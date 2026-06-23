@@ -13,11 +13,17 @@ function abas_upsert_installation(mysqli $conn, array $row): int
         return 0;
     }
     $insNo = (string) ($row['ins_no'] ?? '');
-    $misc = isset($row['miscno2']) ? strtoupper((string) $row['miscno2']) : null;
-    $name = (string) ($row['name'] ?? '');
-    $addr = trim(($row['address'] ?? '') . ' ' . ($row['address2'] ?? ''));
-    $city = (string) ($row['city'] ?? '');
-    $mon = (string) ($row['mon_stat'] ?? '');
+    $misc = isset($row['miscno2']) && (string) $row['miscno2'] !== ''
+        ? strtoupper((string) $row['miscno2'])
+        : '';
+    $name = (string) ($row['name'] ?? $row['namecom'] ?? '');
+    $addr = trim(
+        trim((string) ($row['address'] ?? $row['street1'] ?? ''))
+        . ' '
+        . trim((string) ($row['address2'] ?? $row['street2'] ?? ''))
+    );
+    $city = trim((string) ($row['city'] ?? ''));
+    $mon = trim((string) ($row['mon_stat'] ?? ''));
     $stmt = $conn->prepare(
         'INSERT INTO installations (s_ins, deal_id, ins_no, miscno2, name, address, city, mon_stat, last_synced_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
@@ -38,6 +44,86 @@ function abas_upsert_installation(mysqli $conn, array $row): int
     }
 
     return $id;
+}
+
+function abas_search_installations_local(mysqli $conn, string $q, bool $allAccess, int $userId = 0): array
+{
+    $like = '%' . $q . '%';
+    if ($allAccess) {
+        $stmt = $conn->prepare(
+            'SELECT * FROM installations WHERE miscno2 LIKE ? OR name LIKE ? OR ins_no LIKE ? OR city LIKE ?
+             ORDER BY miscno2 LIMIT 50'
+        );
+        $stmt->bind_param('ssss', $like, $like, $like, $like);
+    } else {
+        $stmt = $conn->prepare(
+            'SELECT i.* FROM installations i
+             JOIN user_installations ui ON ui.installation_id = i.id
+             WHERE ui.user_id = ? AND (i.miscno2 LIKE ? OR i.name LIKE ?)
+             ORDER BY i.miscno2 LIMIT 50'
+        );
+        $stmt->bind_param('iss', $userId, $like, $like);
+    }
+    $stmt->execute();
+    $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+
+    return $rows;
+}
+
+function abas_search_installations_from_api(mysqli $conn, ?array $user, string $q): array
+{
+    $cfg = abas_config()['trekant'];
+    if ($cfg['user'] === '' || $cfg['pass'] === '') {
+        throw new RuntimeException('TrekantBrand API er ikke konfigureret (TREKANT_API_USER/PASS i .env).');
+    }
+
+    $client = abas_trekant();
+    $misc = strtolower(trim($q));
+    $resp = $client->searchInstallations(abas_trekant_userid($user), $misc);
+    $code = abas_trekant_return_code($resp);
+    if ($code !== 0) {
+        $msg = (string) ($resp['message']['message'] ?? $resp['Message'] ?? '');
+        throw new RuntimeException(
+            'TrekantBrand søgning fejlede (kode ' . $code . ($msg !== '' ? ': ' . $msg : '') . ').'
+        );
+    }
+
+    $rows = abas_trekant_rows($resp);
+    if ($rows === []) {
+        return [];
+    }
+
+    $savedIds = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $id = abas_upsert_installation($conn, $row);
+        if ($id > 0) {
+            $savedIds[$id] = true;
+        }
+    }
+
+    if ($savedIds === []) {
+        throw new RuntimeException('API returnerede anlæg, men de kunne ikke gemmes i databasen.');
+    }
+
+    $ids = array_keys($savedIds);
+    $placeholders = implode(',', array_fill(0, count($ids), '?'));
+    $types = str_repeat('i', count($ids));
+    $stmt = $conn->prepare('SELECT * FROM installations WHERE id IN (' . $placeholders . ') ORDER BY miscno2');
+    $stmt->bind_param($types, ...$ids);
+    $stmt->execute();
+    $result = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+
+    return $result;
+}
+
+function abas_is_miscno2_query(string $q): bool
+{
+    return (bool) preg_match('/^[a-z]{3}\d{4}$/i', trim($q));
 }
 
 function abas_sync_prefix(mysqli $conn, int $prefixId, ?string $trekantUserid = null): array

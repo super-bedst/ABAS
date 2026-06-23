@@ -34,7 +34,7 @@ class TrekantClient
             return $this->token;
         }
         $resp = $this->requestRaw('/login/login', ['loginName' => $this->loginUser, 'loginPass' => $this->loginPass], false);
-        if (empty($resp['success'])) {
+        if (empty($resp['success']) && empty($resp['message']['token']['result'])) {
             throw new RuntimeException('TrekantBrand login fejlede: ' . ($resp['message'] ?? 'ukendt'));
         }
         $token = $resp['message']['token']['result'] ?? null;
@@ -42,7 +42,7 @@ class TrekantClient
             throw new RuntimeException('TrekantBrand returnerede intet token');
         }
         $this->token = $token;
-        $ttl = (int) ($resp['message']['token']['expiresIn'] ?? 50400);
+        $ttl = (int) ($resp['message']['token']['expiresIn'] ?? $resp['message']['token']['expiration_seconds'] ?? 50400);
         $this->tokenExpiresAt = time() + $ttl;
 
         return $this->token;

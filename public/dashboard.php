@@ -15,46 +15,19 @@ $q = trim($_GET['q'] ?? '');
 $installations = [];
 
 if ($q !== '') {
-  if (abas_user_can_access_all_installations($user['role'])) {
-    $like = '%' . $q . '%';
-    $stmt = $conn->prepare(
-      'SELECT * FROM installations WHERE miscno2 LIKE ? OR name LIKE ? OR ins_no LIKE ? OR city LIKE ? ORDER BY miscno2 LIMIT 50'
-    );
-    $stmt->bind_param('ssss', $like, $like, $like, $like);
-    $stmt->execute();
-    $installations = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-    $stmt->close();
-    if ($installations === [] && preg_match('/^[a-z]{3}\d{4}$/i', $q)) {
-      try {
-        $client = abas_trekant();
-        $resp = $client->searchInstallations(abas_trekant_userid($user), $q);
-        foreach (abas_trekant_rows($resp) as $row) {
-          $id = abas_upsert_installation($conn, $row);
-          if ($id) {
-            $inst = abas_find_installation_by_miscno2($conn, $q);
-            if ($inst) {
-              $installations[] = $inst;
+    $allAccess = abas_user_can_access_all_installations($user['role']);
+    $installations = abas_search_installations_local($conn, $q, $allAccess, (int) $user['id']);
+
+    if ($installations === [] && $allAccess && abas_is_miscno2_query($q)) {
+        try {
+            $installations = abas_search_installations_from_api($conn, $user, $q);
+            if ($installations === []) {
+                abas_flash_set('error', 'Ingen anlæg fundet i TrekantBrand for: ' . $q);
             }
-          }
+        } catch (Throwable $e) {
+            abas_flash_set('error', 'API-søgning fejlede: ' . $e->getMessage());
         }
-      } catch (Throwable $e) {
-        abas_flash_set('error', 'API-søgning fejlede: ' . $e->getMessage());
-      }
     }
-  } else {
-    $like = '%' . $q . '%';
-    $uid = (int) $user['id'];
-    $stmt = $conn->prepare(
-      'SELECT i.* FROM installations i
-       JOIN user_installations ui ON ui.installation_id = i.id
-       WHERE ui.user_id = ? AND (i.miscno2 LIKE ? OR i.name LIKE ?)
-       ORDER BY i.miscno2 LIMIT 50'
-    );
-    $stmt->bind_param('iss', $uid, $like, $like);
-    $stmt->execute();
-    $installations = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-    $stmt->close();
-  }
 } elseif (!abas_user_can_access_all_installations($user['role'])) {
     $uid = (int) $user['id'];
     $stmt = $conn->prepare(
