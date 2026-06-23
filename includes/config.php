@@ -77,6 +77,17 @@ function abas_config(): array
             'from' => abas_env('MAIL_FROM', 'noreply@trekantbrand.dk'),
             'from_name' => abas_env('MAIL_FROM_NAME', 'ABA Service'),
         ],
+        'sms' => [
+            'enabled' => abas_env('SMS_ENABLED', '1') !== '0',
+            'gateway' => abas_env('SMS_GATEWAY', 'bas'),
+            'bas_url' => rtrim((string) abas_env('BAS_SMS_API_URL', ''), '/'),
+            'bas_token' => (string) abas_env('BAS_SMS_API_TOKEN', ''),
+            'bas_system' => (string) abas_env('BAS_SMS_SYSTEM', 'PMS'),
+            'sender' => (string) abas_env('BAS_SMS_SENDER', '+4541140602'),
+            'dedupe_seconds' => (int) abas_env('BAS_SMS_DEDUPE_SECONDS', '120'),
+            'send_replies' => abas_env('SMS_SEND_REPLIES', '1') !== '0',
+            'inbound_secret' => (string) abas_env('SMS_INBOUND_SECRET', ''),
+        ],
     ];
 }
 require_once __DIR__ . '/paths.php';

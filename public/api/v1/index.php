@@ -21,6 +21,17 @@ if ($path === 'health' && $method === 'GET') {
     abas_api_json(200, ['status' => 'ok', 'app' => abas_config()['app_name']]);
 }
 
+if ($path === 'sms/inbound' && $method === 'POST') {
+    abas_sms_verify_inbound_request();
+    $body = json_decode((string) file_get_contents('php://input'), true) ?: [];
+    $inbound = abas_sms_parse_inbound_request($body);
+    if ($inbound['from'] === '' || $inbound['body'] === '') {
+        abas_api_json(400, ['error' => 'from og body/text påkrævet']);
+    }
+    $reply = abas_sms_handle_inbound($conn, $inbound['from'], $inbound['body']);
+    abas_api_json(200, ['reply' => $reply]);
+}
+
 $token = abas_api_authenticate($conn);
 $apiUser = abas_api_user_from_token($conn, $token);
 
@@ -63,17 +74,6 @@ if (preg_match('#^installations/([^/]+)/log$#', $path, $m) && $method === 'GET')
     $mode = $_GET['mode'] ?? 'last20';
     $log = abas_fetch_installation_log($installation, $mode);
     abas_api_json(200, ['code' => $log['code'], 'items' => $log['rows']]);
-}
-
-if ($path === 'sms/inbound' && $method === 'POST') {
-    $body = json_decode((string) file_get_contents('php://input'), true) ?: [];
-    $from = (string) ($body['from'] ?? '');
-    $text = (string) ($body['body'] ?? '');
-    if ($from === '' || $text === '') {
-        abas_api_json(400, ['error' => 'from og body påkrævet']);
-    }
-    $reply = abas_sms_handle_inbound($conn, $from, $text);
-    abas_api_json(200, ['reply' => $reply]);
 }
 
 abas_api_json(404, ['error' => 'Ukendt endpoint', 'path' => $path]);

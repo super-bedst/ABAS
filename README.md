@@ -117,6 +117,7 @@ Scriptet kører `git pull`, `npm install` og `npm run build`. Kræver [Node.js](
 
 ```cron
 */5 * * * * php /path/to/ABAS/cron/sms_expiry.php
+*/5 * * * * php /path/to/ABAS/cron/sms_outbound.php
 0 2 * * * php /path/to/ABAS/cron/sync_installations.php
 */15 * * * * php /path/to/ABAS/cron/expire_sessions.php
 ```
@@ -134,7 +135,19 @@ Opret tokens under **Admin → API-tokens**.
 
 ## SMS-format
 
-Inbound SMS (via `/api/v1/sms/inbound`):
+Outbound SMS sendes via **BAS** `Api/V2/Sms/sendSms.php` (samme Inmobile-integration som PMS/ISM).
+Sæt `BAS_SMS_API_URL` og `BAS_SMS_API_TOKEN` i `env.local` — brug PMS-token til test (`BAS_SMS_SYSTEM=PMS`).
+
+Inbound webhook (uden API Bearer-token):
+
+```
+POST /api/v1/sms/inbound
+{"from":"+4520123456","body":"secret123 fab0100 START 2"}
+```
+
+Valgfrit: `SMS_INBOUND_SECRET` — gateway sender `?key=` eller `Authorization: Bearer`.
+
+Eksempler på SMS-kommandoer:
 
 ```
 <hemmelighed> <miscno2> START <timer>
