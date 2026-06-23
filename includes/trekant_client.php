@@ -165,13 +165,13 @@ class TrekantClient
             $headers[] = 'User-Token: ' . $token;
         }
         $ch = curl_init($url);
-        $curlOpts = array_merge([
+        $curlOpts = [
             CURLOPT_POST => true,
             CURLOPT_POSTFIELDS => $json,
             CURLOPT_HTTPHEADER => $headers,
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT => 60,
-        ], abas_curl_ssl_options());
+        ] + abas_curl_ssl_options();
         curl_setopt_array($ch, $curlOpts);
         $raw = curl_exec($ch);
         $errno = curl_errno($ch);
