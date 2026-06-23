@@ -133,6 +133,14 @@
     @apply abas-badge bg-green-100 text-green-800 border border-green-200;
   }
 
+  .abas-badge-in-service {
+    @apply abas-badge bg-red-100 text-red-800 border border-red-200;
+  }
+
+  .abas-installation-badges {
+    @apply flex flex-wrap gap-1.5;
+  }
+
   .abas-auth-card {
     @apply max-w-md mx-auto abas-card border-brand-gold/25;
   }

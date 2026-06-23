@@ -123,6 +123,40 @@ function abas_active_session_for_installation(mysqli $conn, int $installationId)
     return $row ?: null;
 }
 
+/**
+ * @return array<int, list<array{installation_id:int, miscno2:string, in_service:bool}>>
+ */
+function abas_user_installations_with_service_status(mysqli $conn): array
+{
+    $result = $conn->query(
+        'SELECT ui.user_id, i.id AS installation_id, i.miscno2,
+                EXISTS(
+                    SELECT 1 FROM service_sessions ss
+                    WHERE ss.installation_id = i.id AND ss.status = "active"
+                    LIMIT 1
+                ) AS in_service
+         FROM user_installations ui
+         JOIN installations i ON i.id = ui.installation_id
+         ORDER BY ui.user_id, i.miscno2'
+    );
+    if (!$result) {
+        return [];
+    }
+
+    $grouped = [];
+    while ($row = $result->fetch_assoc()) {
+        $userId = (int) $row['user_id'];
+        $grouped[$userId][] = [
+            'installation_id' => (int) $row['installation_id'],
+            'miscno2' => (string) $row['miscno2'],
+            'in_service' => (bool) $row['in_service'],
+        ];
+    }
+    $result->close();
+
+    return $grouped;
+}
+
 function abas_fetch_installation_log(array $installation, string $mode, ?array $customRange = null): array
 {
     $client = abas_trekant();

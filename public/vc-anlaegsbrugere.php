@@ -9,6 +9,7 @@ require_once __DIR__ . '/../includes/roles.php';
 require_once __DIR__ . '/../includes/password_flow.php';
 require_once __DIR__ . '/../includes/installation_sync.php';
 require_once __DIR__ . '/../includes/users.php';
+require_once __DIR__ . '/../includes/service.php';
 
 $conn = abas_db();
 $user = abas_require_login();
@@ -64,6 +65,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $owners = $conn->query("SELECT id, email, username, phone FROM users WHERE role='anlaegsejer' ORDER BY username")->fetch_all(MYSQLI_ASSOC);
+$ownerInstallations = abas_user_installations_with_service_status($conn);
 $installations = $conn->query('SELECT id, miscno2, name FROM installations ORDER BY miscno2 LIMIT 200')->fetch_all(MYSQLI_ASSOC);
 
 $pageTitle = 'Anlægsbrugere';
@@ -105,16 +107,36 @@ require __DIR__ . '/partials/header.php';
 
 <div class="mt-6 abas-table-wrap">
     <table class="abas-table">
-        <thead><tr><th>Bruger</th><th>E-mail</th><th>Telefon</th></tr></thead>
+        <thead><tr><th>Bruger</th><th>E-mail</th><th>Telefon</th><th>Anlæg</th></tr></thead>
         <tbody>
         <?php foreach ($owners as $o): ?>
+            <?php $linked = $ownerInstallations[(int) $o['id']] ?? []; ?>
             <tr>
                 <td><?= htmlspecialchars($o['username']) ?></td>
                 <td><?= htmlspecialchars($o['email']) ?></td>
                 <td><?= htmlspecialchars((string) ($o['phone'] ?? '—')) ?></td>
+                <td>
+                    <?php if ($linked === []): ?>
+                        <span class="text-gray-400 text-sm">Ingen anlæg</span>
+                    <?php else: ?>
+                        <div class="abas-installation-badges">
+                            <?php foreach ($linked as $inst): ?>
+                                <a
+                                    href="<?= abas_url('installation.php?id=' . (int) $inst['installation_id']) ?>"
+                                    class="<?= $inst['in_service'] ? 'abas-badge-in-service' : 'abas-badge-ok' ?> hover:opacity-90"
+                                    title="<?= $inst['in_service'] ? 'I service' : 'Normal drift' ?>"
+                                ><?= htmlspecialchars($inst['miscno2']) ?></a>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                </td>
             </tr>
         <?php endforeach; ?>
         </tbody>
     </table>
 </div>
+<p class="mt-3 text-xs text-gray-500">
+    <span class="abas-badge-in-service">fab0100</span> = i service &nbsp;
+    <span class="abas-badge-ok">fab0100</span> = normal drift
+</p>
 <?php require __DIR__ . '/partials/footer.php';
