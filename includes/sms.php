@@ -74,6 +74,56 @@ function abas_sms_flush_queued(mysqli $conn, int $limit = 50): int
     return $count;
 }
 
+function abas_sms_inbound_log_path(): string
+{
+    return abas_root() . '/storage/sms/inbound-last20.log';
+}
+
+/**
+ * @return list<string>
+ */
+function abas_sms_read_inbound_webhook_log(): array
+{
+    $file = abas_sms_inbound_log_path();
+    if (!is_file($file)) {
+        return [];
+    }
+
+    $lines = file($file, FILE_IGNORE_NEW_LINES) ?: [];
+    $lines = array_values(array_filter($lines, static fn (string $row): bool => $row !== ''));
+
+    return array_reverse($lines);
+}
+
+function abas_sms_log_inbound_webhook(string $rawBody): void
+{
+    $storage = abas_root() . '/storage/sms';
+    if (!is_dir($storage)) {
+        @mkdir($storage, 0775, true);
+    }
+
+    $ip = (string) ($_SERVER['REMOTE_ADDR'] ?? '-');
+    $payload = trim(preg_replace('/\s+/', ' ', $rawBody) ?? '');
+    if ($payload === '') {
+        $payload = '(tom body)';
+    }
+
+    $line = sprintf('[%s] IP=%s %s', date('c'), $ip, $payload);
+
+    $file = abas_sms_inbound_log_path();
+    $lines = [];
+    if (is_file($file)) {
+        $lines = file($file, FILE_IGNORE_NEW_LINES) ?: [];
+        $lines = array_values(array_filter($lines, static fn (string $row): bool => $row !== ''));
+    }
+    $lines[] = $line;
+    if (count($lines) > 20) {
+        $lines = array_slice($lines, -20);
+    }
+
+    file_put_contents($file, implode("\n", $lines) . "\n");
+}
+
 function abas_sms_verify_inbound_request(): void
 {
     $secret = abas_config()['sms']['inbound_secret'];

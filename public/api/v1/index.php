@@ -22,8 +22,11 @@ if ($path === 'health' && $method === 'GET') {
 }
 
 if ($path === 'sms/inbound' && $method === 'POST') {
+    $raw = (string) file_get_contents('php://input');
+    abas_sms_log_inbound_webhook($raw);
+
     abas_sms_verify_inbound_request();
-    $body = json_decode((string) file_get_contents('php://input'), true) ?: [];
+    $body = json_decode($raw, true) ?: [];
     $inbound = abas_sms_parse_inbound_request($body);
     if ($inbound['from'] === '' || $inbound['body'] === '') {
         abas_api_json(400, ['error' => 'from og body/text påkrævet']);
