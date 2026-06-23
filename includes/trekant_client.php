@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/curl_cainfo.php';
 
 class TrekantClient
 {
@@ -164,18 +165,18 @@ class TrekantClient
             $headers[] = 'User-Token: ' . $token;
         }
         $ch = curl_init($url);
-        curl_setopt_array($ch, [
+        $curlOpts = array_merge([
             CURLOPT_POST => true,
             CURLOPT_POSTFIELDS => $json,
             CURLOPT_HTTPHEADER => $headers,
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT => 60,
-        ]);
+        ], abas_curl_ssl_options());
+        curl_setopt_array($ch, $curlOpts);
         $raw = curl_exec($ch);
         $errno = curl_errno($ch);
         $err = curl_error($ch);
         $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
         if ($errno) {
             throw new RuntimeException('TrekantBrand HTTP fejl: ' . $err);
         }

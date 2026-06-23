@@ -203,7 +203,7 @@ CREATE TABLE IF NOT EXISTS sms_outbound_log (
 
 -- Seed admin (password: admin123 — SKIFT I PRODUKTION)
 INSERT INTO users (email, username, password_hash, role, active, password_set_at, access_confirmed_at, access_confirm_due_at)
-SELECT 'admin@trekantbrand.dk', 'admin', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'admin', 1, NOW(), NOW(), DATE_ADD(NOW(), INTERVAL 3 MONTH)
+SELECT 'admin@trekantbrand.dk', 'admin', '$2y$10$9FGUS7MEwUvmHpY91XlkaewV.H09u0J.uJkXT88xNZ67CJAJSizHS', 'admin', 1, NOW(), NOW(), DATE_ADD(NOW(), INTERVAL 3 MONTH)
 WHERE NOT EXISTS (SELECT 1 FROM users WHERE role = 'admin');
 
 SET FOREIGN_KEY_CHECKS = 1;
