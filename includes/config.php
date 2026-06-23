@@ -8,7 +8,7 @@ function abas_load_env(string $root): void
     if ($loaded) {
         return;
     }
-    foreach (['.env', '.env.local'] as $file) {
+    foreach (['.env', '.env.local', 'env.local'] as $file) {
         $path = $root . DIRECTORY_SEPARATOR . $file;
         if (!is_readable($path)) {
             continue;

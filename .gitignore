@@ -2,6 +2,7 @@
 /node_modules/
 .env
 .env.local
+env.local
 *.log
 /scripts/.trekant_test_state.json
 /storage/
