@@ -32,24 +32,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $pageTitle = 'Log ind';
 require __DIR__ . '/partials/header.php';
 ?>
-<div class="max-w-md mx-auto bg-white rounded-lg shadow p-6 border border-brand-gold/30">
-    <h1 class="text-xl font-semibold text-brand mb-4">Log ind</h1>
-    <?php if ($error): ?><p class="text-red-600 mb-3"><?= htmlspecialchars($error) ?></p><?php endif; ?>
-    <form method="post" class="space-y-4">
-        <div>
-            <label class="block text-sm mb-1">E-mail eller brugernavn</label>
-            <input name="login" required class="w-full border rounded px-3 py-2" value="<?= htmlspecialchars($_POST['login'] ?? '') ?>">
+<div class="abas-auth-card">
+    <p class="text-xs uppercase tracking-wider text-brand font-semibold mb-2">TrekantBrand</p>
+    <h1 class="abas-page-title !text-xl mb-4">Log ind</h1>
+    <?php if ($error): ?><p class="abas-alert-error !mb-4"><?= htmlspecialchars($error) ?></p><?php endif; ?>
+    <form method="post" class="abas-form">
+        <div class="abas-field">
+            <label class="abas-label" for="login">E-mail eller brugernavn</label>
+            <input id="login" name="login" required class="abas-input" value="<?= htmlspecialchars($_POST['login'] ?? '') ?>">
         </div>
-        <div>
-            <label class="block text-sm mb-1">Adgangskode</label>
-            <input type="password" name="password" required class="w-full border rounded px-3 py-2">
+        <div class="abas-field">
+            <label class="abas-label" for="password">Adgangskode</label>
+            <input id="password" type="password" name="password" required class="abas-input">
         </div>
-        <button type="submit" class="w-full bg-brand text-white py-2 rounded hover:opacity-90">Log ind</button>
+        <button type="submit" class="abas-btn-primary abas-btn-block">Log ind</button>
     </form>
-    <p class="mt-4 text-sm text-center">
-        <a href="<?= abas_url('forgot-password.php') ?>" class="text-brand underline">Glemt adgangskode</a>
-        &middot;
-        <a href="<?= abas_url('register.php') ?>" class="text-brand underline">Montør-registrering</a>
+    <p class="mt-5 text-sm text-center text-gray-600">
+        <a href="<?= abas_url('forgot-password.php') ?>" class="abas-link">Glemt adgangskode</a>
+        <span class="mx-1">·</span>
+        <a href="<?= abas_url('register.php') ?>" class="abas-link">Montør-registrering</a>
     </p>
 </div>
 <?php require __DIR__ . '/partials/footer.php';

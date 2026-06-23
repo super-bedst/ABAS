@@ -78,6 +78,35 @@ php -S localhost:8080 -t public
    - **E-mail:** `admin@trekantbrand.dk`
    - **Adgangskode:** `admin123` (skift i produktion!)
 
+## Frontend (Tailwind CSS)
+
+Styling bygges lokalt fra `resources/css/app.css` til `public/assets/css/app.css`.
+
+**Udvikling (watch):**
+
+```bash
+npm install
+npm run watch
+```
+
+**Produktion / efter deploy:**
+
+```bash
+npm install
+npm run build
+```
+
+### Opdater server (git pull + Tailwind)
+
+På WAMP-serveren:
+
+```powershell
+cd C:\wamp64\www\TrekantBrand\Sandbox\ABAS
+.\scripts\deploy.ps1
+```
+
+Scriptet kører `git pull`, `npm install` og `npm run build`. Kræver [Node.js](https://nodejs.org) på serveren.
+
 ## Cron
 
 ```cron

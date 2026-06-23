@@ -24,13 +24,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $pageTitle = 'Glemt adgangskode';
 require __DIR__ . '/partials/header.php';
 ?>
-<div class="max-w-md mx-auto bg-white rounded-lg shadow p-6 border">
-    <h1 class="text-xl font-semibold text-brand mb-4">Glemt adgangskode</h1>
-    <?php if ($msg): ?><p class="text-green-700 mb-3"><?= htmlspecialchars($msg) ?></p><?php endif; ?>
-    <form method="post" class="space-y-3">
-        <div><label class="block text-sm">E-mail</label><input name="email" type="email" required class="w-full border rounded px-3 py-2"></div>
-        <button class="w-full bg-brand text-white py-2 rounded">Send link</button>
+<div class="abas-auth-card">
+    <h1 class="abas-page-title !text-xl">Glemt adgangskode</h1>
+    <?php if ($msg): ?><p class="abas-alert-success !mb-4"><?= htmlspecialchars($msg) ?></p><?php endif; ?>
+    <form method="post" class="abas-form">
+        <div class="abas-field">
+            <label class="abas-label" for="email">E-mail</label>
+            <input id="email" name="email" type="email" required class="abas-input">
+        </div>
+        <button class="abas-btn-primary abas-btn-block">Send link</button>
     </form>
-    <p class="mt-4 text-sm"><a href="<?= abas_url('login.php') ?>" class="text-brand underline">Tilbage</a></p>
+    <p class="mt-4 text-sm"><a href="<?= abas_url('login.php') ?>" class="abas-link">Tilbage</a></p>
 </div>
 <?php require __DIR__ . '/partials/footer.php';

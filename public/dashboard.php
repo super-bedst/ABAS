@@ -45,37 +45,60 @@ $pageTitle = 'Dashboard';
 $currentUser = $user;
 require __DIR__ . '/partials/header.php';
 ?>
-<h1 class="text-2xl font-semibold text-brand mb-4">Dashboard</h1>
-<form method="get" class="mb-6 flex flex-col sm:flex-row gap-2">
-    <input name="q" value="<?= htmlspecialchars($q) ?>" placeholder="Søg anlægsnr., navn, by..." class="flex-1 border rounded px-3 py-2">
-    <button class="bg-brand text-white px-4 py-2 rounded">Søg</button>
+<h1 class="abas-page-title">Dashboard</h1>
+<p class="abas-page-lead">Søg og find anlæg — se status og start eller stop service.</p>
+
+<form method="get" class="abas-search mb-6">
+    <div class="abas-field flex-1">
+        <label class="abas-label" for="q">Søg anlæg</label>
+        <input id="q" name="q" value="<?= htmlspecialchars($q) ?>" placeholder="Anlægsnr., navn, by..." class="abas-input">
+    </div>
+    <div class="flex items-end">
+        <button class="abas-btn-primary sm:min-w-[7rem]">Søg</button>
+    </div>
 </form>
+
 <?php if ($installations === []): ?>
-    <p class="text-gray-600">Ingen anlæg fundet.<?= $q ? ' Prøv et andet søgeord.' : '' ?></p>
+    <div class="abas-panel">Ingen anlæg fundet.<?= $q ? ' Prøv et andet søgeord.' : '' ?></div>
 <?php else: ?>
-<div class="overflow-x-auto bg-white rounded shadow border">
-<table class="w-full text-sm">
-    <thead class="table-head">
-        <tr>
-            <th class="text-left p-2">ABA-nr.</th>
-            <th class="text-left p-2">Navn</th>
-            <th class="text-left p-2 hidden sm:table-cell">By</th>
-            <th class="text-left p-2 hidden md:table-cell">Status</th>
-            <th class="text-left p-2"></th>
-        </tr>
-    </thead>
-    <tbody>
-    <?php foreach ($installations as $inst): ?>
-        <tr class="border-t hover:bg-basbg/50">
-            <td class="p-2 font-mono"><?= htmlspecialchars((string) $inst['miscno2']) ?></td>
-            <td class="p-2"><?= htmlspecialchars((string) $inst['name']) ?></td>
-            <td class="p-2 hidden sm:table-cell"><?= htmlspecialchars((string) $inst['city']) ?></td>
-            <td class="p-2 hidden md:table-cell"><?= htmlspecialchars((string) $inst['mon_stat']) ?></td>
-            <td class="p-2"><a class="text-brand underline" href="<?= abas_url('installation.php?id=' . (int) $inst['id']) ?>">Åbn</a></td>
-        </tr>
-    <?php endforeach; ?>
-    </tbody>
-</table>
+
+<div class="hidden sm:block abas-table-wrap">
+    <table class="abas-table">
+        <thead>
+            <tr>
+                <th>ABA-nr.</th>
+                <th>Navn</th>
+                <th class="hidden md:table-cell">By</th>
+                <th class="hidden lg:table-cell">Status</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+        <?php foreach ($installations as $inst): ?>
+            <tr>
+                <td class="font-mono font-medium text-brand"><?= htmlspecialchars((string) $inst['miscno2']) ?></td>
+                <td><?= htmlspecialchars((string) $inst['name']) ?></td>
+                <td class="hidden md:table-cell"><?= htmlspecialchars((string) $inst['city']) ?></td>
+                <td class="hidden lg:table-cell"><?= htmlspecialchars((string) $inst['mon_stat']) ?></td>
+                <td><a class="abas-link" href="<?= abas_url('installation.php?id=' . (int) $inst['id']) ?>">Åbn</a></td>
+            </tr>
+        <?php endforeach; ?>
+        </tbody>
+    </table>
 </div>
+
+<div class="sm:hidden space-y-3">
+    <?php foreach ($installations as $inst): ?>
+        <a href="<?= abas_url('installation.php?id=' . (int) $inst['id']) ?>" class="abas-mobile-card">
+            <div class="abas-mobile-card-title"><?= htmlspecialchars((string) $inst['miscno2']) ?></div>
+            <div class="font-medium text-gray-800 mt-1"><?= htmlspecialchars((string) $inst['name']) ?></div>
+            <div class="text-sm text-gray-500 mt-1"><?= htmlspecialchars((string) $inst['city']) ?></div>
+            <?php if (!empty($inst['mon_stat'])): ?>
+                <span class="abas-badge-ok mt-2"><?= htmlspecialchars((string) $inst['mon_stat']) ?></span>
+            <?php endif; ?>
+        </a>
+    <?php endforeach; ?>
+</div>
+
 <?php endif; ?>
 <?php require __DIR__ . '/partials/footer.php';

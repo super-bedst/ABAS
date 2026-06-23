@@ -15,12 +15,13 @@ $pageTitle = 'Administration';
 $currentUser = $user;
 require __DIR__ . '/../partials/header.php';
 ?>
-<h1 class="text-2xl font-semibold text-brand mb-4">Administration</h1>
+<h1 class="abas-page-title">Administration</h1>
+<p class="abas-page-lead">Brugere, installatører, sync og systemindstillinger.</p>
 <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-    <a href="<?= abas_url('admin/installers.php') ?>" class="block bg-white border rounded p-4 shadow-sm hover:border-brand">Godkendte installatører</a>
-    <a href="<?= abas_url('admin/sync.php') ?>" class="block bg-white border rounded p-4 shadow-sm hover:border-brand">Sync-prefixes</a>
-    <a href="<?= abas_url('admin/settings.php') ?>" class="block bg-white border rounded p-4 shadow-sm hover:border-brand">Systemindstillinger</a>
-    <a href="<?= abas_url('admin/users.php') ?>" class="block bg-white border rounded p-4 shadow-sm hover:border-brand">Brugere</a>
-    <a href="<?= abas_url('admin/api-tokens.php') ?>" class="block bg-white border rounded p-4 shadow-sm hover:border-brand">API-tokens</a>
+    <a href="<?= abas_url('admin/installers.php') ?>" class="abas-admin-tile">Godkendte installatører</a>
+    <a href="<?= abas_url('admin/sync.php') ?>" class="abas-admin-tile">Sync-prefixes</a>
+    <a href="<?= abas_url('admin/settings.php') ?>" class="abas-admin-tile">Systemindstillinger</a>
+    <a href="<?= abas_url('admin/users.php') ?>" class="abas-admin-tile">Brugere</a>
+    <a href="<?= abas_url('admin/api-tokens.php') ?>" class="abas-admin-tile">API-tokens</a>
 </div>
 <?php require __DIR__ . '/../partials/footer.php';

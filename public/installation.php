@@ -69,42 +69,51 @@ $extraHead = ($mapLat !== null && $mapLon !== null)
     : '';
 require __DIR__ . '/partials/header.php';
 ?>
-<div class="mb-4">
-    <a href="<?= abas_url('dashboard.php') ?>" class="text-brand text-sm underline">&larr; Tilbage</a>
+<div class="mb-2">
+    <a href="<?= abas_url('dashboard.php') ?>" class="abas-back-link">&larr; Tilbage til dashboard</a>
 </div>
-<h1 class="text-2xl font-semibold text-brand mb-1"><?= htmlspecialchars((string) $installation['miscno2']) ?></h1>
-<p class="text-gray-700 mb-4"><?= htmlspecialchars((string) $installation['name']) ?> — <?= htmlspecialchars((string) $installation['address']) ?>, <?= htmlspecialchars((string) $installation['city']) ?></p>
+<h1 class="abas-page-title"><?= htmlspecialchars((string) $installation['miscno2']) ?></h1>
+<p class="abas-page-lead"><?= htmlspecialchars((string) $installation['name']) ?> — <?= htmlspecialchars((string) $installation['address']) ?>, <?= htmlspecialchars((string) $installation['city']) ?></p>
 
 <div class="grid md:grid-cols-2 gap-4 mb-6">
-    <div class="bg-white border rounded p-4 shadow-sm">
-        <h2 class="font-semibold mb-2">Service</h2>
+    <div class="abas-card">
+        <h2 class="abas-card-title">Service</h2>
         <?php if ($session): ?>
-            <p class="text-amber-700 mb-3">Aktiv service siden <?= htmlspecialchars($session['started_at']) ?><?= $session['expires_at'] ? ' — udløber ' . htmlspecialchars($session['expires_at']) : ' (uden tidsbegrænsning)' ?></p>
-            <form method="post">
+            <p class="abas-badge-active mb-4">Aktiv service siden <?= htmlspecialchars($session['started_at']) ?><?= $session['expires_at'] ? ' — udløber ' . htmlspecialchars($session['expires_at']) : ' (uden tidsbegrænsning)' ?></p>
+            <form method="post" class="abas-form">
                 <input type="hidden" name="action" value="stop">
-                <textarea name="comment" rows="2" class="w-full border rounded px-2 py-1 mb-2" placeholder="Kommentar ved stop"></textarea>
-                <button class="bg-red-700 text-white px-4 py-2 rounded">Stop service</button>
+                <div class="abas-field">
+                    <label class="abas-label" for="stop-comment">Kommentar ved stop</label>
+                    <textarea id="stop-comment" name="comment" rows="2" class="abas-textarea" placeholder="Beskriv kort hvad der er udført"></textarea>
+                </div>
+                <button class="abas-btn-danger">Stop service</button>
             </form>
         <?php else: ?>
-            <form method="post" class="space-y-2">
+            <form method="post" class="abas-form">
                 <input type="hidden" name="action" value="start">
-                <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="unlimited" value="1"> Uden tidsbegrænsning</label>
-                <div>
-                    <label class="text-sm">Varighed (timer)</label>
-                    <input type="number" name="hours" step="0.5" min="0.5" value="2" class="w-full border rounded px-2 py-1">
+                <label class="flex items-center gap-2 text-sm">
+                    <input type="checkbox" name="unlimited" value="1" class="abas-checkbox">
+                    Uden tidsbegrænsning
+                </label>
+                <div class="abas-field">
+                    <label class="abas-label" for="hours">Varighed (timer)</label>
+                    <input id="hours" type="number" name="hours" step="0.5" min="0.5" value="2" class="abas-input">
                 </div>
-                <textarea name="comment" rows="2" class="w-full border rounded px-2 py-1" placeholder="Kommentar"></textarea>
-                <?php if ($user['role'] !== 'vagtcentral'): ?>
-                    <p class="text-xs text-gray-500">Din kommentar får automatisk tilføjet navn, telefon og rolle<?= $user['role'] === 'montor' ? ' samt firmanavn' : '' ?>.</p>
-                <?php endif; ?>
-                <button class="bg-brand text-white px-4 py-2 rounded">Start service</button>
+                <div class="abas-field">
+                    <label class="abas-label" for="start-comment">Kommentar</label>
+                    <textarea id="start-comment" name="comment" rows="2" class="abas-textarea" placeholder="Årsag til service eller udført arbejde"></textarea>
+                    <?php if ($user['role'] !== 'vagtcentral'): ?>
+                        <p class="abas-hint">Din kommentar får automatisk tilføjet navn, telefon og rolle<?= $user['role'] === 'montor' ? ' samt firmanavn' : '' ?>.</p>
+                    <?php endif; ?>
+                </div>
+                <button class="abas-btn-primary">Start service</button>
             </form>
         <?php endif; ?>
     </div>
-    <div class="bg-white border rounded p-4 shadow-sm text-sm">
-        <h2 class="font-semibold mb-2">Placering og kontakter</h2>
+    <div class="abas-card text-sm">
+        <h2 class="abas-card-title">Placering og kontakter</h2>
         <?php if ($mapLat !== null && $mapLon !== null): ?>
-            <div id="inst-map" class="h-44 w-full rounded border mb-3 z-0"></div>
+            <div id="inst-map" class="h-44 w-full rounded-xl border border-gray-200 mb-3 z-0"></div>
         <?php else: ?>
             <p class="text-gray-500 mb-3 text-xs">GPS-koordinater ikke tilgængelige for dette anlæg.</p>
         <?php endif; ?>
@@ -164,40 +173,40 @@ require __DIR__ . '/partials/header.php';
 </script>
 <?php endif; ?>
 
-<div class="bg-white border rounded shadow-sm overflow-hidden">
-    <div class="p-3 border-b flex flex-wrap gap-2 items-center">
-        <h2 class="font-semibold flex-1">Alarmlog</h2>
-        <a href="?id=<?= $id ?>&log=last20" class="text-sm px-2 py-1 rounded <?= $logMode==='last20'?'bg-brand text-white':'border' ?>">Sidste 20</a>
-        <a href="?id=<?= $id ?>&log=24h" class="text-sm px-2 py-1 rounded <?= $logMode==='24h'?'bg-brand text-white':'border' ?>">24 timer</a>
+<div class="abas-card !p-0 overflow-hidden">
+    <div class="abas-log-toolbar">
+        <h2 class="abas-card-title !mb-0 flex-1">Alarmlog</h2>
+        <a href="?id=<?= $id ?>&log=last20" class="<?= $logMode === 'last20' ? 'abas-chip-active' : 'abas-chip' ?>">Sidste 20</a>
+        <a href="?id=<?= $id ?>&log=24h" class="<?= $logMode === '24h' ? 'abas-chip-active' : 'abas-chip' ?>">24 timer</a>
     </div>
-    <form method="get" class="p-3 border-b flex flex-wrap gap-2 text-sm items-end">
+    <form method="get" class="p-4 border-b border-gray-100 flex flex-wrap gap-3 items-end bg-basbg/40">
         <input type="hidden" name="id" value="<?= $id ?>">
         <input type="hidden" name="log" value="custom">
-        <div>
-            <label class="block text-xs">Fra</label>
-            <input type="date" name="from" value="<?= htmlspecialchars($_GET['from'] ?? '') ?>" class="border rounded px-2 py-1" title="dd/mm/åååå">
-            <span class="text-xs text-gray-500">dd/mm/åååå</span>
+        <div class="abas-field">
+            <label class="abas-label" for="log-from">Fra</label>
+            <input id="log-from" type="date" name="from" value="<?= htmlspecialchars($_GET['from'] ?? '') ?>" class="abas-input" title="dd/mm/åååå">
+            <span class="abas-hint">dd/mm/åååå</span>
         </div>
-        <div>
-            <label class="block text-xs">Til</label>
-            <input type="date" name="to" value="<?= htmlspecialchars($_GET['to'] ?? '') ?>" class="border rounded px-2 py-1" title="dd/mm/åååå">
-            <span class="text-xs text-gray-500">dd/mm/åååå</span>
+        <div class="abas-field">
+            <label class="abas-label" for="log-to">Til</label>
+            <input id="log-to" type="date" name="to" value="<?= htmlspecialchars($_GET['to'] ?? '') ?>" class="abas-input" title="dd/mm/åååå">
+            <span class="abas-hint">dd/mm/åååå</span>
         </div>
-        <button class="border px-3 py-1 rounded">Vis periode</button>
+        <button class="abas-btn-secondary">Vis periode</button>
     </form>
     <?php if ($log['code'] !== 0): ?>
-        <p class="p-3 text-amber-700">Log kunne ikke hentes (kode <?= (int) $log['code'] ?>).</p>
+        <p class="p-4 text-amber-800">Log kunne ikke hentes (kode <?= (int) $log['code'] ?>).</p>
     <?php elseif ($log['rows'] === []): ?>
-        <p class="p-3 text-gray-500">Ingen loglinjer.</p>
+        <p class="p-4 text-gray-500">Ingen loglinjer.</p>
     <?php else: ?>
-    <div class="overflow-x-auto max-h-96">
-        <table class="w-full text-xs">
-            <thead class="table-head sticky top-0"><tr><th class="p-2 text-left">Tidspunkt</th><th class="p-2 text-left">Tekst</th></tr></thead>
+    <div class="abas-log-body">
+        <table class="abas-table text-xs">
+            <thead class="sticky top-0"><tr><th>Tidspunkt</th><th>Tekst</th></tr></thead>
             <tbody>
             <?php foreach ($log['rows'] as $row): ?>
-                <tr class="border-t">
-                    <td class="p-2 whitespace-nowrap"><?= htmlspecialchars(abas_format_alarmlog_timestamp($row)) ?></td>
-                    <td class="p-2"><?= htmlspecialchars(abas_format_alarmlog_text($row)) ?></td>
+                <tr>
+                    <td class="whitespace-nowrap"><?= htmlspecialchars(abas_format_alarmlog_timestamp($row)) ?></td>
+                    <td><?= htmlspecialchars(abas_format_alarmlog_text($row)) ?></td>
                 </tr>
             <?php endforeach; ?>
             </tbody>

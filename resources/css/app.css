@@ -1,0 +1,179 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-basbg text-gray-900 antialiased;
+  }
+}
+
+@layer components {
+  .abas-page-title {
+    @apply text-2xl font-bold text-brand tracking-tight mb-1;
+  }
+
+  .abas-page-lead {
+    @apply text-gray-600 mb-5;
+  }
+
+  .abas-back-link {
+    @apply inline-flex items-center text-sm text-brand font-medium hover:underline mb-4;
+  }
+
+  .abas-card {
+    @apply bg-white border border-gray-200 rounded-2xl shadow-card p-4 sm:p-5;
+  }
+
+  .abas-card-hover {
+    @apply abas-card transition hover:border-brand/35 hover:shadow-md;
+  }
+
+  .abas-card-title {
+    @apply text-base font-semibold text-brand mb-3;
+  }
+
+  .abas-panel {
+    @apply bg-basbg border-l-4 border-brand-gold rounded-r-2xl px-4 py-3 text-sm text-gray-700;
+  }
+
+  .abas-label {
+    @apply block text-sm font-medium text-gray-700 mb-1.5;
+  }
+
+  .abas-hint {
+    @apply text-xs text-gray-500 mt-1;
+  }
+
+  .abas-input,
+  .abas-textarea,
+  .abas-select {
+    @apply w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm bg-white
+      focus:outline-none focus:ring-2 focus:ring-brand/25 focus:border-brand
+      placeholder:text-gray-400;
+  }
+
+  .abas-textarea {
+    @apply min-h-[4.5rem] resize-y;
+  }
+
+  .abas-checkbox {
+    @apply rounded border-gray-300 text-brand focus:ring-brand/30;
+  }
+
+  .abas-btn {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition;
+  }
+
+  .abas-btn-primary {
+    @apply abas-btn bg-brand text-white hover:bg-brand-dark shadow-sm;
+  }
+
+  .abas-btn-secondary {
+    @apply abas-btn border border-gray-300 bg-white text-gray-800 hover:bg-gray-50;
+  }
+
+  .abas-btn-danger {
+    @apply abas-btn bg-red-700 text-white hover:bg-red-800 shadow-sm;
+  }
+
+  .abas-btn-block {
+    @apply w-full;
+  }
+
+  .abas-alert {
+    @apply mb-4 p-3.5 rounded-xl border text-sm;
+  }
+
+  .abas-alert-success {
+    @apply abas-alert bg-green-50 border-green-200 text-green-800;
+  }
+
+  .abas-alert-error {
+    @apply abas-alert bg-red-50 border-red-200 text-red-800;
+  }
+
+  .abas-table-wrap {
+    @apply overflow-x-auto bg-white border border-gray-200 rounded-2xl shadow-card;
+  }
+
+  .abas-table {
+    @apply w-full text-sm;
+  }
+
+  .abas-table thead th {
+    @apply text-left p-3 font-semibold text-gray-900 bg-tablehead/90 first:rounded-tl-2xl last:rounded-tr-2xl;
+  }
+
+  .abas-table tbody td {
+    @apply p-3 border-t border-gray-100 align-top;
+  }
+
+  .abas-table tbody tr:hover {
+    @apply bg-basbg/60;
+  }
+
+  .abas-chip {
+    @apply inline-flex items-center px-3 py-1.5 rounded-full text-sm border border-gray-300 bg-white text-gray-700 hover:border-brand/40;
+  }
+
+  .abas-chip-active {
+    @apply abas-chip bg-brand text-white border-brand hover:border-brand;
+  }
+
+  .abas-badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold;
+  }
+
+  .abas-badge-active {
+    @apply abas-badge bg-amber-100 text-amber-900 border border-amber-200;
+  }
+
+  .abas-badge-ok {
+    @apply abas-badge bg-green-100 text-green-800 border border-green-200;
+  }
+
+  .abas-auth-card {
+    @apply max-w-md mx-auto abas-card border-brand-gold/25;
+  }
+
+  .abas-search {
+    @apply flex flex-col sm:flex-row gap-2;
+  }
+
+  .abas-search .abas-input {
+    @apply flex-1;
+  }
+
+  .abas-field {
+    @apply space-y-1;
+  }
+
+  .abas-form {
+    @apply space-y-4;
+  }
+
+  .abas-link {
+    @apply text-brand font-medium hover:underline;
+  }
+
+  .abas-admin-tile {
+    @apply block abas-card-hover font-medium text-gray-800;
+  }
+
+  .abas-mobile-card {
+    @apply block abas-card-hover no-underline text-inherit;
+  }
+
+  .abas-mobile-card-title {
+    @apply font-mono font-semibold text-brand text-lg;
+  }
+
+  .abas-log-toolbar {
+    @apply p-3 border-b border-gray-100 flex flex-wrap gap-2 items-center bg-white rounded-t-2xl;
+  }
+
+  .abas-log-body {
+    @apply max-h-96 overflow-x-auto;
+  }
+}

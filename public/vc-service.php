@@ -79,15 +79,16 @@ $pageTitle = 'VC — Hurtig service';
 $currentUser = $user;
 require __DIR__ . '/partials/header.php';
 ?>
-<h1 class="text-2xl font-semibold text-brand mb-4">Vagtcentral — service på vegne af montør</h1>
-<form method="post" class="bg-white border rounded p-4 shadow-sm max-w-xl space-y-3">
-    <div>
-        <label class="block text-sm font-medium">Anlægsnr. (miscno2)</label>
-        <input name="miscno2" required placeholder="fab0100" class="w-full border rounded px-3 py-2 font-mono">
+<h1 class="abas-page-title">Vagtcentral — service på vegne af montør</h1>
+<p class="abas-page-lead">Find anlæg, vælg montør og start service med kommentar.</p>
+<form method="post" class="abas-card max-w-xl abas-form">
+    <div class="abas-field">
+        <label class="abas-label" for="miscno2">Anlægsnr. (miscno2)</label>
+        <input id="miscno2" name="miscno2" required placeholder="fab0100" class="abas-input font-mono">
     </div>
-    <div>
-        <label class="block text-sm font-medium">Montør</label>
-        <select name="montor_id" class="w-full border rounded px-3 py-2">
+    <div class="abas-field">
+        <label class="abas-label" for="montor_id">Montør</label>
+        <select id="montor_id" name="montor_id" class="abas-select">
             <option value="0">— Vælg montør —</option>
             <?php foreach ($montors as $m): ?>
                 <option value="<?= (int) $m['id'] ?>">
@@ -100,16 +101,22 @@ require __DIR__ . '/partials/header.php';
             <?php endforeach; ?>
         </select>
     </div>
-    <div>
-        <label class="block text-sm font-medium">Eller inviter via telefon (SMS)</label>
-        <input name="invite_phone" placeholder="+45..." class="w-full border rounded px-3 py-2">
+    <div class="abas-field">
+        <label class="abas-label" for="invite_phone">Eller inviter via telefon (SMS)</label>
+        <input id="invite_phone" name="invite_phone" placeholder="+45..." class="abas-input">
     </div>
-    <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="unlimited" value="1"> Uden tidsbegrænsning</label>
-    <div>
-        <label class="block text-sm">Varighed (timer)</label>
-        <input type="number" name="hours" step="0.5" value="2" class="w-full border rounded px-3 py-2">
+    <label class="flex items-center gap-2 text-sm">
+        <input type="checkbox" name="unlimited" value="1" class="abas-checkbox">
+        Uden tidsbegrænsning
+    </label>
+    <div class="abas-field">
+        <label class="abas-label" for="hours">Varighed (timer)</label>
+        <input id="hours" type="number" name="hours" step="0.5" value="2" class="abas-input">
     </div>
-    <textarea name="comment" rows="2" class="w-full border rounded px-3 py-2" placeholder="Kommentar">VC service</textarea>
-    <button class="bg-brand text-white px-4 py-2 rounded">Start service</button>
+    <div class="abas-field">
+        <label class="abas-label" for="comment">Kommentar</label>
+        <textarea id="comment" name="comment" rows="2" class="abas-textarea" placeholder="Kommentar">VC service</textarea>
+    </div>
+    <button class="abas-btn-primary">Start service</button>
 </form>
 <?php require __DIR__ . '/partials/footer.php';

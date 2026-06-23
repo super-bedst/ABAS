@@ -72,3 +72,12 @@ function abas_full_url(string $path): string
 {
     return rtrim(abas_app_url(), '/') . '/' . ltrim($path, '/');
 }
+
+function abas_asset_url(string $path): string
+{
+    $rel = ltrim(str_replace('\\', '/', $path), '/');
+    $file = dirname(__DIR__) . '/public/' . $rel;
+    $version = is_file($file) ? (string) filemtime($file) : (string) time();
+
+    return abas_url($rel) . '?v=' . $version;
+}

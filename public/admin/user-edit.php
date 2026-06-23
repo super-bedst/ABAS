@@ -97,51 +97,51 @@ $pageTitle = 'Rediger bruger';
 $currentUser = $admin;
 require __DIR__ . '/../partials/header.php';
 ?>
-<h1 class="text-xl font-semibold text-brand mb-4">Rediger bruger</h1>
-<form method="post" class="bg-white border rounded p-4 max-w-lg space-y-3">
+<h1 class="abas-page-title !text-xl">Rediger bruger</h1>
+<form method="post" class="abas-card max-w-lg abas-form">
     <input type="hidden" name="id" value="<?= (int) $editUser['id'] ?>">
-    <div>
-        <label class="block text-sm">E-mail</label>
-        <input name="email" type="email" required value="<?= htmlspecialchars((string) $editUser['email']) ?>" class="w-full border rounded px-3 py-2">
+    <div class="abas-field">
+        <label class="abas-label" for="email">E-mail</label>
+        <input id="email" name="email" type="email" required value="<?= htmlspecialchars((string) $editUser['email']) ?>" class="abas-input">
     </div>
-    <div>
-        <label class="block text-sm">Brugernavn</label>
-        <input name="username" required value="<?= htmlspecialchars((string) $editUser['username']) ?>" class="w-full border rounded px-3 py-2">
+    <div class="abas-field">
+        <label class="abas-label" for="username">Brugernavn</label>
+        <input id="username" name="username" required value="<?= htmlspecialchars((string) $editUser['username']) ?>" class="abas-input">
     </div>
-    <div>
-        <label class="block text-sm">Telefon</label>
-        <input name="phone" required value="<?= htmlspecialchars((string) ($editUser['phone'] ?? '')) ?>" class="w-full border rounded px-3 py-2" placeholder="+45...">
+    <div class="abas-field">
+        <label class="abas-label" for="phone">Telefon</label>
+        <input id="phone" name="phone" required value="<?= htmlspecialchars((string) ($editUser['phone'] ?? '')) ?>" class="abas-input" placeholder="+45...">
     </div>
-    <div>
-        <label class="block text-sm">Rolle</label>
-        <select name="role" class="w-full border rounded px-3 py-2">
+    <div class="abas-field">
+        <label class="abas-label" for="role">Rolle</label>
+        <select id="role" name="role" class="abas-select">
             <?php foreach (abas_roles() as $r): ?>
                 <option value="<?= $r ?>" <?= $editUser['role'] === $r ? 'selected' : '' ?>><?= abas_role_label($r) ?></option>
             <?php endforeach; ?>
         </select>
     </div>
-    <div>
-        <label class="block text-sm">TrekantBrand userid</label>
-        <input name="trekant_userid" value="<?= htmlspecialchars((string) ($editUser['trekant_userid'] ?? '')) ?>" class="w-full border rounded px-3 py-2 font-mono" maxlength="8">
+    <div class="abas-field">
+        <label class="abas-label" for="trekant_userid">TrekantBrand userid</label>
+        <input id="trekant_userid" name="trekant_userid" value="<?= htmlspecialchars((string) ($editUser['trekant_userid'] ?? '')) ?>" class="abas-input font-mono" maxlength="8">
     </div>
     <?php if ($editUser['role'] === 'montor' || !empty($editUser['company_name'])): ?>
-        <div class="text-sm bg-basbg border rounded px-3 py-2">
+        <div class="abas-panel">
             <span class="text-gray-600">Firma (automatisk):</span>
             <span class="font-medium"><?= htmlspecialchars((string) ($editUser['company_name'] ?? 'Ikke tildelt')) ?></span>
-            <p class="text-xs text-gray-500 mt-1">Sættes automatisk ud fra e-mail-domænet ved montører.</p>
+            <p class="abas-hint !mt-2">Sættes automatisk ud fra e-mail-domænet ved montører.</p>
         </div>
     <?php endif; ?>
     <label class="flex items-center gap-2 text-sm">
-        <input type="checkbox" name="active" value="1" <?= $editUser['active'] ? 'checked' : '' ?>>
+        <input type="checkbox" name="active" value="1" class="abas-checkbox" <?= $editUser['active'] ? 'checked' : '' ?>>
         Aktiv konto
     </label>
     <label class="flex items-center gap-2 text-sm">
-        <input type="checkbox" name="send_welcome" value="1">
+        <input type="checkbox" name="send_welcome" value="1" class="abas-checkbox">
         Send velkomst/e-mail til valg af adgangskode
     </label>
-    <div class="flex gap-2 pt-2">
-        <button class="bg-brand text-white px-4 py-2 rounded">Gem</button>
-        <a href="<?= abas_url('admin/users.php') ?>" class="border px-4 py-2 rounded">Annuller</a>
+    <div class="flex flex-wrap gap-2 pt-2">
+        <button class="abas-btn-primary">Gem</button>
+        <a href="<?= abas_url('admin/users.php') ?>" class="abas-btn-secondary">Annuller</a>
     </div>
 </form>
 <?php require __DIR__ . '/../partials/footer.php';

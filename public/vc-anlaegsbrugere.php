@@ -70,45 +70,48 @@ $pageTitle = 'Anlægsbrugere';
 $currentUser = $user;
 require __DIR__ . '/partials/header.php';
 ?>
-<h1 class="text-2xl font-semibold text-brand mb-4">Anlægsbrugere</h1>
+<h1 class="abas-page-title">Anlægsbrugere</h1>
+<p class="abas-page-lead">Opret og tilknyt anlægsejere til deres anlæg.</p>
 
 <div class="grid lg:grid-cols-2 gap-6">
-    <form method="post" class="bg-white border rounded p-4 space-y-3">
-        <h2 class="font-semibold">Opret anlægsbruger</h2>
+    <form method="post" class="abas-card abas-form">
+        <h2 class="abas-card-title">Opret anlægsbruger</h2>
         <input type="hidden" name="action" value="create_user">
-        <input name="email" type="email" required placeholder="E-mail" class="w-full border rounded px-3 py-2">
-        <input name="username" required placeholder="Brugernavn" class="w-full border rounded px-3 py-2">
-        <input name="phone" required placeholder="Telefon (+45...)" class="w-full border rounded px-3 py-2">
-        <input name="miscno2" placeholder="Anlægsnr. (valgfri)" class="w-full border rounded px-3 py-2 font-mono">
-        <button class="bg-brand text-white px-4 py-2 rounded">Opret</button>
+        <div class="abas-field"><label class="abas-label">E-mail</label><input name="email" type="email" required class="abas-input"></div>
+        <div class="abas-field"><label class="abas-label">Brugernavn</label><input name="username" required class="abas-input"></div>
+        <div class="abas-field"><label class="abas-label">Telefon</label><input name="phone" required placeholder="+45..." class="abas-input"></div>
+        <div class="abas-field"><label class="abas-label">Anlægsnr. (valgfri)</label><input name="miscno2" placeholder="fab0100" class="abas-input font-mono"></div>
+        <button class="abas-btn-primary">Opret</button>
     </form>
 
-    <form method="post" class="bg-white border rounded p-4 space-y-3">
-        <h2 class="font-semibold">Tilknyt eksisterende bruger til anlæg</h2>
+    <form method="post" class="abas-card abas-form">
+        <h2 class="abas-card-title">Tilknyt eksisterende bruger til anlæg</h2>
         <input type="hidden" name="action" value="link">
-        <select name="user_id" class="w-full border rounded px-3 py-2">
+        <div class="abas-field"><label class="abas-label">Bruger</label>
+        <select name="user_id" class="abas-select">
             <?php foreach ($owners as $o): ?>
                 <option value="<?= (int) $o['id'] ?>"><?= htmlspecialchars($o['username']) ?></option>
             <?php endforeach; ?>
-        </select>
-        <select name="installation_id" class="w-full border rounded px-3 py-2">
+        </select></div>
+        <div class="abas-field"><label class="abas-label">Anlæg</label>
+        <select name="installation_id" class="abas-select">
             <?php foreach ($installations as $i): ?>
                 <option value="<?= (int) $i['id'] ?>"><?= htmlspecialchars((string) $i['miscno2']) ?> — <?= htmlspecialchars((string) $i['name']) ?></option>
             <?php endforeach; ?>
-        </select>
-        <button class="border px-4 py-2 rounded">Tilknyt</button>
+        </select></div>
+        <button class="abas-btn-secondary">Tilknyt</button>
     </form>
 </div>
 
-<div class="mt-6 bg-white border rounded overflow-x-auto">
-    <table class="w-full text-sm">
-        <thead class="table-head"><tr><th class="p-2 text-left">Bruger</th><th class="p-2 text-left">E-mail</th><th class="p-2 text-left">Telefon</th></tr></thead>
+<div class="mt-6 abas-table-wrap">
+    <table class="abas-table">
+        <thead><tr><th>Bruger</th><th>E-mail</th><th>Telefon</th></tr></thead>
         <tbody>
         <?php foreach ($owners as $o): ?>
-            <tr class="border-t">
-                <td class="p-2"><?= htmlspecialchars($o['username']) ?></td>
-                <td class="p-2"><?= htmlspecialchars($o['email']) ?></td>
-                <td class="p-2"><?= htmlspecialchars((string) ($o['phone'] ?? '—')) ?></td>
+            <tr>
+                <td><?= htmlspecialchars($o['username']) ?></td>
+                <td><?= htmlspecialchars($o['email']) ?></td>
+                <td><?= htmlspecialchars((string) ($o['phone'] ?? '—')) ?></td>
             </tr>
         <?php endforeach; ?>
         </tbody>

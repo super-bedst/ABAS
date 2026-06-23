@@ -49,19 +49,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $pageTitle = 'Registrering';
 require __DIR__ . '/partials/header.php';
 ?>
-<div class="max-w-md mx-auto bg-white rounded-lg shadow p-6 border">
-    <h1 class="text-xl font-semibold text-brand mb-2">Montør-registrering</h1>
-    <p class="text-sm text-gray-600 mb-4">Kun e-mail fra godkendte installatør-domæner.</p>
-    <?php if ($error): ?><p class="text-red-600 mb-3"><?= htmlspecialchars($error) ?></p><?php endif; ?>
-    <?php if ($success): ?><p class="text-green-700 mb-3"><?= htmlspecialchars($success) ?></p><?php endif; ?>
+<div class="abas-auth-card">
+    <h1 class="abas-page-title !text-xl">Montør-registrering</h1>
+    <p class="text-sm text-gray-600 mb-4">Kun e-mail fra godkendte installatør-domæner. Firmanavn tilknyttes automatisk.</p>
+    <?php if ($error): ?><p class="abas-alert-error !mb-4"><?= htmlspecialchars($error) ?></p><?php endif; ?>
+    <?php if ($success): ?><p class="abas-alert-success !mb-4"><?= htmlspecialchars($success) ?></p><?php endif; ?>
     <?php if (!$success): ?>
-    <form method="post" class="space-y-3">
-        <div><label class="block text-sm">E-mail</label><input name="email" type="email" required class="w-full border rounded px-3 py-2"></div>
-        <div><label class="block text-sm">Brugernavn</label><input name="username" required class="w-full border rounded px-3 py-2"></div>
-        <div><label class="block text-sm">Telefon</label><input name="phone" required class="w-full border rounded px-3 py-2" placeholder="+45..."></div>
-        <button class="w-full bg-brand text-white py-2 rounded">Opret konto</button>
+    <form method="post" class="abas-form">
+        <div class="abas-field"><label class="abas-label" for="email">E-mail</label><input id="email" name="email" type="email" required class="abas-input"></div>
+        <div class="abas-field"><label class="abas-label" for="username">Brugernavn</label><input id="username" name="username" required class="abas-input"></div>
+        <div class="abas-field"><label class="abas-label" for="phone">Telefon</label><input id="phone" name="phone" required class="abas-input" placeholder="+45..."></div>
+        <button class="abas-btn-primary abas-btn-block">Opret konto</button>
     </form>
     <?php endif; ?>
-    <p class="mt-4 text-sm"><a href="<?= abas_url('login.php') ?>" class="text-brand underline">Tilbage til login</a></p>
+    <p class="mt-4 text-sm"><a href="<?= abas_url('login.php') ?>" class="abas-link">Tilbage til login</a></p>
 </div>
 <?php require __DIR__ . '/partials/footer.php';

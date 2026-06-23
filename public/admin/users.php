@@ -68,52 +68,55 @@ $pageTitle = 'Brugere';
 $currentUser = $user;
 require __DIR__ . '/../partials/header.php';
 ?>
-<h1 class="text-xl font-semibold text-brand mb-4">Brugere</h1>
-<form method="post" class="bg-white border rounded p-4 mb-4 max-w-lg space-y-2">
-    <input name="email" type="email" required placeholder="E-mail" class="w-full border rounded px-3 py-2">
-    <input name="username" required placeholder="Brugernavn" class="w-full border rounded px-3 py-2">
-    <input name="phone" required placeholder="Telefon (+45...)" class="w-full border rounded px-3 py-2">
-    <select name="role" class="w-full border rounded px-3 py-2">
+<h1 class="abas-page-title !text-xl">Brugere</h1>
+<form method="post" class="abas-card mb-4 max-w-lg abas-form">
+    <div class="abas-field"><label class="abas-label">E-mail</label><input name="email" type="email" required class="abas-input"></div>
+    <div class="abas-field"><label class="abas-label">Brugernavn</label><input name="username" required class="abas-input"></div>
+    <div class="abas-field"><label class="abas-label">Telefon</label><input name="phone" required placeholder="+45..." class="abas-input"></div>
+    <div class="abas-field">
+        <label class="abas-label">Rolle</label>
+        <select name="role" class="abas-select">
         <?php foreach (abas_roles() as $r): ?>
             <option value="<?= $r ?>"><?= abas_role_label($r) ?></option>
         <?php endforeach; ?>
-    </select>
-    <p class="text-xs text-gray-500">Montører får automatisk firmanavn ud fra e-mail-domænet.</p>
-    <button class="bg-brand text-white px-4 py-2 rounded">Opret bruger</button>
+        </select>
+        <p class="abas-hint">Montører får automatisk firmanavn ud fra e-mail-domænet.</p>
+    </div>
+    <button class="abas-btn-primary">Opret bruger</button>
 </form>
-<div class="overflow-x-auto bg-white border rounded">
-<table class="w-full text-sm">
-    <thead class="table-head">
+<div class="abas-table-wrap">
+<table class="abas-table">
+    <thead>
         <tr>
-            <th class="p-2 text-left">Bruger</th>
-            <th class="p-2 text-left">Telefon</th>
-            <th class="p-2 text-left">Rolle / firma</th>
-            <th class="p-2">Aktiv</th>
-            <th class="p-2"></th>
+            <th>Bruger</th>
+            <th>Telefon</th>
+            <th>Rolle / firma</th>
+            <th>Aktiv</th>
+            <th></th>
         </tr>
     </thead>
     <tbody>
     <?php foreach ($rows as $r): ?>
-        <tr class="border-t">
-            <td class="p-2">
+        <tr>
+            <td>
                 <?= htmlspecialchars($r['username']) ?><br>
                 <span class="text-gray-500 text-xs"><?= htmlspecialchars($r['email']) ?></span>
             </td>
-            <td class="p-2 whitespace-nowrap"><?= htmlspecialchars((string) ($r['phone'] ?? '—')) ?></td>
-            <td class="p-2">
+            <td class="whitespace-nowrap"><?= htmlspecialchars((string) ($r['phone'] ?? '—')) ?></td>
+            <td>
                 <?= abas_role_label($r['role']) ?>
                 <?php if ($r['role'] === 'montor' && !empty($r['company_name'])): ?>
                     <br><span class="text-gray-500 text-xs"><?= htmlspecialchars($r['company_name']) ?></span>
                 <?php endif; ?>
             </td>
-            <td class="p-2 text-center"><?= $r['active'] ? 'Ja' : 'Nej' ?></td>
-            <td class="p-2 text-right">
-                <a href="<?= abas_url('admin/user-edit.php?id=' . (int) $r['id']) ?>" class="text-brand underline">Rediger</a>
+            <td class="text-center"><?= $r['active'] ? 'Ja' : 'Nej' ?></td>
+            <td class="text-right">
+                <a href="<?= abas_url('admin/user-edit.php?id=' . (int) $r['id']) ?>" class="abas-link">Rediger</a>
             </td>
         </tr>
     <?php endforeach; ?>
     </tbody>
 </table>
 </div>
-<p class="mt-4"><a href="<?= abas_url('admin/index.php') ?>" class="text-brand underline text-sm">Tilbage</a></p>
+<p class="mt-4"><a href="<?= abas_url('admin/index.php') ?>" class="abas-link text-sm">Tilbage</a></p>
 <?php require __DIR__ . '/../partials/footer.php';
