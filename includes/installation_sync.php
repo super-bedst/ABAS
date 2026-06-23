@@ -83,9 +83,9 @@ function abas_search_installations_from_api(mysqli $conn, ?array $user, string $
     $resp = $client->searchInstallations(abas_trekant_userid($user), $misc);
     $code = abas_trekant_return_code($resp);
     if ($code !== 0) {
-        $msg = (string) ($resp['message']['message'] ?? $resp['Message'] ?? '');
+        $hint = abas_trekant_response_hint($resp);
         throw new RuntimeException(
-            'TrekantBrand søgning fejlede (kode ' . $code . ($msg !== '' ? ': ' . $msg : '') . ').'
+            'TrekantBrand søgning fejlede (kode ' . $code . ($hint !== '' ? ': ' . $hint : '') . ').'
         );
     }
 
