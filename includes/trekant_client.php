@@ -134,6 +134,24 @@ class TrekantClient
         ]);
     }
 
+    public function getInstallationDetails(int $sIns, string $dealId): array
+    {
+        return $this->call('g_ma_installations', [
+            's_ins' => $sIns,
+            'deal_id' => $dealId,
+        ]);
+    }
+
+    public function getInstallationContacts(int $sIns, string $dealId, string $userid): array
+    {
+        return $this->call('g_contper', [
+            's_ins' => $sIns,
+            'deal_id' => $dealId,
+            'userid' => strtoupper($userid),
+            's_cont' => 0,
+        ]);
+    }
+
     private function requestRaw(string $path, array $payload, bool $useToken, ?string $token = null): array
     {
         $url = $this->baseUrl . $path;
@@ -209,7 +227,10 @@ function abas_unlimited_test_time(): string
 
 function abas_trekant_rows(array $response): array
 {
-    $rows = $response['message']['result'] ?? $response['message']['rows'] ?? [];
+    $rows = $response['ResultSet']
+        ?? $response['message']['result']
+        ?? $response['message']['rows']
+        ?? [];
     if (!is_array($rows)) {
         return [];
     }

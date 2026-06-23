@@ -8,6 +8,7 @@ require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/roles.php';
 require_once __DIR__ . '/../includes/service.php';
 require_once __DIR__ . '/../includes/installation_sync.php';
+require_once __DIR__ . '/../includes/installation_details.php';
 
 $conn = abas_db();
 $user = abas_require_login();
@@ -57,8 +58,16 @@ try {
     abas_flash_set('error', 'Log: ' . $e->getMessage());
 }
 
+$instDetails = abas_fetch_installation_details($installation, $user);
+$mapLat = $instDetails['lat'];
+$mapLon = $instDetails['lon'];
+$contacts = $instDetails['contacts'];
+
 $pageTitle = $installation['miscno2'] ?? 'Anlæg';
 $currentUser = $user;
+$extraHead = ($mapLat !== null && $mapLon !== null)
+    ? '<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">'
+    : '';
 require __DIR__ . '/partials/header.php';
 ?>
 <div class="mb-4">
@@ -91,8 +100,43 @@ require __DIR__ . '/partials/header.php';
         <?php endif; ?>
     </div>
     <div class="bg-white border rounded p-4 shadow-sm text-sm">
-        <h2 class="font-semibold mb-2">Detaljer</h2>
-        <dl class="grid grid-cols-2 gap-1">
+        <h2 class="font-semibold mb-2">Placering og kontakter</h2>
+        <?php if ($mapLat !== null && $mapLon !== null): ?>
+            <div id="inst-map" class="h-44 w-full rounded border mb-3 z-0"></div>
+        <?php else: ?>
+            <p class="text-gray-500 mb-3 text-xs">GPS-koordinater ikke tilgængelige for dette anlæg.</p>
+        <?php endif; ?>
+
+        <?php if ($instDetails['error']): ?>
+            <p class="text-amber-700 text-xs mb-2">Kontakter kunne ikke hentes: <?= htmlspecialchars($instDetails['error']) ?></p>
+        <?php endif; ?>
+
+        <?php if ($contacts === []): ?>
+            <p class="text-gray-500 text-xs">Ingen registrerede kontakter.</p>
+        <?php else: ?>
+            <ul class="space-y-2">
+                <?php foreach ($contacts as $contact): ?>
+                    <li class="border-t pt-2 first:border-t-0 first:pt-0">
+                        <div class="font-medium"><?= htmlspecialchars($contact['name']) ?></div>
+                        <?php foreach ($contact['phones'] as $phone): ?>
+                            <div class="text-gray-600">
+                                <?php if ($phone['label'] !== 'Tlf.'): ?>
+                                    <span class="text-gray-400 text-xs"><?= htmlspecialchars($phone['label']) ?>:</span>
+                                <?php endif; ?>
+                                <a href="tel:<?= htmlspecialchars(preg_replace('/\s+/', '', $phone['number']) ?? $phone['number']) ?>" class="text-brand underline"><?= htmlspecialchars($phone['number']) ?></a>
+                            </div>
+                        <?php endforeach; ?>
+                        <?php if ($contact['email'] !== '' && $contact['email'] !== ' '): ?>
+                            <div class="text-gray-600">
+                                <a href="mailto:<?= htmlspecialchars(trim($contact['email'])) ?>" class="text-brand underline"><?= htmlspecialchars(trim($contact['email'])) ?></a>
+                            </div>
+                        <?php endif; ?>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
+        <?php endif; ?>
+
+        <dl class="grid grid-cols-2 gap-1 mt-4 pt-3 border-t text-xs">
             <dt class="text-gray-500">s_ins</dt><dd><?= (int) $installation['s_ins'] ?></dd>
             <dt class="text-gray-500">deal_id</dt><dd><?= htmlspecialchars((string) $installation['deal_id']) ?></dd>
             <dt class="text-gray-500">ins_no</dt><dd><?= htmlspecialchars((string) $installation['ins_no']) ?></dd>
@@ -100,6 +144,23 @@ require __DIR__ . '/partials/header.php';
         </dl>
     </div>
 </div>
+
+<?php if ($mapLat !== null && $mapLon !== null): ?>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+(function () {
+    var lat = <?= json_encode($mapLat) ?>;
+    var lon = <?= json_encode($mapLon) ?>;
+    var map = L.map('inst-map', { scrollWheelZoom: false }).setView([lat, lon], 16);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+    }).addTo(map);
+    L.marker([lat, lon]).addTo(map);
+    setTimeout(function () { map.invalidateSize(); }, 100);
+})();
+</script>
+<?php endif; ?>
 
 <div class="bg-white border rounded shadow-sm overflow-hidden">
     <div class="p-3 border-b flex flex-wrap gap-2 items-center">

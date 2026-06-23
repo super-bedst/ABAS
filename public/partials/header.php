@@ -18,6 +18,7 @@ $flash = abas_flash_get();
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title><?= htmlspecialchars($title) ?></title>
+    <?= $extraHead ?? '' ?>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
