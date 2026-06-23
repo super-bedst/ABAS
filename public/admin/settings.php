@@ -17,8 +17,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     abas_set_setting($conn, 'password_reset_ttl_hours', (string) max(1, (int) ($_POST['password_reset_ttl_hours'] ?? 24)));
     abas_set_setting($conn, 'welcome_token_ttl_hours', (string) max(1, (int) ($_POST['welcome_token_ttl_hours'] ?? 72)));
     abas_flash_set('success', 'Indstillinger gemt.');
-    header('Location: /admin/settings.php');
-    exit;
+    abas_redirect('admin/settings.php');
 }
 
 $pageTitle = 'Indstillinger';
@@ -41,5 +40,5 @@ require __DIR__ . '/../partials/header.php';
     </div>
     <button class="bg-brand text-white px-4 py-2 rounded">Gem</button>
 </form>
-<p class="mt-4"><a href="/admin/index.php" class="text-brand underline text-sm">Tilbage</a></p>
+<p class="mt-4"><a href="<?= abas_url('admin/index.php') ?>" class="text-brand underline text-sm">Tilbage</a></p>
 <?php require __DIR__ . '/../partials/footer.php';

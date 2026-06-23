@@ -54,8 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $link->close();
         abas_flash_set('success', 'Tilknytning gemt.');
     }
-    header('Location: /vc-anlaegsbrugere.php');
-    exit;
+    abas_redirect('vc-anlaegsbrugere.php');
 }
 
 $owners = $conn->query("SELECT id, email, username FROM users WHERE role='anlaegsejer' ORDER BY username")->fetch_all(MYSQLI_ASSOC);

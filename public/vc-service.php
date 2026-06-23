@@ -35,8 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $installation = abas_find_installation_by_miscno2($conn, $misc);
         } catch (Throwable $e) {
             abas_flash_set('error', $e->getMessage());
-            header('Location: /vc-service.php');
-            exit;
+            abas_redirect('vc-service.php');
         }
     }
     if (!$installation) {
@@ -52,7 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $onBehalf = $onBehalf ? (int) $onBehalf['id'] : null;
         }
         if (!$onBehalf && $phone !== '') {
-            $msg = 'Du er inviteret til ABA Service. Registrér dig som montør: ' . abas_config()['app_url'] . '/register.php';
+            $msg = 'Du er inviteret til ABA Service. Registrér dig som montør: ' . abas_full_url('register.php');
             abas_sms_queue($conn, $phone, $msg, 'montor_invite');
             $vcId = (int) $user['id'];
             $instId = (int) $installation['id'];
@@ -64,12 +63,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $r = abas_start_service_session($conn, $user, $installation, $hours, $unlimited, $onBehalf, $comment);
         abas_flash_set($r['ok'] ? 'success' : 'error', $r['ok'] ? 'Service startet på vegne af montør.' : ($r['message'] ?? 'Fejl'));
         if ($r['ok']) {
-            header('Location: /installation.php?id=' . (int) $installation['id']);
-            exit;
+            abas_redirect('installation.php?id=' . (int) $installation['id']);
         }
     }
-    header('Location: /vc-service.php');
-    exit;
+    abas_redirect('vc-service.php');
 }
 
 $pageTitle = 'VC — Hurtig service';

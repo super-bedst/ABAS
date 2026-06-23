@@ -64,8 +64,8 @@ function abas_config(): array
         'db' => [
             'host' => abas_env('DB_HOST', '127.0.0.1'),
             'port' => (int) abas_env('DB_PORT', '3306'),
-            'name' => abas_env('DB_NAME', 'aba_service'),
-            'user' => abas_env('DB_USER', 'root'),
+            'name' => abas_env('DB_NAME', 'abas'),
+            'user' => abas_env('DB_USER', 'abas_app'),
             'pass' => abas_env('DB_PASS', ''),
         ],
         'trekant' => [
@@ -80,6 +80,8 @@ function abas_config(): array
         ],
     ];
 }
+
+require_once __DIR__ . '/paths.php';
 
 function abas_setting(mysqli $conn, string $key, ?string $default = null): ?string
 {

@@ -9,7 +9,7 @@ function abas_session_start(): void
     }
     session_set_cookie_params([
         'lifetime' => 86400,
-        'path' => '/',
+        'path' => abas_public_base() ?: '/',
         'secure' => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
         'httponly' => true,
         'samesite' => 'Lax',

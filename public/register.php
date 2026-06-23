@@ -59,6 +59,6 @@ require __DIR__ . '/partials/header.php';
         <button class="w-full bg-brand text-white py-2 rounded">Opret konto</button>
     </form>
     <?php endif; ?>
-    <p class="mt-4 text-sm"><a href="/login.php" class="text-brand underline">Tilbage til login</a></p>
+    <p class="mt-4 text-sm"><a href="<?= abas_url('login.php') ?>" class="text-brand underline">Tilbage til login</a></p>
 </div>
 <?php require __DIR__ . '/partials/footer.php';

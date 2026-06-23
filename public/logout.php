@@ -6,5 +6,4 @@ require_once __DIR__ . '/../includes/bootstrap.php';
 require_once __DIR__ . '/../includes/auth.php';
 
 abas_logout();
-header('Location: /login.php');
-exit;
+abas_redirect('login.php');

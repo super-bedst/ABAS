@@ -27,8 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $row) {
         abas_password_consume_token($conn, $token);
         abas_access_set_due($conn, $uid);
         abas_flash_set('success', 'Adgangskode gemt. Du kan nu logge ind.');
-        header('Location: /login.php');
-        exit;
+        abas_redirect('login.php');
     }
 }
 

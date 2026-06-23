@@ -13,8 +13,7 @@ $user = abas_require_login();
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     abas_access_set_due($conn, (int) $user['id']);
     abas_flash_set('success', 'Adgang bekræftet.');
-    header('Location: /dashboard.php');
-    exit;
+    abas_redirect('dashboard.php');
 }
 
 $pageTitle = 'Bekræft adgang';

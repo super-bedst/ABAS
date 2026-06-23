@@ -34,8 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         abas_flash_set('success', 'Bruger oprettet.');
     }
     $chk->close();
-    header('Location: /admin/users.php');
-    exit;
+    abas_redirect('admin/users.php');
 }
 
 $rows = $conn->query('SELECT id, email, username, role, active, trekant_userid FROM users ORDER BY role, username')->fetch_all(MYSQLI_ASSOC);
@@ -68,5 +67,5 @@ require __DIR__ . '/../partials/header.php';
     </tbody>
 </table>
 </div>
-<p class="mt-4"><a href="/admin/index.php" class="text-brand underline text-sm">Tilbage</a></p>
+<p class="mt-4"><a href="<?= abas_url('admin/index.php') ?>" class="text-brand underline text-sm">Tilbage</a></p>
 <?php require __DIR__ . '/../partials/footer.php';

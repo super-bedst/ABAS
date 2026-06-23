@@ -47,8 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $r = abas_stop_service_session($conn, $user, $installation, $session ? (int) $session['id'] : null, trim($_POST['comment'] ?? ''));
         abas_flash_set($r['ok'] ? 'success' : 'error', $r['ok'] ? 'Service stoppet.' : ($r['message'] ?? 'Fejl'));
     }
-    header('Location: /installation.php?id=' . $id);
-    exit;
+    abas_redirect('installation.php?id=' . $id);
 }
 
 $log = ['rows' => [], 'code' => -1];
@@ -71,7 +70,7 @@ $extraHead = ($mapLat !== null && $mapLon !== null)
 require __DIR__ . '/partials/header.php';
 ?>
 <div class="mb-4">
-    <a href="/dashboard.php" class="text-brand text-sm underline">&larr; Tilbage</a>
+    <a href="<?= abas_url('dashboard.php') ?>" class="text-brand text-sm underline">&larr; Tilbage</a>
 </div>
 <h1 class="text-2xl font-semibold text-brand mb-1"><?= htmlspecialchars((string) $installation['miscno2']) ?></h1>
 <p class="text-gray-700 mb-4"><?= htmlspecialchars((string) $installation['name']) ?> — <?= htmlspecialchars((string) $installation['address']) ?>, <?= htmlspecialchars((string) $installation['city']) ?></p>

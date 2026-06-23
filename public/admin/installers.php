@@ -25,8 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt->close();
         abas_flash_set('success', 'Installatør gemt.');
     }
-    header('Location: /admin/installers.php');
-    exit;
+    abas_redirect('admin/installers.php');
 }
 
 $rows = $conn->query('SELECT * FROM approved_installers ORDER BY company_name')->fetch_all(MYSQLI_ASSOC);
@@ -48,5 +47,5 @@ require __DIR__ . '/../partials/header.php';
     <?php endforeach; ?>
     </tbody>
 </table>
-<p class="mt-4"><a href="/admin/index.php" class="text-brand underline text-sm">Tilbage</a></p>
+<p class="mt-4"><a href="<?= abas_url('admin/index.php') ?>" class="text-brand underline text-sm">Tilbage</a></p>
 <?php require __DIR__ . '/../partials/footer.php';

@@ -17,10 +17,10 @@ require __DIR__ . '/../partials/header.php';
 ?>
 <h1 class="text-2xl font-semibold text-brand mb-4">Administration</h1>
 <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-    <a href="/admin/installers.php" class="block bg-white border rounded p-4 shadow-sm hover:border-brand">Godkendte installatører</a>
-    <a href="/admin/sync.php" class="block bg-white border rounded p-4 shadow-sm hover:border-brand">Sync-prefixes</a>
-    <a href="/admin/settings.php" class="block bg-white border rounded p-4 shadow-sm hover:border-brand">Systemindstillinger</a>
-    <a href="/admin/users.php" class="block bg-white border rounded p-4 shadow-sm hover:border-brand">Brugere</a>
-    <a href="/admin/api-tokens.php" class="block bg-white border rounded p-4 shadow-sm hover:border-brand">API-tokens</a>
+    <a href="<?= abas_url('admin/installers.php') ?>" class="block bg-white border rounded p-4 shadow-sm hover:border-brand">Godkendte installatører</a>
+    <a href="<?= abas_url('admin/sync.php') ?>" class="block bg-white border rounded p-4 shadow-sm hover:border-brand">Sync-prefixes</a>
+    <a href="<?= abas_url('admin/settings.php') ?>" class="block bg-white border rounded p-4 shadow-sm hover:border-brand">Systemindstillinger</a>
+    <a href="<?= abas_url('admin/users.php') ?>" class="block bg-white border rounded p-4 shadow-sm hover:border-brand">Brugere</a>
+    <a href="<?= abas_url('admin/api-tokens.php') ?>" class="block bg-white border rounded p-4 shadow-sm hover:border-brand">API-tokens</a>
 </div>
 <?php require __DIR__ . '/../partials/footer.php';

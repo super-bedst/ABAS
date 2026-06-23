@@ -10,8 +10,7 @@ require_once __DIR__ . '/../includes/roles.php';
 
 $conn = abas_db();
 if (!empty($_SESSION['user_id'])) {
-    header('Location: /dashboard.php');
-    exit;
+    abas_redirect('dashboard.php');
 }
 
 $error = '';
@@ -25,8 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $stmt->close();
     if ($user && $user['password_hash'] && password_verify($pass, $user['password_hash'])) {
         abas_login_user($user);
-        header('Location: /dashboard.php');
-        exit;
+        abas_redirect('dashboard.php');
     }
     $error = 'Forkert login eller adgangskode.';
 }
@@ -49,9 +47,9 @@ require __DIR__ . '/partials/header.php';
         <button type="submit" class="w-full bg-brand text-white py-2 rounded hover:opacity-90">Log ind</button>
     </form>
     <p class="mt-4 text-sm text-center">
-        <a href="/forgot-password.php" class="text-brand underline">Glemt adgangskode</a>
+        <a href="<?= abas_url('forgot-password.php') ?>" class="text-brand underline">Glemt adgangskode</a>
         &middot;
-        <a href="/register.php" class="text-brand underline">Montør-registrering</a>
+        <a href="<?= abas_url('register.php') ?>" class="text-brand underline">Montør-registrering</a>
     </p>
 </div>
 <?php require __DIR__ . '/partials/footer.php';

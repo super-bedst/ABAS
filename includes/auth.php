@@ -43,15 +43,15 @@ function abas_require_login(): array
     $conn = abas_db();
     $user = abas_current_user($conn);
     if (!$user) {
-        header('Location: /login.php');
+        abas_redirect('login.php');
         exit;
     }
     if (empty($user['password_hash'])) {
-        header('Location: /forgot-password.php');
+        abas_redirect('forgot-password.php');
         exit;
     }
     if (abas_access_needs_confirm($user) && !str_contains($_SERVER['PHP_SELF'] ?? '', 'access-confirm')) {
-        header('Location: /access-confirm.php');
+        abas_redirect('access-confirm.php');
         exit;
     }
 

@@ -51,6 +51,22 @@ mysql -u root -p -e "CREATE DATABASE aba_service CHARACTER SET utf8mb4 COLLATE u
 mysql -u root -p aba_service < Database/schema.sql
 ```
 
+### Apache (undermappe, fx `/Sandbox/ABAS/public/`)
+
+Document root peger typisk på `public/`. Applikationen finder selv base-sti ud fra URL'en.
+
+Valgfrit kan du åbne `https://host/Sandbox/ABAS/` — roden `index.php` videresender til `public/`.
+
+Sæt i `.env`:
+
+```
+APP_URL=https://tkb.teamscreen.dk/Sandbox/ABAS/public
+```
+
+### Apache (direkte domæne)
+
+Document root = `public/`. `APP_URL=https://abas.example.dk`
+
 4. Start PHP built-in server (udvikling):
 
 ```bash

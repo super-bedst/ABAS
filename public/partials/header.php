@@ -2,8 +2,9 @@
 
 declare(strict_types=1);
 
-require_once dirname(__DIR__) . '/includes/bootstrap.php';
-require_once dirname(__DIR__) . '/includes/theme.php';
+require_once dirname(__DIR__, 2) . '/includes/bootstrap.php';
+require_once dirname(__DIR__, 2) . '/includes/roles.php';
+require_once dirname(__DIR__, 2) . '/includes/theme.php';
 
 /** @var string $pageTitle */
 /** @var array|null $currentUser */
@@ -40,19 +41,19 @@ $flash = abas_flash_get();
 <body class="min-h-screen flex flex-col">
 <header class="bg-brand text-white shadow">
     <div class="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-2">
-        <a href="/dashboard.php" class="font-semibold text-lg tracking-wide"><?= htmlspecialchars($appName) ?></a>
+        <a href="<?= abas_url('dashboard.php') ?>" class="font-semibold text-lg tracking-wide"><?= htmlspecialchars($appName) ?></a>
         <?php if (!empty($currentUser)): ?>
         <nav class="flex flex-wrap gap-3 text-sm items-center">
-            <a href="/dashboard.php" class="hover:underline">Dashboard</a>
+            <a href="<?= abas_url('dashboard.php') ?>" class="hover:underline">Dashboard</a>
             <?php if (in_array($currentUser['role'], ['vagtcentral', 'admin'], true)): ?>
-                <a href="/vc-service.php" class="hover:underline">VC service</a>
-                <a href="/vc-anlaegsbrugere.php" class="hover:underline">Anlægsbrugere</a>
+                <a href="<?= abas_url('vc-service.php') ?>" class="hover:underline">VC service</a>
+                <a href="<?= abas_url('vc-anlaegsbrugere.php') ?>" class="hover:underline">Anlægsbrugere</a>
             <?php endif; ?>
             <?php if ($currentUser['role'] === 'admin'): ?>
-                <a href="/admin/index.php" class="hover:underline">Admin</a>
+                <a href="<?= abas_url('admin/index.php') ?>" class="hover:underline">Admin</a>
             <?php endif; ?>
             <span class="opacity-80"><?= htmlspecialchars($currentUser['username']) ?> (<?= htmlspecialchars(abas_role_label($currentUser['role'])) ?>)</span>
-            <a href="/logout.php" class="bg-white/10 px-2 py-1 rounded hover:bg-white/20">Log ud</a>
+            <a href="<?= abas_url('logout.php') ?>" class="bg-white/10 px-2 py-1 rounded hover:bg-white/20">Log ud</a>
         </nav>
         <?php endif; ?>
     </div>

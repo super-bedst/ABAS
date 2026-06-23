@@ -98,7 +98,7 @@ require __DIR__ . '/partials/header.php';
             <td class="p-2"><?= htmlspecialchars((string) $inst['name']) ?></td>
             <td class="p-2 hidden sm:table-cell"><?= htmlspecialchars((string) $inst['city']) ?></td>
             <td class="p-2 hidden md:table-cell"><?= htmlspecialchars((string) $inst['mon_stat']) ?></td>
-            <td class="p-2"><a class="text-brand underline" href="/installation.php?id=<?= (int) $inst['id'] ?>">Åbn</a></td>
+            <td class="p-2"><a class="text-brand underline" href="<?= abas_url('installation.php?id=' . (int) $inst['id']) ?>">Åbn</a></td>
         </tr>
     <?php endforeach; ?>
     </tbody>

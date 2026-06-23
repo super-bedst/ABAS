@@ -31,6 +31,6 @@ require __DIR__ . '/partials/header.php';
         <div><label class="block text-sm">E-mail</label><input name="email" type="email" required class="w-full border rounded px-3 py-2"></div>
         <button class="w-full bg-brand text-white py-2 rounded">Send link</button>
     </form>
-    <p class="mt-4 text-sm"><a href="/login.php" class="text-brand underline">Tilbage</a></p>
+    <p class="mt-4 text-sm"><a href="<?= abas_url('login.php') ?>" class="text-brand underline">Tilbage</a></p>
 </div>
 <?php require __DIR__ . '/partials/footer.php';

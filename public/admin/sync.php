@@ -31,8 +31,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             abas_flash_set('error', $e->getMessage());
         }
     }
-    header('Location: /admin/sync.php');
-    exit;
+    abas_redirect('admin/sync.php');
 }
 
 $rows = $conn->query('SELECT * FROM sync_prefixes ORDER BY prefix')->fetch_all(MYSQLI_ASSOC);
@@ -64,5 +63,5 @@ require __DIR__ . '/../partials/header.php';
     <?php endforeach; ?>
     </tbody>
 </table>
-<p class="mt-4"><a href="/admin/index.php" class="text-brand underline text-sm">Tilbage</a></p>
+<p class="mt-4"><a href="<?= abas_url('admin/index.php') ?>" class="text-brand underline text-sm">Tilbage</a></p>
 <?php require __DIR__ . '/../partials/footer.php';
