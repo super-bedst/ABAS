@@ -111,6 +111,14 @@ Hvis `git pull` fejler (fx uafsluttet merge eller lokale ændringer), brug **for
 .\scripts\deploy.ps1 -Force
 ```
 
+Hvis `npm install` fejler (fx exit `-4048` pga. fil-lås/antivirus), brug **SkipNpm** — PHP deployes og CSS hentes fra git:
+
+```powershell
+.\scripts\deploy.ps1 -SkipNpm
+# eller kombineret:
+.\scripts\deploy.ps1 -Force -SkipNpm
+```
+
 Scriptet kører `git pull`, `npm install` og `npm run build`. Kræver [Node.js](https://nodejs.org) på serveren.
 
 ## Cron
