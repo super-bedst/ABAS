@@ -1,7 +1,10 @@
 RewriteEngine On
 DirectorySlash Off
 
-# API routing (uden RewriteBase — virker i /Sandbox/ABAS/public/ m.m.)
+# SMS inbound webhook (BAS)
+RewriteRule ^api/v1/sms/inbound/?$ api/v1/index.php?route=sms/inbound [QSA,L]
+
+# Øvrige API-ruter
 RewriteRule ^api/v1/(.*)$ api/v1/index.php?route=$1 [QSA,L]
 
 # Front controller fallback

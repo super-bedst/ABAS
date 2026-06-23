@@ -13,25 +13,19 @@ $user = abas_require_login();
 abas_require_role(['admin']);
 
 $lines = abas_sms_read_inbound_webhook_log();
-$endpoints = [
-    'Anbefalet' => abas_full_url('sms-inbound.php'),
-    'Rewrite' => abas_full_url('api/v1/sms/inbound'),
-];
+$endpoint = abas_sms_inbound_webhook_url();
 
 $pageTitle = 'SMS inbound log';
 $currentUser = $user;
 require __DIR__ . '/../partials/header.php';
 ?>
 <h1 class="abas-page-title">SMS inbound log</h1>
-<p class="abas-page-lead">Seneste <?= count($lines) ?> webhook-kald. Konfigurer BAS med én af disse URL'er:</p>
-<ul class="mb-4 space-y-1 text-sm">
-    <?php foreach ($endpoints as $label => $url): ?>
-        <li>
-            <span class="font-medium text-gray-700"><?= htmlspecialchars($label) ?>:</span>
-            <code class="bg-gray-100 px-1.5 py-0.5 rounded break-all"><?= htmlspecialchars($url) ?></code>
-        </li>
-    <?php endforeach; ?>
-</ul>
+<p class="abas-page-lead">
+    Seneste <?= count($lines) ?> webhook-kald. Konfigurer BAS med:
+</p>
+<p class="mb-4">
+    <code class="text-sm bg-gray-100 px-2 py-1.5 rounded break-all block"><?= htmlspecialchars($endpoint) ?></code>
+</p>
 
 <div class="flex flex-wrap gap-2 mb-4">
     <a href="<?= abas_url('admin/sms-inbound-log.php') ?>" class="abas-btn-secondary">Opdater</a>

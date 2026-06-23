@@ -73,6 +73,12 @@ function abas_full_url(string $path): string
     return rtrim(abas_app_url(), '/') . '/' . ltrim($path, '/');
 }
 
+/** Officiel BAS/Inmobile webhook-URL (kræver mod_rewrite i public/.htaccess). */
+function abas_sms_inbound_webhook_url(): string
+{
+    return abas_full_url('api/v1/sms/inbound');
+}
+
 function abas_asset_url(string $path): string
 {
     $rel = ltrim(str_replace('\\', '/', $path), '/');
