@@ -8,6 +8,7 @@ require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/roles.php';
 require_once __DIR__ . '/../includes/password_flow.php';
 require_once __DIR__ . '/../includes/installation_sync.php';
+require_once __DIR__ . '/../includes/users.php';
 
 $conn = abas_db();
 $user = abas_require_login();
@@ -18,7 +19,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'create_user') {
         $email = strtolower(trim($_POST['email'] ?? ''));
         $username = trim($_POST['username'] ?? '');
+        $phone = abas_normalize_phone(trim($_POST['phone'] ?? ''));
         $misc = strtolower(trim($_POST['miscno2'] ?? ''));
+        if (!abas_validate_phone($phone)) {
+            abas_flash_set('error', 'Angiv et gyldigt telefonnummer (min. 8 cifre).');
+            abas_redirect('vc-anlaegsbrugere.php');
+        }
         $chk = $conn->prepare('SELECT id FROM users WHERE email=? OR username=? LIMIT 1');
         $chk->bind_param('ss', $email, $username);
         $chk->execute();
@@ -27,9 +33,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $vcId = (int) $user['id'];
             $stmt = $conn->prepare(
-                'INSERT INTO users (email, username, role, active, created_by_user_id) VALUES (?, ?, "anlaegsejer", 1, ?)'
+                'INSERT INTO users (email, username, role, phone, active, created_by_user_id) VALUES (?, ?, "anlaegsejer", ?, 1, ?)'
             );
-            $stmt->bind_param('ssi', $email, $username, $vcId);
+            $stmt->bind_param('sssi', $email, $username, $phone, $vcId);
             $stmt->execute();
             $newId = (int) $stmt->insert_id;
             $stmt->close();
@@ -57,7 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     abas_redirect('vc-anlaegsbrugere.php');
 }
 
-$owners = $conn->query("SELECT id, email, username FROM users WHERE role='anlaegsejer' ORDER BY username")->fetch_all(MYSQLI_ASSOC);
+$owners = $conn->query("SELECT id, email, username, phone FROM users WHERE role='anlaegsejer' ORDER BY username")->fetch_all(MYSQLI_ASSOC);
 $installations = $conn->query('SELECT id, miscno2, name FROM installations ORDER BY miscno2 LIMIT 200')->fetch_all(MYSQLI_ASSOC);
 
 $pageTitle = 'Anlægsbrugere';
@@ -72,6 +78,7 @@ require __DIR__ . '/partials/header.php';
         <input type="hidden" name="action" value="create_user">
         <input name="email" type="email" required placeholder="E-mail" class="w-full border rounded px-3 py-2">
         <input name="username" required placeholder="Brugernavn" class="w-full border rounded px-3 py-2">
+        <input name="phone" required placeholder="Telefon (+45...)" class="w-full border rounded px-3 py-2">
         <input name="miscno2" placeholder="Anlægsnr. (valgfri)" class="w-full border rounded px-3 py-2 font-mono">
         <button class="bg-brand text-white px-4 py-2 rounded">Opret</button>
     </form>
@@ -95,10 +102,14 @@ require __DIR__ . '/partials/header.php';
 
 <div class="mt-6 bg-white border rounded overflow-x-auto">
     <table class="w-full text-sm">
-        <thead class="table-head"><tr><th class="p-2 text-left">Bruger</th><th class="p-2 text-left">E-mail</th></tr></thead>
+        <thead class="table-head"><tr><th class="p-2 text-left">Bruger</th><th class="p-2 text-left">E-mail</th><th class="p-2 text-left">Telefon</th></tr></thead>
         <tbody>
         <?php foreach ($owners as $o): ?>
-            <tr class="border-t"><td class="p-2"><?= htmlspecialchars($o['username']) ?></td><td class="p-2"><?= htmlspecialchars($o['email']) ?></td></tr>
+            <tr class="border-t">
+                <td class="p-2"><?= htmlspecialchars($o['username']) ?></td>
+                <td class="p-2"><?= htmlspecialchars($o['email']) ?></td>
+                <td class="p-2"><?= htmlspecialchars((string) ($o['phone'] ?? '—')) ?></td>
+            </tr>
         <?php endforeach; ?>
         </tbody>
     </table>

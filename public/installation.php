@@ -94,6 +94,9 @@ require __DIR__ . '/partials/header.php';
                     <input type="number" name="hours" step="0.5" min="0.5" value="2" class="w-full border rounded px-2 py-1">
                 </div>
                 <textarea name="comment" rows="2" class="w-full border rounded px-2 py-1" placeholder="Kommentar"></textarea>
+                <?php if ($user['role'] !== 'vagtcentral'): ?>
+                    <p class="text-xs text-gray-500">Din kommentar får automatisk tilføjet navn, telefon og rolle<?= $user['role'] === 'montor' ? ' samt firmanavn' : '' ?>.</p>
+                <?php endif; ?>
                 <button class="bg-brand text-white px-4 py-2 rounded">Start service</button>
             </form>
         <?php endif; ?>
@@ -170,8 +173,16 @@ require __DIR__ . '/partials/header.php';
     <form method="get" class="p-3 border-b flex flex-wrap gap-2 text-sm items-end">
         <input type="hidden" name="id" value="<?= $id ?>">
         <input type="hidden" name="log" value="custom">
-        <div><label class="block text-xs">Fra</label><input type="date" name="from" value="<?= htmlspecialchars($_GET['from'] ?? '') ?>"></div>
-        <div><label class="block text-xs">Til</label><input type="date" name="to" value="<?= htmlspecialchars($_GET['to'] ?? '') ?>"></div>
+        <div>
+            <label class="block text-xs">Fra</label>
+            <input type="date" name="from" value="<?= htmlspecialchars($_GET['from'] ?? '') ?>" class="border rounded px-2 py-1" title="dd/mm/åååå">
+            <span class="text-xs text-gray-500">dd/mm/åååå</span>
+        </div>
+        <div>
+            <label class="block text-xs">Til</label>
+            <input type="date" name="to" value="<?= htmlspecialchars($_GET['to'] ?? '') ?>" class="border rounded px-2 py-1" title="dd/mm/åååå">
+            <span class="text-xs text-gray-500">dd/mm/åååå</span>
+        </div>
         <button class="border px-3 py-1 rounded">Vis periode</button>
     </form>
     <?php if ($log['code'] !== 0): ?>
@@ -181,12 +192,12 @@ require __DIR__ . '/partials/header.php';
     <?php else: ?>
     <div class="overflow-x-auto max-h-96">
         <table class="w-full text-xs">
-            <thead class="table-head sticky top-0"><tr><th class="p-2 text-left">Tid</th><th class="p-2 text-left">Tekst</th></tr></thead>
+            <thead class="table-head sticky top-0"><tr><th class="p-2 text-left">Tidspunkt</th><th class="p-2 text-left">Tekst</th></tr></thead>
             <tbody>
             <?php foreach ($log['rows'] as $row): ?>
                 <tr class="border-t">
-                    <td class="p-2 whitespace-nowrap"><?= htmlspecialchars((string) ($row['logtime'] ?? $row['datetime'] ?? '')) ?></td>
-                    <td class="p-2"><?= htmlspecialchars((string) ($row['comm'] ?? $row['text'] ?? json_encode($row, JSON_UNESCAPED_UNICODE))) ?></td>
+                    <td class="p-2 whitespace-nowrap"><?= htmlspecialchars(abas_format_alarmlog_timestamp($row)) ?></td>
+                    <td class="p-2"><?= htmlspecialchars(abas_format_alarmlog_text($row)) ?></td>
                 </tr>
             <?php endforeach; ?>
             </tbody>

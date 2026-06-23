@@ -15,7 +15,13 @@ $conn = abas_db();
 $user = abas_require_login();
 abas_require_role(['vagtcentral', 'admin']);
 
-$montors = $conn->query("SELECT id, username, email, phone FROM users WHERE role='montor' AND active=1 ORDER BY username")->fetch_all(MYSQLI_ASSOC);
+$montors = $conn->query(
+    "SELECT u.id, u.username, u.email, u.phone, ai.company_name
+     FROM users u
+     LEFT JOIN approved_installers ai ON ai.id = u.installer_id
+     WHERE u.role='montor' AND u.active=1
+     ORDER BY u.username"
+)->fetch_all(MYSQLI_ASSOC);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $misc = strtolower(trim($_POST['miscno2'] ?? ''));
@@ -84,7 +90,13 @@ require __DIR__ . '/partials/header.php';
         <select name="montor_id" class="w-full border rounded px-3 py-2">
             <option value="0">— Vælg montør —</option>
             <?php foreach ($montors as $m): ?>
-                <option value="<?= (int) $m['id'] ?>"><?= htmlspecialchars($m['username']) ?> (<?= htmlspecialchars($m['email']) ?>)</option>
+                <option value="<?= (int) $m['id'] ?>">
+                    <?= htmlspecialchars($m['username']) ?>
+                    <?php if (!empty($m['company_name'])): ?>
+                        (<?= htmlspecialchars($m['company_name']) ?>)
+                    <?php endif; ?>
+                    — <?= htmlspecialchars((string) ($m['phone'] ?? '')) ?>
+                </option>
             <?php endforeach; ?>
         </select>
     </div>

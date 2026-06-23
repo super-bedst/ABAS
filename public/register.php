@@ -7,6 +7,7 @@ require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/password_flow.php';
 require_once __DIR__ . '/../includes/roles.php';
+require_once __DIR__ . '/../includes/users.php';
 
 $conn = abas_db();
 $error = '';
@@ -14,13 +15,15 @@ $success = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = strtolower(trim($_POST['email'] ?? ''));
     $username = trim($_POST['username'] ?? '');
-    $phone = trim($_POST['phone'] ?? '');
+    $phone = abas_normalize_phone(trim($_POST['phone'] ?? ''));
     $domain = abas_email_domain($email);
     $installer = abas_installer_approved_for_domain($conn, $domain);
     if (!$installer) {
         $error = 'E-mail-domænet er ikke godkendt til montør-registrering.';
     } elseif ($username === '' || strlen($username) < 3) {
         $error = 'Vælg et brugernavn (min. 3 tegn).';
+    } elseif (!abas_validate_phone($phone)) {
+        $error = 'Angiv et gyldigt telefonnummer (min. 8 cifre).';
     } else {
         $chk = $conn->prepare('SELECT id FROM users WHERE email=? OR username=? LIMIT 1');
         $chk->bind_param('ss', $email, $username);
@@ -55,7 +58,7 @@ require __DIR__ . '/partials/header.php';
     <form method="post" class="space-y-3">
         <div><label class="block text-sm">E-mail</label><input name="email" type="email" required class="w-full border rounded px-3 py-2"></div>
         <div><label class="block text-sm">Brugernavn</label><input name="username" required class="w-full border rounded px-3 py-2"></div>
-        <div><label class="block text-sm">Telefon (valgfri)</label><input name="phone" class="w-full border rounded px-3 py-2"></div>
+        <div><label class="block text-sm">Telefon</label><input name="phone" required class="w-full border rounded px-3 py-2" placeholder="+45..."></div>
         <button class="w-full bg-brand text-white py-2 rounded">Opret konto</button>
     </form>
     <?php endif; ?>

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/trekant_client.php';
+require_once __DIR__ . '/users.php';
 
 function abas_log_service_action(
     mysqli $conn,
@@ -41,7 +42,7 @@ function abas_start_service_session(
     $sIns = (int) $installation['s_ins'];
     $dealId = (string) $installation['deal_id'];
     $testTime = $unlimited ? abas_unlimited_test_time() : abas_format_test_time_hours((float) $hours);
-    $comm = $comment !== '' ? $comment : 'ABA Service start';
+    $comm = $comment !== '' ? abas_enrich_service_start_comment($conn, $user, $comment) : 'ABA Service start';
     $resp = $client->startService($sIns, $dealId, $testTime, $comm);
     $code = abas_trekant_return_code($resp);
     $userId = (int) $user['id'];
@@ -146,4 +147,42 @@ function abas_fetch_installation_log(array $installation, string $mode, ?array $
     $resp = $client->getAlarmLog($sIns, $dealId, $lines, $range);
 
     return ['code' => abas_trekant_return_code($resp), 'rows' => abas_trekant_rows($resp), 'raw' => $resp];
+}
+
+function abas_format_alarmlog_timestamp(array $row): string
+{
+    $date = trim((string) ($row['tm_date'] ?? ''));
+    $time = trim((string) ($row['tm_time'] ?? ''));
+    if ($date !== '' && $time !== '') {
+        $ts = strtotime($date . ' ' . $time);
+
+        return $ts !== false ? date('d/m/Y H:i:s', $ts) : $date . ' ' . $time;
+    }
+    if ($date !== '') {
+        $ts = strtotime($date);
+
+        return $ts !== false ? date('d/m/Y', $ts) : $date;
+    }
+    $fallback = trim((string) ($row['logtime'] ?? $row['datetime'] ?? ''));
+    if ($fallback === '') {
+        return '';
+    }
+    $ts = strtotime($fallback);
+
+    return $ts !== false ? date('d/m/Y H:i:s', $ts) : $fallback;
+}
+
+function abas_format_alarmlog_text(array $row): string
+{
+    foreach (['text', 'zone_text', 'event', 'comm_gen', 'comm'] as $key) {
+        if (!isset($row[$key])) {
+            continue;
+        }
+        $val = trim((string) $row[$key]);
+        if ($val !== '') {
+            return $val;
+        }
+    }
+
+    return '';
 }
