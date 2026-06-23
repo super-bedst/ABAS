@@ -14,9 +14,8 @@ abas_require_role(['admin']);
 
 $lines = abas_sms_read_inbound_webhook_log();
 $endpoints = [
+    'Anbefalet' => abas_full_url('sms-inbound.php'),
     'Rewrite' => abas_full_url('api/v1/sms/inbound'),
-    'Direkte (anbefalet ved 404)' => abas_full_url('sms-inbound.php'),
-    'Alternativ' => abas_full_url('api/v1/sms/inbound/index.php'),
 ];
 
 $pageTitle = 'SMS inbound log';
