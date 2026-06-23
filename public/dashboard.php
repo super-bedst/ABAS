@@ -8,15 +8,31 @@ require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/roles.php';
 require_once __DIR__ . '/../includes/trekant_client.php';
 require_once __DIR__ . '/../includes/installation_sync.php';
+require_once __DIR__ . '/../includes/service.php';
 
 $conn = abas_db();
 $user = abas_require_login();
 $q = trim($_GET['q'] ?? '');
 $installations = [];
+$listHeading = '';
+$showServiceInfo = false;
+$showServiceScope = false;
+$isOwner = $user['role'] === 'anlaegsejer';
+$isMontor = $user['role'] === 'montor';
+$userId = (int) $user['id'];
+$includeCompany = !$isMontor || ($_GET['scope'] ?? 'all') !== 'mine';
 
-if ($q !== '') {
+if ($isOwner) {
+    $installations = $q === ''
+        ? abas_user_linked_installations($conn, $userId)
+        : abas_search_installations_local($conn, $q, false, $userId);
+    if ($q === '') {
+        $listHeading = 'Dine anlæg';
+        $installations = abas_flag_installations_in_service($conn, $installations);
+    }
+} elseif ($q !== '') {
     $allAccess = abas_user_can_access_all_installations($user['role']);
-    $installations = abas_search_installations_local($conn, $q, $allAccess, (int) $user['id']);
+    $installations = abas_search_installations_local($conn, $q, $allAccess, $userId);
 
     if ($installations === [] && $allAccess && abas_is_miscno2_query($q)) {
         try {
@@ -28,17 +44,11 @@ if ($q !== '') {
             abas_flash_set('error', 'API-søgning fejlede: ' . $e->getMessage());
         }
     }
-} elseif (!abas_user_can_access_all_installations($user['role'])) {
-    $uid = (int) $user['id'];
-    $stmt = $conn->prepare(
-        'SELECT i.* FROM installations i
-         JOIN user_installations ui ON ui.installation_id = i.id
-         WHERE ui.user_id = ? ORDER BY i.miscno2 LIMIT 50'
-    );
-    $stmt->bind_param('i', $uid);
-    $stmt->execute();
-    $installations = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-    $stmt->close();
+} else {
+    $installations = abas_dashboard_in_service_installations($conn, $user, $includeCompany);
+    $showServiceInfo = true;
+    $showServiceScope = $isMontor;
+    $listHeading = $isMontor ? 'Anlæg i service' : 'Anlæg i service';
 }
 
 $pageTitle = 'Dashboard';
@@ -46,59 +56,56 @@ $currentUser = $user;
 require __DIR__ . '/partials/header.php';
 ?>
 <h1 class="abas-page-title">Dashboard</h1>
-<p class="abas-page-lead">Søg og find anlæg — se status og start eller stop service.</p>
+<?php if ($isOwner): ?>
+    <p class="abas-page-lead">Dine tilknyttede anlæg — tryk på et anlæg for at se status og starte eller stoppe service.</p>
+<?php elseif ($q === ''): ?>
+    <p class="abas-page-lead">Anlæg med aktiv service — tryk på et anlæg for detaljer og alarmlog.</p>
+<?php else: ?>
+    <p class="abas-page-lead">Søg og find anlæg — se status og start eller stop service.</p>
+<?php endif; ?>
 
 <form method="get" class="abas-search mb-6">
     <div class="abas-field flex-1">
         <label class="abas-label" for="q">Søg anlæg</label>
         <input id="q" name="q" value="<?= htmlspecialchars($q) ?>" placeholder="Anlægsnr., navn, by..." class="abas-input">
     </div>
+  <?php if ($isMontor && $q === ''): ?>
+    <div class="abas-field sm:w-52">
+        <label class="abas-label" for="scope">Visning</label>
+        <select id="scope" name="scope" class="abas-select" onchange="this.form.submit()">
+            <option value="all" <?= $includeCompany ? 'selected' : '' ?>>Mine + firma i service</option>
+            <option value="mine" <?= !$includeCompany ? 'selected' : '' ?>>Kun mine i service</option>
+        </select>
+    </div>
+  <?php endif; ?>
     <div class="flex items-end">
         <button class="abas-btn-primary sm:min-w-[7rem]">Søg</button>
     </div>
 </form>
 
 <?php if ($installations === []): ?>
-    <div class="abas-panel">Ingen anlæg fundet.<?= $q ? ' Prøv et andet søgeord.' : '' ?></div>
+    <div class="abas-panel">
+        <?php if ($isOwner && $q === ''): ?>
+            Du har ingen tilknyttede anlæg. Kontakt vagtcentralen.
+        <?php elseif ($q !== ''): ?>
+            Ingen anlæg fundet. Prøv et andet søgeord.
+        <?php elseif ($isMontor): ?>
+            Ingen anlæg i service lige nu<?= $includeCompany ? '' : ' for dig' ?>. Søg efter et anlæg ovenfor.
+        <?php else: ?>
+            Ingen anlæg i service lige nu. Søg efter et anlæg ovenfor.
+        <?php endif; ?>
+    </div>
 <?php else: ?>
 
-<div class="hidden sm:block abas-table-wrap">
-    <table class="abas-table">
-        <thead>
-            <tr>
-                <th>ABA-nr.</th>
-                <th>Navn</th>
-                <th class="hidden md:table-cell">By</th>
-                <th class="hidden lg:table-cell">Status</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody>
-        <?php foreach ($installations as $inst): ?>
-            <tr>
-                <td class="font-mono font-medium text-brand"><?= htmlspecialchars((string) $inst['miscno2']) ?></td>
-                <td><?= htmlspecialchars((string) $inst['name']) ?></td>
-                <td class="hidden md:table-cell"><?= htmlspecialchars((string) $inst['city']) ?></td>
-                <td class="hidden lg:table-cell"><?= htmlspecialchars((string) $inst['mon_stat']) ?></td>
-                <td><a class="abas-link" href="<?= abas_url('installation.php?id=' . (int) $inst['id']) ?>">Åbn</a></td>
-            </tr>
-        <?php endforeach; ?>
-        </tbody>
-    </table>
-</div>
+<?php if ($listHeading !== ''): ?>
+    <h2 class="abas-card-title mb-3"><?= htmlspecialchars($listHeading) ?> (<?= count($installations) ?>)</h2>
+<?php endif; ?>
 
-<div class="sm:hidden space-y-3">
-    <?php foreach ($installations as $inst): ?>
-        <a href="<?= abas_url('installation.php?id=' . (int) $inst['id']) ?>" class="abas-mobile-card">
-            <div class="abas-mobile-card-title"><?= htmlspecialchars((string) $inst['miscno2']) ?></div>
-            <div class="font-medium text-gray-800 mt-1"><?= htmlspecialchars((string) $inst['name']) ?></div>
-            <div class="text-sm text-gray-500 mt-1"><?= htmlspecialchars((string) $inst['city']) ?></div>
-            <?php if (!empty($inst['mon_stat'])): ?>
-                <span class="abas-badge-ok mt-2"><?= htmlspecialchars((string) $inst['mon_stat']) ?></span>
-            <?php endif; ?>
-        </a>
-    <?php endforeach; ?>
-</div>
+<?php
+$showServiceInfo = $showServiceInfo;
+$showServiceScope = $showServiceScope;
+require __DIR__ . '/partials/dashboard-installation-list.php';
+?>
 
 <?php endif; ?>
 <?php require __DIR__ . '/partials/footer.php';

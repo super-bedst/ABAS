@@ -180,11 +180,6 @@ function abas_sms_handle_inbound(mysqli $conn, string $from, string $body): stri
         $hours = (float) ($parsed['hours'] ?? 2);
         $r = abas_start_service_session($conn, $user, $installation, $hours, false, null, 'SMS start', 'sms');
         $result = $r['ok'] ? 'ABA: Service startet på ' . $installation['miscno2'] . '.' : ($r['message'] ?? 'Start fejlede');
-        if ($r['ok'] && !empty($user['phone'])) {
-            abas_sms_queue($conn, (string) $user['phone'], $result, 'start_confirm', $r['session_id'] ?? null);
-        } elseif (abas_config()['sms']['send_replies'] && $from !== '') {
-            abas_sms_queue($conn, $from, $result, 'inbound_reply');
-        }
     } elseif ($parsed['command'] === 'STOP') {
         $r = abas_stop_service_session($conn, $user, $installation, null, 'SMS stop', 'sms');
         $result = $r['ok'] ? 'ABA: Service stoppet på ' . $installation['miscno2'] . '.' : ($r['message'] ?? 'Stop fejlede');
@@ -199,7 +194,7 @@ function abas_sms_handle_inbound(mysqli $conn, string $from, string $body): stri
     $upd->execute();
     $upd->close();
 
-    if (abas_config()['sms']['send_replies'] && $from !== '' && $parsed['command'] !== 'START') {
+    if (abas_config()['sms']['send_replies'] && $from !== '' && !in_array($parsed['command'], ['START', 'STOP'], true)) {
         abas_sms_queue($conn, $from, $result, 'inbound_reply');
     }
 
@@ -209,8 +204,9 @@ function abas_sms_handle_inbound(mysqli $conn, string $from, string $body): stri
 function abas_sms_send_expiry_warnings(mysqli $conn): int
 {
     $stmt = $conn->query(
-        'SELECT ss.*, u.phone, i.miscno2 FROM service_sessions ss
+        'SELECT ss.*, COALESCE(NULLIF(ou.phone, ""), u.phone) AS phone, i.miscno2 FROM service_sessions ss
          JOIN users u ON u.id = ss.user_id
+         LEFT JOIN users ou ON ou.id = ss.on_behalf_of_user_id
          JOIN installations i ON i.id = ss.installation_id
          WHERE ss.status="active" AND ss.unlimited=0 AND ss.warning_sent_at IS NULL
          AND ss.expires_at IS NOT NULL AND ss.expires_at <= DATE_ADD(NOW(), INTERVAL 15 MINUTE)'

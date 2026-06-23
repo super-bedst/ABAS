@@ -113,6 +113,18 @@
     @apply bg-basbg/60;
   }
 
+  .abas-table-row-link {
+    @apply cursor-pointer transition-colors;
+  }
+
+  .abas-table-row-link:hover {
+    @apply bg-basbg/60;
+  }
+
+  .abas-table-row-link:focus-visible {
+    @apply outline outline-2 outline-brand outline-offset-[-2px];
+  }
+
   .abas-chip {
     @apply inline-flex items-center px-3 py-1.5 rounded-full text-sm border border-gray-300 bg-white text-gray-700 hover:border-brand/40;
   }
@@ -183,5 +195,13 @@
 
   .abas-log-body {
     @apply max-h-96 overflow-x-auto;
+  }
+
+  .abas-log-entry {
+    @apply space-y-1;
+  }
+
+  .abas-log-entry-detail {
+    @apply text-xs text-gray-700;
   }
 }

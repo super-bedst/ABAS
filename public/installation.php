@@ -79,7 +79,7 @@ require __DIR__ . '/partials/header.php';
     <div class="abas-card">
         <h2 class="abas-card-title">Service</h2>
         <?php if ($session): ?>
-            <p class="abas-badge-active mb-4">Aktiv service siden <?= htmlspecialchars($session['started_at']) ?><?= $session['expires_at'] ? ' — udløber ' . htmlspecialchars($session['expires_at']) : ' (uden tidsbegrænsning)' ?></p>
+            <p id="inst-service-status" class="abas-badge-active mb-4">Aktiv service siden <?= htmlspecialchars($session['started_at']) ?><?= $session['expires_at'] ? ' — udløber ' . htmlspecialchars($session['expires_at']) : ' (uden tidsbegrænsning)' ?></p>
             <form method="post" class="abas-form">
                 <input type="hidden" name="action" value="stop">
                 <div class="abas-field">
@@ -195,23 +195,76 @@ require __DIR__ . '/partials/header.php';
         <button class="abas-btn-secondary">Vis periode</button>
     </form>
     <?php if ($log['code'] !== 0): ?>
-        <p class="p-4 text-amber-800">Log kunne ikke hentes (kode <?= (int) $log['code'] ?>).</p>
+        <p class="p-4 text-amber-800" id="inst-log-error">Log kunne ikke hentes (kode <?= (int) $log['code'] ?>).</p>
     <?php elseif ($log['rows'] === []): ?>
-        <p class="p-4 text-gray-500">Ingen loglinjer.</p>
+        <p class="p-4 text-gray-500" id="inst-log-empty">Ingen loglinjer.</p>
     <?php else: ?>
-    <div class="abas-log-body">
+    <div class="abas-log-body" id="inst-log-body">
         <table class="abas-table text-xs">
-            <thead class="sticky top-0"><tr><th>Tidspunkt</th><th>Tekst</th></tr></thead>
-            <tbody>
-            <?php foreach ($log['rows'] as $row): ?>
-                <tr>
-                    <td class="whitespace-nowrap"><?= htmlspecialchars(abas_format_alarmlog_timestamp($row)) ?></td>
-                    <td><?= htmlspecialchars(abas_format_alarmlog_text($row)) ?></td>
-                </tr>
-            <?php endforeach; ?>
+            <thead class="sticky top-0"><tr><th>Tidspunkt</th><th>Detaljer</th></tr></thead>
+            <tbody id="inst-log-rows">
+            <?= abas_render_alarmlog_rows_html($log['rows']) ?>
             </tbody>
         </table>
     </div>
     <?php endif; ?>
 </div>
+<script>
+(function () {
+    var refreshUrl = <?= json_encode(abas_url('installation-refresh.php?id=' . $id . '&log=' . rawurlencode($logMode)
+        . ($logMode === 'custom' && !empty($_GET['from']) && !empty($_GET['to'])
+            ? '&from=' . rawurlencode((string) $_GET['from']) . '&to=' . rawurlencode((string) $_GET['to'])
+            : ''))) ?>;
+    var initialSessionActive = <?= $session ? 'true' : 'false' ?>;
+    var logRows = document.getElementById('inst-log-rows');
+    var logBody = document.getElementById('inst-log-body');
+    var logEmpty = document.getElementById('inst-log-empty');
+    var logError = document.getElementById('inst-log-error');
+    var serviceStatus = document.getElementById('inst-service-status');
+
+    function refreshInstallationView() {
+        fetch(refreshUrl, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+            .then(function (response) { return response.json(); })
+            .then(function (data) {
+                if (data.error) {
+                    return;
+                }
+                if (data.sessionActive !== initialSessionActive) {
+                    window.location.reload();
+                    return;
+                }
+                if (serviceStatus && data.sessionLabel) {
+                    serviceStatus.textContent = data.sessionLabel;
+                }
+                if (data.logCode !== 0) {
+                    return;
+                }
+                if (logError) {
+                    logError.style.display = 'none';
+                }
+                if (data.logEmpty) {
+                    if (logBody) {
+                        logBody.style.display = 'none';
+                    }
+                    if (logEmpty) {
+                        logEmpty.style.display = '';
+                    }
+                    return;
+                }
+                if (logEmpty) {
+                    logEmpty.style.display = 'none';
+                }
+                if (logBody) {
+                    logBody.style.display = '';
+                }
+                if (logRows && data.logHtml) {
+                    logRows.innerHTML = data.logHtml;
+                }
+            })
+            .catch(function () {});
+    }
+
+    setInterval(refreshInstallationView, 5000);
+})();
+</script>
 <?php require __DIR__ . '/partials/footer.php';

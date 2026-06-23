@@ -46,6 +46,21 @@ function abas_upsert_installation(mysqli $conn, array $row): int
     return $id;
 }
 
+function abas_user_linked_installations(mysqli $conn, int $userId): array
+{
+    $stmt = $conn->prepare(
+        'SELECT i.* FROM installations i
+         JOIN user_installations ui ON ui.installation_id = i.id
+         WHERE ui.user_id = ? ORDER BY i.miscno2'
+    );
+    $stmt->bind_param('i', $userId);
+    $stmt->execute();
+    $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+
+    return $rows;
+}
+
 function abas_search_installations_local(mysqli $conn, string $q, bool $allAccess, int $userId = 0): array
 {
     $like = '%' . $q . '%';
@@ -59,10 +74,10 @@ function abas_search_installations_local(mysqli $conn, string $q, bool $allAcces
         $stmt = $conn->prepare(
             'SELECT i.* FROM installations i
              JOIN user_installations ui ON ui.installation_id = i.id
-             WHERE ui.user_id = ? AND (i.miscno2 LIKE ? OR i.name LIKE ?)
+             WHERE ui.user_id = ? AND (i.miscno2 LIKE ? OR i.name LIKE ? OR i.city LIKE ?)
              ORDER BY i.miscno2 LIMIT 50'
         );
-        $stmt->bind_param('iss', $userId, $like, $like);
+        $stmt->bind_param('isss', $userId, $like, $like, $like);
     }
     $stmt->execute();
     $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
