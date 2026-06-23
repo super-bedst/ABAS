@@ -1,0 +1,13 @@
+{
+    "name": "trekantbrand/aba-service",
+    "description": "ABA Service — brandalarmeringsanlæg i service",
+    "type": "project",
+    "require": {
+        "php": ">=8.2"
+    },
+    "autoload": {
+        "psr-4": {
+            "Abas\\": "includes/"
+        }
+    }
+}

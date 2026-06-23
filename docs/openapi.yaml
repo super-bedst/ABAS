@@ -1,0 +1,94 @@
+openapi: 3.0.3
+info:
+  title: ABA Service API
+  version: 1.0.0
+  description: Intern REST API til telefonsystemer og SMS-gateway
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+paths:
+  /health:
+    get:
+      summary: Health check
+      security: []
+      responses:
+        '200':
+          description: OK
+  /installations/search:
+    get:
+      summary: Søg anlæg i cache
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Liste af anlæg
+  /installations/{miscno2}/service:
+    post:
+      summary: Start eller stop service
+      parameters:
+        - name: miscno2
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                  enum: [start, stop]
+                hours:
+                  type: number
+                unlimited:
+                  type: boolean
+                comment:
+                  type: string
+      responses:
+        '200':
+          description: Success
+  /installations/{miscno2}/log:
+    get:
+      summary: Hent alarmlog
+      parameters:
+        - name: miscno2
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: mode
+          in: query
+          schema:
+            type: string
+            enum: [last20, 24h]
+      responses:
+        '200':
+          description: Loglinjer
+  /sms/inbound:
+    post:
+      summary: Modtag SMS fra gateway
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [from, body]
+              properties:
+                from:
+                  type: string
+                body:
+                  type: string
+      responses:
+        '200':
+          description: Auto-svar
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer

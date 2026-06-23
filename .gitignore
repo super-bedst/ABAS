@@ -1,0 +1,8 @@
+/vendor/
+/node_modules/
+.env
+.env.local
+*.log
+/scripts/.trekant_test_state.json
+/storage/
+/public/storage/
