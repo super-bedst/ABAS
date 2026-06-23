@@ -153,6 +153,9 @@ POST /api/v1/sms/inbound
 {"from":"+4520123456","body":"secret123 fab0100 START 2"}
 ```
 
+Ved **404** i undermappe (WAMP): brug `POST /sms-inbound.php` i stedet, fx
+`https://tkb.teamscreen.dk/Sandbox/ABAS/public/sms-inbound.php`
+
 Valgfrit: `SMS_INBOUND_SECRET` — gateway sender `?key=` eller `Authorization: Bearer`.
 
 Eksempler på SMS-kommandoer:

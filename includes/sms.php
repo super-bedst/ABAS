@@ -124,6 +124,23 @@ function abas_sms_log_inbound_webhook(string $rawBody): void
     file_put_contents($file, implode("\n", $lines) . "\n");
 }
 
+function abas_handle_sms_inbound_webhook(mysqli $conn): never
+{
+    require_once __DIR__ . '/api_auth.php';
+
+    $raw = (string) file_get_contents('php://input');
+    abas_sms_log_inbound_webhook($raw);
+
+    abas_sms_verify_inbound_request();
+    $body = json_decode($raw, true) ?: [];
+    $inbound = abas_sms_parse_inbound_request($body);
+    if ($inbound['from'] === '' || $inbound['body'] === '') {
+        abas_api_json(400, ['error' => 'from og body/text påkrævet']);
+    }
+    $reply = abas_sms_handle_inbound($conn, $inbound['from'], $inbound['body']);
+    abas_api_json(200, ['reply' => $reply]);
+}
+
 function abas_sms_verify_inbound_request(): void
 {
     $secret = abas_config()['sms']['inbound_secret'];

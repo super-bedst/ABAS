@@ -1,7 +1,6 @@
 RewriteEngine On
-RewriteBase /
 
-# API routing
+# API routing (uden RewriteBase — virker i /Sandbox/ABAS/public/ m.m.)
 RewriteRule ^api/v1/(.*)$ api/v1/index.php?route=$1 [QSA,L]
 
 # Front controller fallback

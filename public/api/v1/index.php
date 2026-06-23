@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-require_once dirname(__DIR__, 2) . '/includes/bootstrap.php';
-require_once dirname(__DIR__, 2) . '/includes/db.php';
-require_once dirname(__DIR__, 2) . '/includes/api_auth.php';
-require_once dirname(__DIR__, 2) . '/includes/auth.php';
-require_once dirname(__DIR__, 2) . '/includes/service.php';
-require_once dirname(__DIR__, 2) . '/includes/installation_sync.php';
-require_once dirname(__DIR__, 2) . '/includes/sms.php';
+require_once dirname(__DIR__, 3) . '/includes/bootstrap.php';
+require_once dirname(__DIR__, 3) . '/includes/db.php';
+require_once dirname(__DIR__, 3) . '/includes/api_auth.php';
+require_once dirname(__DIR__, 3) . '/includes/auth.php';
+require_once dirname(__DIR__, 3) . '/includes/service.php';
+require_once dirname(__DIR__, 3) . '/includes/installation_sync.php';
+require_once dirname(__DIR__, 3) . '/includes/sms.php';
 
 $conn = abas_db();
 $method = $_SERVER['REQUEST_METHOD'];
@@ -22,17 +22,7 @@ if ($path === 'health' && $method === 'GET') {
 }
 
 if ($path === 'sms/inbound' && $method === 'POST') {
-    $raw = (string) file_get_contents('php://input');
-    abas_sms_log_inbound_webhook($raw);
-
-    abas_sms_verify_inbound_request();
-    $body = json_decode($raw, true) ?: [];
-    $inbound = abas_sms_parse_inbound_request($body);
-    if ($inbound['from'] === '' || $inbound['body'] === '') {
-        abas_api_json(400, ['error' => 'from og body/text påkrævet']);
-    }
-    $reply = abas_sms_handle_inbound($conn, $inbound['from'], $inbound['body']);
-    abas_api_json(200, ['reply' => $reply]);
+    abas_handle_sms_inbound_webhook($conn);
 }
 
 $token = abas_api_authenticate($conn);
