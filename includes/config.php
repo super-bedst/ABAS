@@ -66,11 +66,11 @@ function abas_config(): array
             'port' => (int) abas_env('DB_PORT', '3306'),
             'name' => abas_env('DB_NAME', 'abas'),
             'user' => abas_env('DB_USER', 'abas_app'),
-            'pass' => abas_env('DB_PASS', ''),        ],
+            'pass' => abas_env('DB_PASS', 'B*qs89j1Sg*V#5y*G$LHMCC3Ia%f'),        ],
         'trekant' => [
             'url' => rtrim((string) abas_env('TREKANT_API_URL', 'https://api.trekantbrand.dk'), '/'),
-            'user' => abas_env('TREKANT_API_USER', ''),
-            'pass' => abas_env('TREKANT_API_PASS', ''),
+            'user' => abas_env('TREKANT_API_USER', 'NKI'),
+            'pass' => abas_env('TREKANT_API_PASS', 'Test1234'),
             'term' => abas_env('TREKANT_TERM', 'ABAS'),
         ],
         'mail' => [
@@ -79,7 +79,6 @@ function abas_config(): array
         ],
     ];
 }
-
 require_once __DIR__ . '/paths.php';
 
 function abas_setting(mysqli $conn, string $key, ?string $default = null): ?string
