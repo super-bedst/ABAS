@@ -66,8 +66,7 @@ function abas_config(): array
             'port' => (int) abas_env('DB_PORT', '3306'),
             'name' => abas_env('DB_NAME', 'abas'),
             'user' => abas_env('DB_USER', 'abas_app'),
-            'pass' => abas_env('DB_PASS', ''),
-        ],
+            'pass' => abas_env('DB_PASS', ''),        ],
         'trekant' => [
             'url' => rtrim((string) abas_env('TREKANT_API_URL', 'https://api.trekantbrand.dk'), '/'),
             'user' => abas_env('TREKANT_API_USER', ''),
