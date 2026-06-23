@@ -240,11 +240,14 @@ function abas_sms_handle_inbound(mysqli $conn, string $from, string $body): stri
     $log->close();
 
     $user = abas_sms_find_user_by_phone($conn, $from);
-    if (!$user || empty($user['sms_secret_hash'])) {
-        return 'Ukendt afsender eller manglende SMS-hemmelighed.';
+    if (!$user || !abas_user_role_uses_sms_code((string) ($user['role'] ?? ''))) {
+        return 'Ukendt afsender.';
     }
-    if (!password_verify($parsed['secret'], $user['sms_secret_hash'])) {
-        return 'Forkert hemmelighed.';
+    if (!abas_user_has_sms_code($user)) {
+        return 'Ingen SMS-kode registreret for brugeren.';
+    }
+    if (!password_verify($parsed['secret'], (string) $user['sms_secret_hash'])) {
+        return 'Forkert SMS-kode.';
     }
     $installation = abas_find_installation_by_miscno2($conn, $parsed['miscno2']);
     if (!$installation) {

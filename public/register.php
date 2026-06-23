@@ -25,6 +25,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif (!abas_validate_phone($phone)) {
         $error = 'Angiv et gyldigt telefonnummer (min. 8 cifre).';
     } else {
+        $smsCode = trim($_POST['sms_code'] ?? '');
+        if (!abas_validate_sms_code($smsCode)) {
+            $error = 'SMS-kode skal være mindst 6 tegn.';
+        } else {
         $chk = $conn->prepare('SELECT id FROM users WHERE email=? OR username=? LIMIT 1');
         $chk->bind_param('ss', $email, $username);
         $chk->execute();
@@ -39,10 +43,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute();
             $uid = (int) $stmt->insert_id;
             $stmt->close();
+            abas_set_user_sms_code($conn, $uid, $smsCode);
             abas_password_send_flow_email($conn, $uid, 'welcome');
             $success = 'Konto oprettet. Tjek e-mail for at vælge adgangskode.';
         }
         $chk->close();
+        }
     }
 }
 
@@ -59,6 +65,11 @@ require __DIR__ . '/partials/header.php';
         <div class="abas-field"><label class="abas-label" for="email">E-mail</label><input id="email" name="email" type="email" required class="abas-input"></div>
         <div class="abas-field"><label class="abas-label" for="username">Brugernavn</label><input id="username" name="username" required class="abas-input"></div>
         <div class="abas-field"><label class="abas-label" for="phone">Telefon</label><input id="phone" name="phone" required class="abas-input" placeholder="+45..."></div>
+        <div class="abas-field">
+            <label class="abas-label" for="sms_code">SMS-kode</label>
+            <input id="sms_code" name="sms_code" required minlength="6" autocomplete="off" class="abas-input font-mono" placeholder="Min. 6 tegn">
+            <p class="abas-hint">Bruges sammen med dit telefonnummer ved SMS-kommandoer til anlæg.</p>
+        </div>
         <button class="abas-btn-primary abas-btn-block">Opret konto</button>
     </form>
     <?php endif; ?>

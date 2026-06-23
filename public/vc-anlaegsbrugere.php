@@ -26,6 +26,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             abas_flash_set('error', 'Angiv et gyldigt telefonnummer (min. 8 cifre).');
             abas_redirect('vc-anlaegsbrugere.php');
         }
+        $smsCode = trim($_POST['sms_code'] ?? '');
+        if (!abas_validate_sms_code($smsCode)) {
+            abas_flash_set('error', 'SMS-kode skal være mindst 6 tegn.');
+            abas_redirect('vc-anlaegsbrugere.php');
+        }
         $chk = $conn->prepare('SELECT id FROM users WHERE email=? OR username=? LIMIT 1');
         $chk->bind_param('ss', $email, $username);
         $chk->execute();
@@ -40,6 +45,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute();
             $newId = (int) $stmt->insert_id;
             $stmt->close();
+            abas_set_user_sms_code($conn, $newId, $smsCode);
             abas_password_send_flow_email($conn, $newId, 'welcome');
             $installation = abas_find_installation_by_miscno2($conn, $misc);
             if ($installation) {
@@ -82,6 +88,11 @@ require __DIR__ . '/partials/header.php';
         <div class="abas-field"><label class="abas-label">E-mail</label><input name="email" type="email" required class="abas-input"></div>
         <div class="abas-field"><label class="abas-label">Brugernavn</label><input name="username" required class="abas-input"></div>
         <div class="abas-field"><label class="abas-label">Telefon</label><input name="phone" required placeholder="+45..." class="abas-input"></div>
+        <div class="abas-field">
+            <label class="abas-label" for="sms_code">SMS-kode</label>
+            <input id="sms_code" name="sms_code" required minlength="6" autocomplete="off" class="abas-input font-mono" placeholder="Min. 6 tegn">
+            <p class="abas-hint">Bruges sammen med telefonnummer ved SMS-kommandoer til anlæg.</p>
+        </div>
         <div class="abas-field"><label class="abas-label">Anlægsnr. (valgfri)</label><input name="miscno2" placeholder="fab0100" class="abas-input font-mono"></div>
         <button class="abas-btn-primary">Opret</button>
     </form>

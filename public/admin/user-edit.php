@@ -8,6 +8,8 @@ require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/roles.php';
 require_once __DIR__ . '/../../includes/password_flow.php';
 require_once __DIR__ . '/../../includes/users.php';
+require_once __DIR__ . '/../../includes/installation_sync.php';
+require_once __DIR__ . '/../../includes/service.php';
 
 $conn = abas_db();
 $admin = abas_require_login();
@@ -31,6 +33,38 @@ if (!$editUser) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = $_POST['action'] ?? 'save';
+
+    if ($action === 'delete') {
+        if (empty($_POST['confirm_delete'])) {
+            abas_flash_set('error', 'Bekræft sletning med afkrydsningsfeltet.');
+            abas_redirect('admin/user-edit.php?id=' . $id);
+        }
+        $result = abas_delete_user($conn, $id, (int) $admin['id']);
+        abas_flash_set($result['ok'] ? 'success' : 'error', $result['message']);
+        abas_redirect($result['ok'] ? 'admin/users.php' : 'admin/user-edit.php?id=' . $id);
+    }
+
+    if ($action === 'unlink') {
+        $installationId = (int) ($_POST['installation_id'] ?? 0);
+        if ($installationId > 0 && abas_unlink_user_installation($conn, $id, $installationId)) {
+            abas_flash_set('success', 'Anlæg fjernet fra brugeren.');
+        } else {
+            abas_flash_set('error', 'Kunne ikke fjerne tilknytning.');
+        }
+        abas_redirect('admin/user-edit.php?id=' . $id);
+    }
+
+    if ($action === 'link') {
+        $linkError = abas_link_user_installation_by_miscno2($conn, $id, (string) ($_POST['miscno2'] ?? ''));
+        if ($linkError !== null) {
+            abas_flash_set('error', $linkError);
+        } else {
+            abas_flash_set('success', 'Anlæg tilknyttet.');
+        }
+        abas_redirect('admin/user-edit.php?id=' . $id);
+    }
+
     $email = strtolower(trim($_POST['email'] ?? ''));
     $username = trim($_POST['username'] ?? '');
     $phone = abas_normalize_phone(trim($_POST['phone'] ?? ''));
@@ -49,6 +83,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     if (!abas_validate_phone($phone)) {
         abas_flash_set('error', 'Angiv et gyldigt telefonnummer (min. 8 cifre).');
+        abas_redirect('admin/user-edit.php?id=' . $id);
+    }
+
+    $smsCode = trim($_POST['sms_code'] ?? '');
+    if ($smsCode !== '' && !abas_validate_sms_code($smsCode)) {
+        abas_flash_set('error', 'SMS-kode skal være mindst 6 tegn.');
+        abas_redirect('admin/user-edit.php?id=' . $id);
+    }
+    if (abas_user_role_uses_sms_code($role) && $smsCode === '' && !abas_user_has_sms_code($editUser)) {
+        abas_flash_set('error', 'Angiv SMS-kode (min. 6 tegn) for montør og anlægsejer.');
         abas_redirect('admin/user-edit.php?id=' . $id);
     }
 
@@ -85,21 +129,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $upd->execute();
     $upd->close();
 
+    if ($smsCode !== '') {
+        abas_set_user_sms_code($conn, $id, $smsCode);
+    }
+
     if ($sendWelcome) {
         abas_password_send_flow_email($conn, $id, 'welcome');
     }
 
     abas_flash_set('success', 'Bruger opdateret.');
-    abas_redirect('admin/users.php');
+    abas_redirect('admin/user-edit.php?id=' . $id);
+}
+
+$linkedInstallations = abas_user_installation_links($conn, $id);
+$ownerInstallStatus = abas_user_installations_with_service_status($conn);
+$linkedWithStatus = $ownerInstallStatus[$id] ?? [];
+$statusByInstId = [];
+foreach ($linkedWithStatus as $row) {
+    $statusByInstId[(int) $row['installation_id']] = (bool) $row['in_service'];
 }
 
 $pageTitle = 'Rediger bruger';
 $currentUser = $admin;
 require __DIR__ . '/../partials/header.php';
 ?>
+<div class="mb-2">
+    <a href="<?= abas_url('admin/users.php') ?>" class="abas-back-link">&larr; Tilbage til brugere</a>
+</div>
 <h1 class="abas-page-title !text-xl">Rediger bruger</h1>
-<form method="post" class="abas-card max-w-lg abas-form">
+<p class="abas-page-lead"><?= htmlspecialchars(abas_role_label((string) $editUser['role'])) ?> — <?= htmlspecialchars((string) $editUser['username']) ?></p>
+
+<form method="post" class="abas-card max-w-lg abas-form mb-6">
     <input type="hidden" name="id" value="<?= (int) $editUser['id'] ?>">
+    <input type="hidden" name="action" value="save">
     <div class="abas-field">
         <label class="abas-label" for="email">E-mail</label>
         <input id="email" name="email" type="email" required value="<?= htmlspecialchars((string) $editUser['email']) ?>" class="abas-input">
@@ -111,6 +173,16 @@ require __DIR__ . '/../partials/header.php';
     <div class="abas-field">
         <label class="abas-label" for="phone">Telefon</label>
         <input id="phone" name="phone" required value="<?= htmlspecialchars((string) ($editUser['phone'] ?? '')) ?>" class="abas-input" placeholder="+45...">
+    </div>
+    <div class="abas-field" id="sms-code-field">
+        <label class="abas-label" for="sms_code">SMS-kode</label>
+        <input id="sms_code" name="sms_code" minlength="6" autocomplete="new-password" class="abas-input font-mono" placeholder="<?= abas_user_has_sms_code($editUser) ? 'Tom = behold nuværende' : 'Min. 6 tegn' ?>">
+        <p class="abas-hint">
+            Påkrævet for montør og anlægsejer — bruges sammen med telefonnummer ved SMS.
+            <?php if (abas_user_has_sms_code($editUser)): ?>
+                Kode er sat; tom felt bevarer nuværende.
+            <?php endif; ?>
+        </p>
     </div>
     <div class="abas-field">
         <label class="abas-label" for="role">Rolle</label>
@@ -144,4 +216,62 @@ require __DIR__ . '/../partials/header.php';
         <a href="<?= abas_url('admin/users.php') ?>" class="abas-btn-secondary">Annuller</a>
     </div>
 </form>
+
+<?php if ($editUser['role'] === 'anlaegsejer'): ?>
+<div class="abas-card max-w-lg abas-form mb-6">
+    <h2 class="abas-card-title">Tilknyttede anlæg</h2>
+    <?php if ($linkedInstallations === []): ?>
+        <p class="text-gray-500 text-sm mb-4">Ingen anlæg tilknyttet endnu.</p>
+    <?php else: ?>
+        <ul class="space-y-2 mb-4">
+            <?php foreach ($linkedInstallations as $inst):
+                $instId = (int) $inst['id'];
+                $inService = $statusByInstId[$instId] ?? false;
+                ?>
+                <li class="flex flex-wrap items-center justify-between gap-2 border border-gray-100 rounded-xl px-3 py-2">
+                    <div>
+                        <a href="<?= abas_url('installation.php?id=' . $instId) ?>" class="font-mono font-medium text-brand hover:underline">
+                            <?= htmlspecialchars((string) $inst['miscno2']) ?>
+                        </a>
+                        <span class="text-sm text-gray-600"> — <?= htmlspecialchars((string) $inst['name']) ?></span>
+                        <span class="<?= $inService ? 'abas-badge-in-service' : 'abas-badge-ok' ?> ml-2"><?= $inService ? 'I service' : 'Drift' ?></span>
+                    </div>
+                    <form method="post" class="inline">
+                        <input type="hidden" name="id" value="<?= (int) $editUser['id'] ?>">
+                        <input type="hidden" name="action" value="unlink">
+                        <input type="hidden" name="installation_id" value="<?= $instId ?>">
+                        <button type="submit" class="abas-btn-danger !py-1 !px-2 text-xs" onclick="return confirm('Fjern tilknytning til <?= htmlspecialchars((string) $inst['miscno2'], ENT_QUOTES) ?>?')">Fjern</button>
+                    </form>
+                </li>
+            <?php endforeach; ?>
+        </ul>
+    <?php endif; ?>
+    <form method="post" class="flex flex-wrap gap-2 items-end">
+        <input type="hidden" name="id" value="<?= (int) $editUser['id'] ?>">
+        <input type="hidden" name="action" value="link">
+        <div class="abas-field flex-1 min-w-[10rem]">
+            <label class="abas-label" for="miscno2">Tilknyt anlæg (ABA-nr.)</label>
+            <input id="miscno2" name="miscno2" required placeholder="fab0100" class="abas-input font-mono">
+        </div>
+        <button class="abas-btn-secondary">Tilknyt</button>
+    </form>
+</div>
+<?php endif; ?>
+
+<?php if ((int) $editUser['id'] !== (int) $admin['id']): ?>
+<div class="abas-card max-w-lg border-red-200">
+    <h2 class="abas-card-title text-red-800">Slet bruger</h2>
+    <p class="text-sm text-gray-600 mb-3">Brugere med servicehistorik deaktiveres i stedet for at blive slettet helt.</p>
+    <form method="post" class="abas-form" onsubmit="return confirm('Er du sikker på at du vil slette/deaktivere denne bruger?')">
+        <input type="hidden" name="id" value="<?= (int) $editUser['id'] ?>">
+        <input type="hidden" name="action" value="delete">
+        <label class="flex items-center gap-2 text-sm text-red-800">
+            <input type="checkbox" name="confirm_delete" value="1" class="abas-checkbox" required>
+            Jeg bekræfter sletning af denne bruger
+        </label>
+        <button type="submit" class="abas-btn-danger mt-3">Slet bruger</button>
+    </form>
+</div>
+<?php endif; ?>
+
 <?php require __DIR__ . '/../partials/footer.php';

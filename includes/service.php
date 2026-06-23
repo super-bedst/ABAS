@@ -375,12 +375,11 @@ function abas_format_alarmlog_parts(array $row): array
         $add('Tekst', $text);
     }
 
-    $comm = trim((string) ($row['comm_gen'] ?? ''));
-    if ($comm === '') {
-        $comm = trim((string) ($row['comm'] ?? ''));
-    }
-    if ($comm !== '') {
-        $add('Kommentar', $comm);
+    foreach (['comm_gen', 'comm', 'comment'] as $commKey) {
+        $commText = trim((string) ($row[$commKey] ?? ''));
+        if ($commText !== '') {
+            $add('Kommentar', $commText);
+        }
     }
 
     $operator = trim((string) ($row['operator'] ?? ''));
@@ -421,8 +420,8 @@ function abas_render_alarmlog_rows_html(array $rows): string
                     <span class="text-gray-400">—</span>
                 <?php else: ?>
                     <div class="abas-log-entry">
-                        <?php foreach ($parts as $index => $part): ?>
-                            <?php if ($index === 0): ?>
+                        <?php foreach ($parts as $part): ?>
+                            <?php if ($part['label'] === 'Hændelse'): ?>
                                 <div class="font-medium text-gray-900"><?= htmlspecialchars($part['text']) ?></div>
                             <?php else: ?>
                                 <div class="abas-log-entry-detail">

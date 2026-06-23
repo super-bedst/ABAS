@@ -200,8 +200,8 @@ require __DIR__ . '/partials/header.php';
         <p class="p-4 text-gray-500" id="inst-log-empty">Ingen loglinjer.</p>
     <?php else: ?>
     <div class="abas-log-body" id="inst-log-body">
-        <table class="abas-table text-xs">
-            <thead class="sticky top-0"><tr><th>Tidspunkt</th><th>Detaljer</th></tr></thead>
+        <table class="abas-table abas-log-table text-xs">
+            <thead><tr><th>Tidspunkt</th><th>Detaljer</th></tr></thead>
             <tbody id="inst-log-rows">
             <?= abas_render_alarmlog_rows_html($log['rows']) ?>
             </tbody>

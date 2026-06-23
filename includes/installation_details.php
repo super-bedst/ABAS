@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/trekant_client.php';
+require_once __DIR__ . '/roles.php';
 
 function abas_fetch_installation_details(array $installation, ?array $user): array
 {
@@ -37,7 +38,11 @@ function abas_fetch_installation_details(array $installation, ?array $user): arr
 
         $contactResp = $client->getInstallationContacts($sIns, $dealId, $userid);
         if (abas_trekant_return_code($contactResp) === 0) {
-            $result['contacts'] = abas_filter_installation_contacts(abas_trekant_rows($contactResp));
+            $contacts = abas_filter_installation_contacts(abas_trekant_rows($contactResp));
+            if ($user !== null && !abas_user_may_view_contact_phones($user)) {
+                $contacts = abas_redact_contact_phones($contacts);
+            }
+            $result['contacts'] = $contacts;
         }
     } catch (Throwable $e) {
         $result['error'] = $e->getMessage();
@@ -69,6 +74,19 @@ function abas_filter_installation_contacts(array $rows): array
     }
 
     return $filtered;
+}
+
+/**
+ * @param list<array{name:string, phones:list<array{number:string, label:string}>, email:string}> $contacts
+ * @return list<array{name:string, phones:list<array{number:string, label:string}>, email:string}>
+ */
+function abas_redact_contact_phones(array $contacts): array
+{
+    foreach ($contacts as $index => $contact) {
+        $contacts[$index]['phones'] = [];
+    }
+
+    return $contacts;
 }
 
 function abas_contact_is_system(array $row): bool

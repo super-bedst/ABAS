@@ -194,7 +194,11 @@
   }
 
   .abas-log-body {
-    @apply max-h-96 overflow-x-auto;
+    @apply max-h-96 overflow-y-auto overflow-x-auto;
+  }
+
+  .abas-log-table thead th {
+    @apply sticky top-0 z-10 bg-tablehead shadow-[0_1px_0_0_rgba(0,0,0,0.06)];
   }
 
   .abas-log-entry {

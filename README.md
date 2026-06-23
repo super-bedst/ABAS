@@ -162,12 +162,12 @@ Valgfrit: `SMS_INBOUND_SECRET` — gateway sender `?key=` eller `Authorization: 
 Eksempler på SMS-kommandoer:
 
 ```
-<hemmelighed> <miscno2> START <timer>
-<hemmelighed> <miscno2> STOP
-<hemmelighed> <miscno2> STATUS
+<SMS-kode> <miscno2> START <timer>
+<SMS-kode> <miscno2> STOP
+<SMS-kode> <miscno2> STATUS
 ```
 
-Brugerens `sms_secret_hash` sættes i databasen (bcrypt af hemmelighed).
+SMS-koden (min. 6 tegn) sættes ved oprettelse af montør/anlægsejer. Afsenderens telefonnummer skal matche brugerens registrerede nummer.
 
 ## Test mod TrekantBrand
 

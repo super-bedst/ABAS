@@ -23,6 +23,11 @@ function abas_user_can_access_all_installations(string $role): bool
     return in_array($role, ['admin', 'vagtcentral', 'montor'], true);
 }
 
+function abas_user_may_view_contact_phones(array $user): bool
+{
+    return ($user['role'] ?? '') !== 'montor';
+}
+
 function abas_require_role(array $allowed): void
 {
     $role = $_SESSION['user_role'] ?? '';
