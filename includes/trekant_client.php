@@ -18,6 +18,7 @@ class TrekantClient
     {
         $cfg = abas_config()['trekant'];
         $this->baseUrl = rtrim($override['url'] ?? $cfg['url'], '/');
+        $this->baseUrl = (string) preg_replace('#/api/v1$#i', '', $this->baseUrl);
         $this->loginUser = strtoupper((string) ($override['user'] ?? $cfg['user']));
         $this->loginPass = (string) ($override['pass'] ?? $cfg['pass']);
         $this->term = (string) ($override['term'] ?? $cfg['term']);
@@ -180,6 +181,11 @@ class TrekantClient
         if ($errno) {
             throw new RuntimeException('TrekantBrand HTTP fejl: ' . $err);
         }
+        if ($code < 200 || $code >= 300) {
+            throw new RuntimeException(
+                'TrekantBrand HTTP ' . $code . ': ' . substr(trim((string) $raw), 0, 300)
+            );
+        }
         $data = json_decode((string) $raw, true);
         if (!is_array($data)) {
             throw new RuntimeException('Ugyldigt JSON-svar (HTTP ' . $code . ')');
@@ -226,16 +232,41 @@ function abas_unlimited_test_time(): string
     return '9999:23:59:59';
 }
 
+function abas_trekant_pick_nested(array $response, array $paths): mixed
+{
+    foreach ($paths as $path) {
+        $val = $response;
+        $ok = true;
+        foreach ($path as $key) {
+            if (!is_array($val) || !array_key_exists($key, $val)) {
+                $ok = false;
+                break;
+            }
+            $val = $val[$key];
+        }
+        if ($ok && $val !== null && $val !== '') {
+            return $val;
+        }
+    }
+
+    return null;
+}
+
 function abas_trekant_rows(array $response): array
 {
-    $rows = $response['ResultSet']
-        ?? $response['message']['result']
-        ?? $response['message']['rows']
-        ?? [];
+    $rows = abas_trekant_pick_nested($response, [
+        ['ResultSet'],
+        ['resultSet'],
+        ['message', 'ResultSet'],
+        ['message', 'resultSet'],
+        ['message', 'result'],
+        ['message', 'rows'],
+        ['Message', 'ResultSet'],
+    ]);
     if (!is_array($rows)) {
         return [];
     }
-    if (isset($rows[0]) || $rows === []) {
+    if ($rows === [] || isset($rows[0])) {
         return $rows;
     }
 
@@ -244,5 +275,37 @@ function abas_trekant_rows(array $response): array
 
 function abas_trekant_return_code(array $response): int
 {
-    return (int) ($response['message']['returncode'] ?? $response['ReturnCode'] ?? -1);
+    $code = abas_trekant_pick_nested($response, [
+        ['ReturnCode'],
+        ['returnCode'],
+        ['returncode'],
+        ['message', 'ReturnCode'],
+        ['message', 'returnCode'],
+        ['message', 'returncode'],
+        ['Message', 'ReturnCode'],
+    ]);
+
+    return $code === null ? -1 : (int) $code;
 }
+
+function abas_trekant_response_hint(array $response): string
+{
+    if (isset($response['message']) && is_string($response['message'])) {
+        return $response['message'];
+    }
+    if (isset($response['error']) && is_string($response['error'])) {
+        return $response['error'];
+    }
+    if (isset($response['message']) && is_array($response['message'])) {
+        foreach (['message', 'Message', 'error', 'Error'] as $key) {
+            if (!empty($response['message'][$key]) && is_string($response['message'][$key])) {
+                return $response['message'][$key];
+            }
+        }
+
+        return 'message: ' . implode(', ', array_keys($response['message']));
+    }
+
+    return implode(', ', array_keys($response));
+}
+
