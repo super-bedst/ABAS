@@ -40,12 +40,9 @@ function abas_curl_resolve_ca_bundle_path(): ?string
 
 function abas_curl_ssl_options(): array
 {
-    $opts = [
-        CURLOPT_SSL_VERIFYPEER => true,
-        CURLOPT_SSL_VERIFYHOST => 2,
-    ];
+    $opts = [];
     $cainfo = abas_curl_resolve_ca_bundle_path();
-    if ($cainfo !== null) {
+    if ($cainfo !== null && $cainfo !== '') {
         $opts[CURLOPT_CAINFO] = $cainfo;
     }
 
