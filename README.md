@@ -105,6 +105,12 @@ cd C:\wamp64\www\TrekantBrand\Sandbox\ABAS
 .\scripts\deploy.ps1
 ```
 
+Hvis `git pull` fejler (fx uafsluttet merge eller lokale ændringer), brug **force** — kasserer lokale ændringer og matcher `origin/master`:
+
+```powershell
+.\scripts\deploy.ps1 -Force
+```
+
 Scriptet kører `git pull`, `npm install` og `npm run build`. Kræver [Node.js](https://nodejs.org) på serveren.
 
 ## Cron

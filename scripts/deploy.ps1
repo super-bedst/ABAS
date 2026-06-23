@@ -4,17 +4,32 @@
 # Eksempel:
 #   .\scripts\deploy.ps1
 #   .\scripts\deploy.ps1 -RepoPath "C:\wamp64\www\TrekantBrand\Sandbox\ABAS"
+#   .\scripts\deploy.ps1 -Force
+#
+# -Force: Afbryd uafsluttet merge og overskriv lokale ændringer med origin/master.
 
 param(
     [string]$RepoPath = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path,
-    [string]$Branch = 'master'
+    [string]$Branch = 'master',
+    [switch]$Force
 )
+
+function Write-NativeOutput {
+    process {
+        if ($_ -is [System.Management.Automation.ErrorRecord]) {
+            Write-Host $_.ToString()
+        } else {
+            Write-Host $_
+        }
+    }
+}
 
 function Invoke-NativeCommand {
     param(
         [string]$Label,
         [string]$FilePath,
-        [string[]]$ArgumentList
+        [string[]]$ArgumentList,
+        [switch]$AllowFailure
     )
 
     Write-Host "`n$Label" -ForegroundColor Yellow
@@ -23,27 +38,52 @@ function Invoke-NativeCommand {
     $prevErrorAction = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
-        & $FilePath @ArgumentList 2>&1 | ForEach-Object {
-            if ($_ -is [System.Management.Automation.ErrorRecord]) {
-                Write-Host $_.ToString()
-            } else {
-                Write-Host $_
-            }
-        }
+        & $FilePath @ArgumentList 2>&1 | ForEach-Object { Write-NativeOutput $_ }
     } finally {
         $ErrorActionPreference = $prevErrorAction
     }
 
-    if ($LASTEXITCODE -ne 0) {
+    if (-not $AllowFailure -and $LASTEXITCODE -ne 0) {
         throw "$FilePath fejlede (exit $LASTEXITCODE)."
     }
+}
+
+function Sync-GitRepository {
+    param(
+        [string]$Branch,
+        [switch]$Force
+    )
+
+    if ($Force) {
+        Write-Host "`nForce: synkroniserer med origin/$Branch (lokale ændringer kasseres)" -ForegroundColor Magenta
+
+        if (Test-Path (Join-Path $RepoPath '.git\MERGE_HEAD')) {
+            Invoke-NativeCommand -Label 'git merge --abort' -FilePath 'git' -ArgumentList @('merge', '--abort')
+        }
+
+        if (Test-Path (Join-Path $RepoPath '.git\rebase-merge') -or (Test-Path (Join-Path $RepoPath '.git\rebase-apply'))) {
+            Invoke-NativeCommand -Label 'git rebase --abort' -FilePath 'git' -ArgumentList @('rebase', '--abort') -AllowFailure
+        }
+
+        Invoke-NativeCommand -Label "git fetch origin $Branch" -FilePath 'git' -ArgumentList @('fetch', 'origin', $Branch)
+        Invoke-NativeCommand -Label "git reset --hard origin/$Branch" -FilePath 'git' -ArgumentList @('reset', '--hard', "origin/$Branch")
+        return
+    }
+
+    Invoke-NativeCommand -Label "[1/3] git pull origin $Branch" -FilePath 'git' -ArgumentList @('pull', 'origin', $Branch)
 }
 
 Write-Host "ABA Service deploy" -ForegroundColor Cyan
 Write-Host "Mappe: $RepoPath" -ForegroundColor Gray
 Set-Location $RepoPath
 
-Invoke-NativeCommand -Label "[1/3] git pull origin $Branch" -FilePath 'git' -ArgumentList @('pull', 'origin', $Branch)
+try {
+    Sync-GitRepository -Branch $Branch -Force:$Force
+} catch {
+    Write-Host "`nGit pull fejlede. Prøv med -Force for at overskrive lokale ændringer:" -ForegroundColor Red
+    Write-Host "  .\scripts\deploy.ps1 -Force" -ForegroundColor Yellow
+    throw
+}
 
 if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
     throw "npm blev ikke fundet. Installer Node.js (https://nodejs.org) og pr�v igen."
