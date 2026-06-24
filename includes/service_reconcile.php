@@ -310,276 +310,112 @@ function abas_find_installation_by_s_ins(mysqli $conn, int $sIns, string $dealId
 }
 
 /**
- * @return list<array{id:int, s_ins:int, deal_id:string}>
+ * Opdater ekstern testkø-status for ét anlæg mod TrekantBrand.
+ *
+ * @return bool true hvis anlægget står i ekstern testkø efter sync
  */
-function abas_installations_for_reconcile_scan(mysqli $conn, int $limit, int $afterId = 0): array
+function abas_sync_installation_testqueue_status(mysqli $conn, TrekantClient $client, array $installation): bool
 {
-    if ($limit <= 0) {
-        return [];
+    $installationId = (int) $installation['id'];
+    if (abas_active_session_for_installation($conn, $installationId) !== null) {
+        abas_clear_external_testqueue($conn, $installationId);
+
+        return false;
     }
 
-    if ($afterId > 0) {
-        $stmt = $conn->prepare(
-            'SELECT id, s_ins, deal_id FROM installations WHERE s_ins > 0 AND id > ? ORDER BY id ASC LIMIT ?'
-        );
-        $stmt->bind_param('ii', $afterId, $limit);
-    } else {
-        $stmt = $conn->prepare(
-            'SELECT id, s_ins, deal_id FROM installations WHERE s_ins > 0 ORDER BY id ASC LIMIT ?'
-        );
-        $stmt->bind_param('i', $limit);
+    $sIns = (int) $installation['s_ins'];
+    $dealId = (string) $installation['deal_id'];
+    $resp = $client->getTestQueueStatus($sIns, $dealId, 1);
+    if (abas_trekant_return_code($resp) !== 0) {
+        return abas_external_testqueue_for_installation($conn, $installationId) !== null;
     }
-    $stmt->execute();
-    $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-    $stmt->close();
+
+    $rows = abas_trekant_rows($resp);
+    if ($rows === [] || !is_array($rows[0])) {
+        abas_clear_external_testqueue($conn, $installationId);
+
+        return false;
+    }
+
+    abas_upsert_external_testqueue($conn, $installationId, $rows[0]);
+
+    return true;
+}
+
+/**
+ * Anlæg der skal overvåges: aktiv ABAS-service, kendt ekstern testkø, eller tilknyttet anlægsejer/afprøver.
+ *
+ * @return list<array<string, mixed>>
+ */
+function abas_reconcile_watch_installations(mysqli $conn): array
+{
+    $result = $conn->query(
+        'SELECT DISTINCT i.*
+         FROM installations i
+         WHERE i.s_ins > 0
+           AND i.id IN (
+               SELECT installation_id FROM service_sessions WHERE status = "active"
+               UNION
+               SELECT installation_id FROM installation_external_testqueue
+               UNION
+               SELECT ui.installation_id
+               FROM user_installations ui
+               INNER JOIN users u ON u.id = ui.user_id
+               WHERE u.role IN ("anlaegsejer", "anlaegsafprover")
+           )
+         ORDER BY i.id'
+    );
+    if (!$result) {
+        return [];
+    }
+    $rows = $result->fetch_all(MYSQLI_ASSOC);
+    $result->close();
 
     return $rows;
 }
 
 /**
- * @return list<array{id:int, s_ins:int, deal_id:string}>
- */
-function abas_reconcile_scan_targets(mysqli $conn, int $batchLimit, int $cursorId): array
-{
-    $targets = [];
-    $seen = [];
-
-    foreach (abas_external_testqueue_installations($conn) as $ext) {
-        $id = (int) $ext['installation_id'];
-        if (isset($seen[$id])) {
-            continue;
-        }
-        $seen[$id] = true;
-        $targets[] = [
-            'id' => $id,
-            's_ins' => (int) $ext['s_ins'],
-            'deal_id' => (string) $ext['deal_id'],
-        ];
-    }
-
-    $batch = abas_installations_for_reconcile_scan($conn, $batchLimit, $cursorId);
-    if ($batch === [] && $cursorId > 0) {
-        $batch = abas_installations_for_reconcile_scan($conn, $batchLimit, 0);
-    }
-
-    foreach ($batch as $installation) {
-        $id = (int) $installation['id'];
-        if (isset($seen[$id])) {
-            continue;
-        }
-        $seen[$id] = true;
-        $targets[] = [
-            'id' => $id,
-            's_ins' => (int) $installation['s_ins'],
-            'deal_id' => (string) $installation['deal_id'],
-        ];
-    }
-
-    return ['targets' => $targets, 'batch' => $batch];
-}
-
-/**
- * @param list<string> $errors
- * @return array{
- *   rows: list<array<string, mixed>>,
- *   scanned: int,
- *   checked_installation_ids: array<int, true>,
- *   scan_cursor: int
- * }
- */
-function abas_reconcile_scan_installations_testqueue(mysqli $conn, TrekantClient $client, array &$errors): array
-{
-    if (abas_env('SERVICE_RECONCILE_SCAN', '1') === '0') {
-        return ['rows' => [], 'scanned' => 0, 'checked_installation_ids' => [], 'scan_cursor' => 0];
-    }
-
-    $batchLimit = max(1, (int) abas_env('SERVICE_RECONCILE_SCAN_LIMIT', '50'));
-    $budgetSec = max(10, (int) abas_env('SERVICE_RECONCILE_SCAN_BUDGET_SEC', '85'));
-    $deadline = microtime(true) + $budgetSec;
-    $cursorId = max(0, (int) abas_setting($conn, 'reconcile_scan_cursor', '0'));
-
-    $plan = abas_reconcile_scan_targets($conn, $batchLimit, $cursorId);
-    $targets = $plan['targets'];
-    $batch = $plan['batch'];
-
-    $rows = [];
-    $scanned = 0;
-    $checkedInstallationIds = [];
-    $nextCursor = $cursorId;
-
-    foreach ($targets as $installation) {
-        if (microtime(true) >= $deadline) {
-            break;
-        }
-
-        $installationId = (int) $installation['id'];
-        $scanned++;
-        $checkedInstallationIds[$installationId] = true;
-
-        if (abas_active_session_for_installation($conn, $installationId) !== null) {
-            continue;
-        }
-
-        $sIns = (int) $installation['s_ins'];
-        $dealId = (string) $installation['deal_id'];
-        try {
-            $resp = $client->getTestQueueStatus($sIns, $dealId, 1);
-            if (abas_trekant_return_code($resp) !== 0) {
-                continue;
-            }
-            $testRows = abas_trekant_rows($resp);
-            if ($testRows === []) {
-                continue;
-            }
-            $row = $testRows[0];
-            if (!is_array($row)) {
-                continue;
-            }
-            $row['s_ins'] = (int) ($row['s_ins'] ?? $sIns);
-            $row['deal_id'] = (string) ($row['deal_id'] ?? $dealId);
-            $rows[] = $row;
-        } catch (Throwable $e) {
-            $errors[] = 'scan ' . $sIns . ':' . $dealId . ': ' . $e->getMessage();
-        }
-    }
-
-    if ($batch !== []) {
-        $last = $batch[count($batch) - 1];
-        $nextCursor = (int) $last['id'];
-        abas_set_setting($conn, 'reconcile_scan_cursor', (string) $nextCursor);
-    }
-
-    return [
-        'rows' => $rows,
-        'scanned' => $scanned,
-        'checked_installation_ids' => $checkedInstallationIds,
-        'scan_cursor' => $nextCursor,
-    ];
-}
-
-/**
- * @return array{ok:bool, closed_abas:int, external_found:int, external_cleared:int, queue_rows:int, scanned_installations:int, scan_mode:bool, scan_cursor:int, summary_warning:?string, errors:list<string>, duration_ms:int}
+ * @return array{ok:bool, closed_abas:int, external_found:int, external_cleared:int, watched_installations:int, errors:list<string>, duration_ms:int}
  */
 function abas_reconcile_service_testqueue(mysqli $conn): array
 {
     $startedAt = microtime(true);
     $client = abas_trekant();
-    $userid = strtoupper((string) abas_config()['trekant']['user']);
-    $dealId = strtoupper((string) abas_env('TREKANT_DEAL_ID', 'TB'));
-
-    $summaryRows = [];
-    $summaryWarning = null;
-    $scanMode = false;
-    $scanned = 0;
-    $scanCursor = max(0, (int) abas_setting($conn, 'reconcile_scan_cursor', '0'));
-    $checkedInstallationIds = [];
-    try {
-        $summaryResp = $client->getTestQueueSummary($userid, $dealId);
-        $code = abas_trekant_return_code($summaryResp);
-        if (abas_trekant_summary_return_ok($code)) {
-            $summaryRows = abas_trekant_rows($summaryResp);
-            if ($summaryRows === [] && $code === 15342) {
-                $summaryWarning = 'g_ma_testqueue_summary s_ins=0 gav ingen raekker (RC 15342) - scanner anlaeg med g_ma_testqueue';
-            }
-        } else {
-            $summaryWarning = 'g_ma_testqueue_summary returncode ' . $code . ': ' . abas_trekant_response_hint($summaryResp);
-        }
-    } catch (Throwable $e) {
-        $summaryWarning = $e->getMessage();
-    }
-
     $errors = [];
-    if ($summaryRows === []) {
-        $scan = abas_reconcile_scan_installations_testqueue($conn, $client, $errors);
-        $summaryRows = $scan['rows'];
-        $scanned = $scan['scanned'];
-        $checkedInstallationIds = $scan['checked_installation_ids'];
-        $scanCursor = $scan['scan_cursor'];
-        $scanMode = $scanned > 0 || abas_env('SERVICE_RECONCILE_SCAN', '1') !== '0';
-    }
-
-    $queueBySIns = [];
-    foreach ($summaryRows as $row) {
-        $identity = abas_queue_row_identity($row);
-        if ($identity === null) {
-            continue;
-        }
-        $queueBySIns[$identity['s_ins'] . ':' . $identity['deal_id']] = $row;
-    }
-
     $closedAbas = 0;
-
-    foreach (abas_active_abas_service_sessions($conn) as $session) {
-        $sIns = (int) $session['s_ins'];
-        $dealId = (string) $session['deal_id'];
-        $key = $sIns . ':' . $dealId;
-        $inQueue = isset($queueBySIns[$key]);
-
-        if (!$inQueue) {
-            try {
-                $inQueue = abas_installation_in_testqueue($conn, $sIns, $dealId);
-            } catch (Throwable $e) {
-                $errors[] = 'testqueue ' . $sIns . ': ' . $e->getMessage();
-                continue;
-            }
-        }
-
-        if (!$inQueue) {
-            try {
-                if (abas_close_session_ended_externally($conn, $session)) {
-                    $closedAbas++;
-                }
-            } catch (Throwable $e) {
-                $errors[] = 'close session ' . ($session['id'] ?? '?') . ': ' . $e->getMessage();
-            }
-        }
-    }
-
     $externalFound = 0;
     $externalCleared = 0;
-    $seenInstallationIds = [];
+    $watched = abas_reconcile_watch_installations($conn);
 
-    foreach ($summaryRows as $row) {
-        $identity = abas_queue_row_identity($row);
-        if ($identity === null) {
-            continue;
-        }
-        $installation = abas_find_installation_by_s_ins($conn, $identity['s_ins'], $identity['deal_id']);
-        if ($installation === null) {
-            continue;
-        }
+    foreach ($watched as $installation) {
         $installationId = (int) $installation['id'];
-        $seenInstallationIds[$installationId] = true;
-
-        if (abas_active_session_for_installation($conn, $installationId) !== null) {
-            abas_clear_external_testqueue($conn, $installationId);
-            continue;
-        }
+        $session = abas_active_session_for_installation($conn, $installationId);
 
         try {
-            abas_upsert_external_testqueue($conn, $installationId, $row);
-            $externalFound++;
-        } catch (Throwable $e) {
-            $errors[] = 'external upsert ' . $installationId . ': ' . $e->getMessage();
-        }
-    }
+            if ($session !== null) {
+                if (!abas_installation_in_testqueue($conn, (int) $installation['s_ins'], (string) $installation['deal_id'])) {
+                    $sessionRow = $session + [
+                        's_ins' => (int) $installation['s_ins'],
+                        'deal_id' => (string) $installation['deal_id'],
+                        'miscno2' => (string) ($installation['miscno2'] ?? ''),
+                        'installation_name' => (string) ($installation['name'] ?? ''),
+                    ];
+                    if (abas_close_session_ended_externally($conn, $sessionRow)) {
+                        $closedAbas++;
+                    }
+                }
+                continue;
+            }
 
-    if ($scanMode) {
-        foreach (abas_external_testqueue_installations($conn) as $ext) {
-            $installationId = (int) $ext['installation_id'];
-            if (isset($checkedInstallationIds[$installationId]) && !isset($seenInstallationIds[$installationId])) {
-                abas_clear_external_testqueue($conn, $installationId);
+            $hadExternal = abas_external_testqueue_for_installation($conn, $installationId) !== null;
+            $hasExternal = abas_sync_installation_testqueue_status($conn, $client, $installation);
+            if ($hasExternal && !$hadExternal) {
+                $externalFound++;
+            } elseif (!$hasExternal && $hadExternal) {
                 $externalCleared++;
             }
-        }
-    } elseif ($summaryRows !== []) {
-        $existing = abas_external_testqueue_installations($conn);
-        foreach ($existing as $ext) {
-            $installationId = (int) $ext['installation_id'];
-            if (!isset($seenInstallationIds[$installationId])) {
-                abas_clear_external_testqueue($conn, $installationId);
-                $externalCleared++;
-            }
+        } catch (Throwable $e) {
+            $errors[] = 'install ' . $installationId . ': ' . $e->getMessage();
         }
     }
 
@@ -588,11 +424,7 @@ function abas_reconcile_service_testqueue(mysqli $conn): array
         'closed_abas' => $closedAbas,
         'external_found' => $externalFound,
         'external_cleared' => $externalCleared,
-        'queue_rows' => count($summaryRows),
-        'scanned_installations' => $scanned,
-        'scan_mode' => $scanMode,
-        'scan_cursor' => $scanCursor,
-        'summary_warning' => $summaryWarning,
+        'watched_installations' => count($watched),
         'errors' => $errors,
         'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
     ];
@@ -606,15 +438,11 @@ function abas_handle_reconcile_service_webhook(mysqli $conn): never
         abas_api_json(403, ['ok' => false, 'error' => abas_reconcile_request_auth_error()]);
     }
 
-    @set_time_limit(150);
+    @set_time_limit(120);
 
     try {
         $result = abas_reconcile_service_testqueue($conn);
-        $status = $result['ok'] ? 200 : 500;
-        if (!$result['ok'] && $result['summary_warning'] && $result['errors'] === []) {
-            $status = 200;
-        }
-        abas_api_json($status, $result);
+        abas_api_json($result['ok'] ? 200 : 500, $result);
     } catch (Throwable $e) {
         abas_api_json(500, ['ok' => false, 'error' => $e->getMessage()]);
     }

@@ -301,6 +301,35 @@ function abas_active_service_installation_ids(mysqli $conn, ?array $installation
 }
 
 /**
+ * @return array<int, true>
+ */
+function abas_external_service_installation_ids(mysqli $conn, ?array $installationIds = null): array
+{
+    if ($installationIds !== null && $installationIds === []) {
+        return [];
+    }
+
+    $sql = 'SELECT installation_id FROM installation_external_testqueue';
+    if ($installationIds !== null) {
+        $ids = array_map('intval', $installationIds);
+        $sql .= ' WHERE installation_id IN (' . implode(',', $ids) . ')';
+    }
+
+    $result = $conn->query($sql);
+    if (!$result) {
+        return [];
+    }
+
+    $external = [];
+    while ($row = $result->fetch_assoc()) {
+        $external[(int) $row['installation_id']] = true;
+    }
+    $result->close();
+
+    return $external;
+}
+
+/**
  * @return list<array<string, mixed>>
  */
 function abas_dashboard_in_service_installations(mysqli $conn, array $user, bool $includeCompany = true): array
@@ -379,9 +408,12 @@ function abas_flag_installations_in_service(mysqli $conn, array $installations):
 
     $ids = array_map(static fn (array $row): int => (int) $row['id'], $installations);
     $active = abas_active_service_installation_ids($conn, $ids);
+    $external = abas_external_service_installation_ids($conn, $ids);
 
     foreach ($installations as &$installation) {
-        $installation['in_service'] = isset($active[(int) $installation['id']]);
+        $installationId = (int) $installation['id'];
+        $installation['in_service'] = isset($active[$installationId]) || isset($external[$installationId]);
+        $installation['in_external_service'] = !isset($active[$installationId]) && isset($external[$installationId]);
     }
     unset($installation);
 

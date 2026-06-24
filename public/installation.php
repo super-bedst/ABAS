@@ -7,6 +7,7 @@ require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/roles.php';
 require_once __DIR__ . '/../includes/service.php';
+require_once __DIR__ . '/../includes/trekant_client.php';
 require_once __DIR__ . '/../includes/service_reconcile.php';
 require_once __DIR__ . '/../includes/installation_sync.php';
 require_once __DIR__ . '/../includes/installation_details.php';
@@ -27,6 +28,11 @@ if (!$installation || !abas_user_may_access_installation($conn, $user, $installa
 }
 
 $session = abas_active_session_for_installation($conn, $id);
+try {
+    abas_sync_installation_testqueue_status($conn, abas_trekant(), $installation);
+} catch (Throwable $e) {
+    error_log('ABA testqueue sync for installation ' . $id . ': ' . $e->getMessage());
+}
 $externalTest = abas_external_testqueue_for_installation($conn, $id);
 $logMode = $_GET['log'] ?? 'last20';
 $customRange = null;

@@ -7,7 +7,9 @@ require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/roles.php';
 require_once __DIR__ . '/../includes/service.php';
+require_once __DIR__ . '/../includes/trekant_client.php';
 require_once __DIR__ . '/../includes/service_reconcile.php';
+require_once __DIR__ . '/../includes/installation_status.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -39,6 +41,12 @@ if (!$installation || !abas_user_may_access_installation($conn, $user, $installa
 }
 
 $session = abas_active_session_for_installation($conn, $id);
+try {
+    abas_sync_installation_testqueue_status($conn, abas_trekant(), $installation);
+} catch (Throwable $e) {
+    echo json_encode(['error' => 'Status: ' . $e->getMessage()]);
+    exit;
+}
 $externalTest = abas_external_testqueue_for_installation($conn, $id);
 $log = ['rows' => [], 'code' => -1];
 

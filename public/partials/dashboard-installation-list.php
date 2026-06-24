@@ -33,7 +33,7 @@ if (!isset($installations) || $installations === []) {
                 <td class="font-mono font-medium text-brand">
                     <?= htmlspecialchars((string) $inst['miscno2']) ?>
                     <?php if (!empty($inst['in_service']) && empty($showServiceInfo)): ?>
-                        <span class="abas-badge-in-service ml-2">I service</span>
+                        <span class="abas-badge-in-service ml-2"><?= !empty($inst['in_external_service']) ? 'Ekstern service' : 'I service' ?></span>
                     <?php endif; ?>
                 </td>
                 <td>
@@ -75,7 +75,7 @@ if (!isset($installations) || $installations === []) {
             <div class="flex flex-wrap items-center gap-2">
                 <div class="abas-mobile-card-title"><?= htmlspecialchars((string) $inst['miscno2']) ?></div>
                 <?php if (!empty($inst['in_service']) && empty($showServiceInfo)): ?>
-                    <span class="abas-badge-in-service">I service</span>
+                    <span class="abas-badge-in-service"><?= !empty($inst['in_external_service']) ? 'Ekstern service' : 'I service' ?></span>
                 <?php endif; ?>
                 <?php if (!empty($showServiceScope) && ($inst['service_scope'] ?? '') === 'company'): ?>
                     <span class="abas-badge bg-slate-100 text-slate-700 border-slate-200">Firma</span>
