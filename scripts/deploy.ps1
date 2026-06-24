@@ -123,6 +123,15 @@ function Sync-GitRepository {
         [switch]$Force
     )
 
+    $envBackups = @{}
+    foreach ($envFile in @('env.local', '.env.local')) {
+        $envPath = Join-Path $RepoPath $envFile
+        if (Test-Path $envPath) {
+            $envBackups[$envFile] = Get-Content -Path $envPath -Raw -Encoding UTF8
+            Write-Host "Bevarer lokalt: $envFile" -ForegroundColor Gray
+        }
+    }
+
     if ($Force) {
         Write-Host "`nForce: synkroniserer med origin/$Branch (lokale aendringer kasseres)" -ForegroundColor Magenta
 
@@ -136,10 +145,22 @@ function Sync-GitRepository {
 
         Invoke-NativeCommand -Label "[1/3] git fetch origin $Branch" -FilePath 'git' -ArgumentList @('fetch', 'origin', $Branch)
         Invoke-NativeCommand -Label "git reset --hard origin/$Branch" -FilePath 'git' -ArgumentList @('reset', '--hard', "origin/$Branch")
+
+        foreach ($envFile in $envBackups.Keys) {
+            $envPath = Join-Path $RepoPath $envFile
+            Set-Content -Path $envPath -Value $envBackups[$envFile] -Encoding UTF8 -NoNewline
+            Write-Host "Gendannet lokalt: $envFile" -ForegroundColor Gray
+        }
         return
     }
 
     Invoke-NativeCommand -Label "[1/3] git pull origin $Branch" -FilePath 'git' -ArgumentList @('pull', 'origin', $Branch)
+
+    foreach ($envFile in $envBackups.Keys) {
+        $envPath = Join-Path $RepoPath $envFile
+        Set-Content -Path $envPath -Value $envBackups[$envFile] -Encoding UTF8 -NoNewline
+        Write-Host "Gendannet lokalt: $envFile" -ForegroundColor Gray
+    }
 }
 
 Write-Host "ABA Service deploy" -ForegroundColor Cyan
