@@ -264,19 +264,16 @@ function abas_sync_prefix(mysqli $conn, int $prefixId, ?string $trekantUserid = 
 
 function abas_sync_verify_cron_request(): bool
 {
-    $secret = (string) abas_env('SYNC_CRON_SECRET', '');
-    if ($secret === '') {
-        return false;
-    }
+    require_once __DIR__ . '/cron_auth.php';
 
-    $hdr = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
-    $bearer = null;
-    if (preg_match('/Bearer\s+(\S+)/i', $hdr, $m)) {
-        $bearer = $m[1];
-    }
-    $key = trim((string) ($_GET['key'] ?? $_POST['key'] ?? ''));
+    return abas_cron_verify_request(['SYNC_CRON_SECRET']);
+}
 
-    return hash_equals($secret, (string) $bearer) || hash_equals($secret, $key);
+function abas_sync_cron_auth_error(): string
+{
+    require_once __DIR__ . '/cron_auth.php';
+
+    return abas_cron_auth_error(['SYNC_CRON_SECRET'], 'sync');
 }
 
 function abas_sync_all_active(mysqli $conn): array
@@ -328,7 +325,7 @@ function abas_handle_sync_cron_webhook(mysqli $conn): never
     require_once __DIR__ . '/api_auth.php';
 
     if (!abas_sync_verify_cron_request()) {
-        abas_api_json(403, ['ok' => false, 'error' => 'Ugyldig eller manglende sync-nøgle']);
+        abas_api_json(403, ['ok' => false, 'error' => abas_sync_cron_auth_error()]);
     }
 
     @set_time_limit(600);

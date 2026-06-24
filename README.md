@@ -138,6 +138,14 @@ GET https://tkb.teamscreen.dk/Sandbox/ABAS/public/api/v1/cron/sync-installations
 
 Alternativt `Authorization: Bearer <secret>`. Svar er JSON med `total_upserted` og `duration_ms`. Sæt lang timeout i Node-RED (typisk 1–2 min for 100 batch-kald pr. prefix).
 
+**Service-reconcile (ekstern testkø):** Samme nøgle (`SYNC_CRON_SECRET`):
+
+```
+GET https://tkb.teamscreen.dk/Sandbox/ABAS/public/api/v1/cron/reconcile-service?key=<secret>
+```
+
+Legacy-URL'er (`/cron/sync_installations.php` og `/cron/reconcile_service.php`) kræver nu også `?key=` ved HTTP-kald. CLI-cron uden nøgle virker som før.
+
 ## API
 
 Se [docs/openapi.yaml](docs/openapi.yaml). Eksempel:

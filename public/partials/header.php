@@ -24,7 +24,10 @@ $flash = abas_flash_get();
 <body class="min-h-screen flex flex-col font-sans">
 <header class="bg-brand text-white shadow-md">
     <div class="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-        <a href="<?= abas_url('dashboard.php') ?>" class="font-bold text-lg tracking-wide"><?= htmlspecialchars($appName) ?></a>
+        <a href="<?= abas_url('dashboard.php') ?>" class="flex items-center gap-3 no-underline text-white hover:text-white/90">
+            <img src="<?= htmlspecialchars(abas_asset_url('assets/images/trekantbrand-logo.svg')) ?>" alt="TrekantBrand" class="h-9 w-auto">
+            <span class="font-semibold text-sm sm:text-base tracking-wide"><?= htmlspecialchars($appName) ?></span>
+        </a>
         <?php if (!empty($currentUser)): ?>
         <nav class="flex flex-wrap gap-2 text-sm items-center">
             <a href="<?= abas_url('dashboard.php') ?>" class="px-3 py-1.5 rounded-full hover:bg-white/15">Dashboard</a>

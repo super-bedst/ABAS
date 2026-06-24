@@ -206,6 +206,72 @@ function abas_assign_installer_for_montor(mysqli $conn, string $email): ?int
     return abas_installer_id_for_email($conn, $email);
 }
 
+/**
+ * @return list<array{id:int, username:string, email:string, phone:?string, company_name:?string}>
+ */
+function abas_search_montors(mysqli $conn, string $q, int $limit = 40): array
+{
+    $q = trim($q);
+    $limit = max(1, min(100, $limit));
+
+    if ($q === '') {
+        $stmt = $conn->prepare(
+            'SELECT u.id, u.username, u.email, u.phone, ai.company_name
+             FROM users u
+             LEFT JOIN approved_installers ai ON ai.id = u.installer_id
+             WHERE u.role = "montor" AND u.active = 1
+             ORDER BY u.username
+             LIMIT ?'
+        );
+        $stmt->bind_param('i', $limit);
+    } else {
+        $like = '%' . $q . '%';
+        $stmt = $conn->prepare(
+            'SELECT u.id, u.username, u.email, u.phone, ai.company_name
+             FROM users u
+             LEFT JOIN approved_installers ai ON ai.id = u.installer_id
+             WHERE u.role = "montor" AND u.active = 1
+               AND (u.username LIKE ? OR u.phone LIKE ? OR u.email LIKE ? OR ai.company_name LIKE ?)
+             ORDER BY u.username
+             LIMIT ?'
+        );
+        $stmt->bind_param('ssssi', $like, $like, $like, $like, $limit);
+    }
+
+    $stmt->execute();
+    $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+
+    return $rows;
+}
+
+function abas_vc_append_person_comment(string $comment, string $name, string $phone): string
+{
+    $name = trim($name);
+    $phone = trim($phone);
+    if ($name === '' && $phone === '') {
+        return $comment;
+    }
+
+    $parts = array_values(array_filter([$name, $phone], static fn (string $p): bool => $p !== ''));
+    $suffix = implode(', ', $parts);
+    if ($comment === '') {
+        return $suffix;
+    }
+
+    $enriched = $comment . ' — ' . $suffix;
+
+    return function_exists('mb_substr')
+        ? (string) mb_substr($enriched, 0, 255)
+        : substr($enriched, 0, 255);
+}
+
+/** @deprecated use abas_vc_append_person_comment */
+function abas_vc_append_manual_montor_comment(string $comment, string $name, string $phone): string
+{
+    return abas_vc_append_person_comment($comment, $name, $phone);
+}
+
 function abas_enrich_service_start_comment(mysqli $conn, array $user, string $comment): string
 {
     if ($comment === '' || ($user['role'] ?? '') === 'vagtcentral') {

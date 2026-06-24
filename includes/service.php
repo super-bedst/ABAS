@@ -150,6 +150,7 @@ function abas_start_service_session(
     $dealId = (string) $installation['deal_id'];
     $testTime = abas_format_test_time_hours($hours);
     $comm = $comment !== '' ? abas_enrich_service_start_comment($conn, $user, $comment) : ($isExtend ? 'ABA Service forlængelse' : 'ABA Service start');
+    $comm = abas_trekant_trim_comment($comm);
     $resp = $client->startService($sIns, $dealId, $testTime, $comm);
     $code = abas_trekant_return_code($resp);
     $userId = (int) $user['id'];
@@ -186,6 +187,17 @@ function abas_start_service_session(
         $stmt->close();
     }
 
+    $sInc = abas_trekant_extract_s_inc($resp);
+    if ($sInc === null && ($code === 0 || $code === 15997)) {
+        $sInc = abas_trekant_active_test_s_inc($client, $sIns, $dealId);
+    }
+    if ($sInc !== null && $sInc > 0 && $sessionId > 0) {
+        $sIncStmt = $conn->prepare('UPDATE service_sessions SET s_inc = ? WHERE id = ? AND (s_inc IS NULL OR s_inc = 0)');
+        $sIncStmt->bind_param('ii', $sInc, $sessionId);
+        $sIncStmt->execute();
+        $sIncStmt->close();
+    }
+
     require_once __DIR__ . '/service_notifications.php';
     abas_notify_service_started($conn, $user, $installation, $onBehalfUserId, $sessionId, false, $hours, $isExtend);
 
@@ -210,15 +222,26 @@ function abas_stop_service_session(
     $onBehalfUserId = abas_service_on_behalf_user_id($sessionRow);
     $notifySessionId = $sessionRow ? (int) $sessionRow['id'] : $sessionId;
     $sInc = null;
-    if ($sessionRow && isset($sessionRow['s_inc'])) {
-        $sInc = (int) $sessionRow['s_inc'] ?: null;
+    if ($sessionRow && !empty($sessionRow['s_inc'])) {
+        $sInc = (int) $sessionRow['s_inc'];
     }
-    $resp = $client->stopService($sIns, $dealId, $sInc, $comment !== '' ? $comment : 'ABA Service stop');
+    if ($sInc === null || $sInc <= 0) {
+        $sInc = abas_trekant_active_test_s_inc($client, $sIns, $dealId);
+    }
+    $stopComment = abas_trekant_trim_comment($comment !== '' ? $comment : 'ABA Service stop');
+    $resp = $client->stopService($sIns, $dealId, $sInc > 0 ? $sInc : null, $stopComment);
     $code = abas_trekant_return_code($resp);
     $userId = (int) $user['id'];
-    abas_log_service_action($conn, $userId, $onBehalfUserId, $notifySessionId, $sIns, $dealId, 'stop_service', null, $comment, $source, $code);
+    abas_log_service_action($conn, $userId, $onBehalfUserId, $notifySessionId, $sIns, $dealId, 'stop_service', null, $stopComment, $source, $code);
     if ($code !== 0 && $code !== 15974) {
         return ['ok' => false, 'code' => $code, 'message' => $resp['message']['message'] ?? 'Stop fejlede'];
+    }
+    if ($stopComment !== '' && $sInc > 0) {
+        $addResp = $client->addLogComment($sIns, $dealId, $sInc, $stopComment);
+        $addCode = abas_trekant_return_code($addResp);
+        if ($addCode !== 0) {
+            error_log('ABA addLogComment after stop failed: code ' . $addCode . ' s_inc=' . $sInc);
+        }
     }
     if ($notifySessionId) {
         $u = $conn->prepare('UPDATE service_sessions SET ended_at=NOW(), status="ended" WHERE id=?');

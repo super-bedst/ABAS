@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/cron_auth.php';
 require_once __DIR__ . '/trekant_client.php';
 require_once __DIR__ . '/service.php';
 require_once __DIR__ . '/service_notifications.php';
@@ -10,22 +11,12 @@ require_once __DIR__ . '/sms.php';
 
 function abas_reconcile_verify_request(): bool
 {
-    $secret = (string) abas_env('SERVICE_RECONCILE_CRON_SECRET', '');
-    if ($secret === '') {
-        $secret = (string) abas_env('SYNC_CRON_SECRET', '');
-    }
-    if ($secret === '') {
-        return false;
-    }
+    return abas_cron_verify_request(['SERVICE_RECONCILE_CRON_SECRET', 'SYNC_CRON_SECRET']);
+}
 
-    $hdr = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
-    $bearer = null;
-    if (preg_match('/Bearer\s+(\S+)/i', $hdr, $m)) {
-        $bearer = $m[1];
-    }
-    $key = trim((string) ($_GET['key'] ?? $_POST['key'] ?? ''));
-
-    return hash_equals($secret, (string) $bearer) || hash_equals($secret, $key);
+function abas_reconcile_request_auth_error(): string
+{
+    return abas_cron_auth_error(['SERVICE_RECONCILE_CRON_SECRET', 'SYNC_CRON_SECRET'], 'reconcile');
 }
 
 function abas_parse_trekant_queue_datetime(?string $date, ?string $time): ?string
@@ -259,7 +250,7 @@ function abas_stop_external_testqueue(
     }
 
     $client = abas_trekant();
-    $comm = $comment !== '' ? $comment : 'ABA Service stop (ekstern test)';
+    $comm = abas_trekant_trim_comment($comment !== '' ? $comment : 'ABA Service stop (ekstern test)');
     $comm = abas_enrich_service_start_comment($conn, $user, $comm);
     $resp = $client->stopService((int) $installation['s_ins'], (string) $installation['deal_id'], $sInc > 0 ? $sInc : null, $comm);
     $code = abas_trekant_return_code($resp);
@@ -279,6 +270,13 @@ function abas_stop_external_testqueue(
 
     if ($code !== 0 && $code !== 15974) {
         return ['ok' => false, 'code' => $code, 'message' => $resp['message']['message'] ?? 'Kunne ikke sætte anlæg i drift.'];
+    }
+
+    if ($comm !== '' && $sInc > 0) {
+        $addResp = $client->addLogComment((int) $installation['s_ins'], (string) $installation['deal_id'], $sInc, $comm);
+        if (abas_trekant_return_code($addResp) !== 0) {
+            error_log('ABA addLogComment after external stop failed s_inc=' . $sInc);
+        }
     }
 
     abas_clear_external_testqueue($conn, (int) $installation['id']);
@@ -417,7 +415,7 @@ function abas_handle_reconcile_service_webhook(mysqli $conn): never
     require_once __DIR__ . '/api_auth.php';
 
     if (!abas_reconcile_verify_request()) {
-        abas_api_json(403, ['ok' => false, 'error' => 'Ugyldig eller manglende reconcile-nøgle']);
+        abas_api_json(403, ['ok' => false, 'error' => abas_reconcile_request_auth_error()]);
     }
 
     @set_time_limit(120);

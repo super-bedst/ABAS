@@ -296,6 +296,70 @@ function abas_trekant_return_code(array $response): int
     return $code === null ? -1 : (int) $code;
 }
 
+function abas_trekant_extract_s_inc(array $response): ?int
+{
+    $rows = abas_trekant_rows($response);
+    if ($rows !== []) {
+        $first = $rows[0];
+        if (is_array($first) && isset($first['s_inc'])) {
+            $n = (int) $first['s_inc'];
+
+            return $n > 0 ? $n : null;
+        }
+        if (is_numeric($first)) {
+            $n = (int) $first;
+
+            return $n > 0 ? $n : null;
+        }
+    }
+
+    $raw = abas_trekant_pick_nested($response, [
+        ['ResultSet'],
+        ['resultSet'],
+        ['message', 'ResultSet'],
+        ['message', 'resultSet'],
+    ]);
+    if (is_numeric($raw)) {
+        $n = (int) $raw;
+
+        return $n > 0 ? $n : null;
+    }
+    if (is_array($raw) && isset($raw[0]) && is_numeric($raw[0])) {
+        $n = (int) $raw[0];
+
+        return $n > 0 ? $n : null;
+    }
+
+    return null;
+}
+
+function abas_trekant_trim_comment(string $comment, int $maxLen = 80): string
+{
+    $text = trim($comment);
+    if ($text === '') {
+        return '';
+    }
+
+    return function_exists('mb_substr')
+        ? (string) mb_substr($text, 0, $maxLen)
+        : substr($text, 0, $maxLen);
+}
+
+function abas_trekant_active_test_s_inc(TrekantClient $client, int $sIns, string $dealId): ?int
+{
+    $resp = $client->getTestQueueStatus($sIns, $dealId, 5);
+    if (abas_trekant_return_code($resp) !== 0) {
+        return null;
+    }
+    $rows = abas_trekant_rows($resp);
+    if ($rows === []) {
+        return null;
+    }
+    $n = (int) ($rows[0]['s_inc'] ?? 0);
+
+    return $n > 0 ? $n : null;
+}
+
 function abas_trekant_response_hint(array $response): string
 {
     if (isset($response['message']) && is_string($response['message'])) {

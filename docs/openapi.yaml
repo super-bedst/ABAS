@@ -50,6 +50,7 @@ paths:
                   type: boolean
                 comment:
                   type: string
+                  description: Ved start sendes som comm til c_ma_testqueue; ved stop som comment til d_ma_testqueue (max 80 tegn) og i alarmlog
       responses:
         '200':
           description: Success
