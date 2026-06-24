@@ -12,6 +12,11 @@ require_once __DIR__ . '/../includes/service.php';
 
 $conn = abas_db();
 $user = abas_require_login();
+$pendingRegistrations = 0;
+if (($user['role'] ?? '') === 'admin') {
+    require_once __DIR__ . '/../includes/registration.php';
+    $pendingRegistrations = abas_pending_registration_count($conn);
+}
 $q = trim($_GET['q'] ?? '');
 $installations = [];
 $listHeading = '';
@@ -56,6 +61,9 @@ $currentUser = $user;
 require __DIR__ . '/partials/header.php';
 ?>
 <h1 class="abas-page-title">Dashboard</h1>
+<?php if ($pendingRegistrations > 0): ?>
+    <?= abas_render_pending_registrations_banner($pendingRegistrations) ?>
+<?php endif; ?>
 <?php if ($isOwner): ?>
     <p class="abas-page-lead">Dine tilknyttede anlæg — tryk på et anlæg for at se status og starte eller stoppe service.</p>
 <?php elseif ($q === ''): ?>

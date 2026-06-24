@@ -1,4 +1,20 @@
 document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.abas-ack-checkbox').forEach(function (ack) {
+        var form = ack.closest('form');
+        if (!form) {
+            return;
+        }
+        var btn = form.querySelector('.abas-ack-submit');
+        if (!btn) {
+            return;
+        }
+        function syncAckButton() {
+            btn.disabled = !ack.checked;
+        }
+        ack.addEventListener('change', syncAckButton);
+        syncAckButton();
+    });
+
     document.querySelectorAll('form[data-abas-loading]').forEach(function (form) {
         form.addEventListener('submit', function () {
             var msg = form.getAttribute('data-abas-loading') || 'Arbejder…';

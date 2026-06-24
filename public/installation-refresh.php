@@ -48,12 +48,12 @@ try {
 }
 
 $sessionLabel = '';
-    if ($session) {
-        $sessionLabel = 'Aktiv service siden ' . $session['started_at'];
-        if (!empty($session['expires_at'])) {
-            $sessionLabel .= ' — udløber ' . $session['expires_at'];
-        }
+if ($session) {
+    $sessionLabel = 'Aktiv siden ' . abas_format_datetime($session['started_at']);
+    if (!empty($session['expires_at'])) {
+        $sessionLabel .= ' — udløber ' . abas_format_datetime($session['expires_at']);
     }
+}
 
 echo json_encode([
     'sessionActive' => $session !== null,

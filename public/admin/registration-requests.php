@@ -29,7 +29,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $pending = $conn->query(
-    "SELECT u.*, ai.company_name FROM users u
+    "SELECT u.*, ai.company_name,
+            COALESCE(ai.company_name, u.registration_requested_company_name) AS display_company_name
+     FROM users u
      LEFT JOIN approved_installers ai ON ai.id = u.installer_id
      WHERE u.registration_status = 'pending'
      ORDER BY u.registration_requested_at ASC"
@@ -61,8 +63,13 @@ require __DIR__ . '/../partials/header.php';
         <dl class="grid sm:grid-cols-2 gap-2 text-sm mb-4">
             <div><dt class="text-gray-500">E-mail</dt><dd><?= htmlspecialchars($p['email']) ?></dd></div>
             <div><dt class="text-gray-500">Telefon</dt><dd><?= htmlspecialchars((string) $p['phone']) ?></dd></div>
-            <?php if (!empty($p['company_name'])): ?>
-            <div><dt class="text-gray-500">Firma</dt><dd><?= htmlspecialchars($p['company_name']) ?></dd></div>
+            <?php if (!empty($p['display_company_name'])): ?>
+            <div><dt class="text-gray-500">Firma</dt><dd>
+                <?= htmlspecialchars((string) $p['display_company_name']) ?>
+                <?php if (!empty($p['registration_requested_company_name']) && empty($p['company_name'])): ?>
+                    <span class="text-amber-700 text-xs block">Ny virksomhed — oprettes ved godkendelse (domæne <?= htmlspecialchars(abas_email_domain((string) $p['email'])) ?>)</span>
+                <?php endif; ?>
+            </dd></div>
             <?php endif; ?>
             <?php if ($reqInst !== []): ?>
             <div class="sm:col-span-2"><dt class="text-gray-500">Ønskede anlæg</dt><dd class="font-mono"><?= htmlspecialchars(implode(', ', array_column($reqInst, 'miscno2'))) ?></dd></div>

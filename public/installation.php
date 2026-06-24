@@ -83,13 +83,20 @@ require __DIR__ . '/partials/header.php';
 </div>
 <h1 class="abas-page-title"><?= htmlspecialchars((string) $installation['miscno2']) ?></h1>
 <div class="mb-2"><?= abas_render_installation_status_badges($installation, $inService) ?></div>
-<p class="abas-page-lead"><?= htmlspecialchars((string) $installation['name']) ?> — <?= htmlspecialchars((string) $installation['address']) ?>, <?= htmlspecialchars((string) $installation['city']) ?></p>
+<?php if ($inService): ?>
+    <?= abas_render_installation_in_service_banner($session) ?>
+<?php endif; ?>
+<p class="abas-page-lead mb-6"><?= htmlspecialchars((string) $installation['name']) ?> — <?= htmlspecialchars((string) $installation['address']) ?>, <?= htmlspecialchars((string) $installation['city']) ?></p>
 
 <div class="grid md:grid-cols-2 gap-4 mb-6">
-    <div class="abas-card" id="service-card">
-        <h2 class="abas-card-title">Service</h2>
+    <div class="abas-card<?= $inService ? ' abas-card--in-service' : '' ?>" id="service-card">
+        <h2 class="abas-card-title flex flex-wrap items-center gap-2">
+            Service
+            <?php if ($inService): ?>
+                <span class="abas-badge-in-service text-sm px-3 py-1">Aktiv nu</span>
+            <?php endif; ?>
+        </h2>
         <?php if ($session): ?>
-            <p id="inst-service-status" class="abas-badge-active mb-4">Aktiv service siden <?= htmlspecialchars($session['started_at']) ?><?= $session['expires_at'] ? ' — udløber ' . htmlspecialchars($session['expires_at']) : '' ?></p>
             <p class="text-sm text-gray-600 mb-4">Maks. <?= (int) abas_service_max_hours_per_start() ?> timer ad gangen og <?= (int) abas_service_max_consecutive_hours() ?> timer i alt fra første start.</p>
             <?php if ($maxExtendHours >= 0.5): ?>
             <form method="post" class="abas-form mb-4" data-abas-loading="Forlænger service…">
@@ -105,11 +112,11 @@ require __DIR__ . '/partials/header.php';
                 </div>
                 <div class="abas-field border border-amber-200 bg-amber-50 rounded-xl p-3">
                     <label class="flex items-start gap-2 text-sm text-gray-800">
-                        <input type="checkbox" name="responsibility_ack" value="1" class="abas-checkbox mt-1" required>
-                        <span>Jeg bekræfter fortsat ansvar for bygningen og brandvagter m.v.</span>
+                        <input type="checkbox" name="responsibility_ack" value="1" class="abas-checkbox abas-ack-checkbox mt-1" id="extend_responsibility_ack" required>
+                        <span>Jeg bekræfter fortsat ansvar for bygningen og brandvagter m.v. Ved brand er jeg ansvarlig for at ringe 112 indtil anlægget sættes tilbage i normal drift.</span>
                     </label>
                 </div>
-                <button type="submit" class="abas-btn-primary">Forlæng service</button>
+                <button type="submit" class="abas-btn-primary abas-ack-submit" id="extend-service-btn" disabled>Forlæng service</button>
             </form>
             <?php else: ?>
             <p class="text-sm text-amber-800 mb-4">Maks. <?= (int) abas_service_max_consecutive_hours() ?> timer i service er nået. Stop service for at starte forfra.</p>
@@ -141,21 +148,12 @@ require __DIR__ . '/partials/header.php';
                 </div>
                 <div class="abas-field border border-amber-200 bg-amber-50 rounded-xl p-3">
                     <label class="flex items-start gap-2 text-sm text-gray-800">
-                        <input type="checkbox" name="responsibility_ack" value="1" class="abas-checkbox mt-1" id="responsibility_ack" required>
-                        <span>Jeg bekræfter, at jeg overtager ansvaret for bygningen, herunder ansvar for brandvagter m.v. Ved brand er jeg ansvarlig for at ringe <strong>112</strong> inden anlægget sættes i service.</span>
+                        <input type="checkbox" name="responsibility_ack" value="1" class="abas-checkbox abas-ack-checkbox mt-1" id="responsibility_ack" required>
+                        <span>Jeg bekræfter, at jeg overtager ansvaret for bygningen, herunder ansvar for brandvagter m.v. Ved brand er jeg ansvarlig for at ringe 112 indtil anlægget sættes tilbage i normal drift.</span>
                     </label>
                 </div>
-                <button type="submit" class="abas-btn-primary" id="start-service-btn" disabled>Start service</button>
+                <button type="submit" class="abas-btn-primary abas-ack-submit" id="start-service-btn" disabled>Start service</button>
             </form>
-            <script>
-            (function () {
-                var ack = document.getElementById('responsibility_ack');
-                var btn = document.getElementById('start-service-btn');
-                if (ack && btn) {
-                    ack.addEventListener('change', function () { btn.disabled = !ack.checked; });
-                }
-            })();
-            </script>
         <?php endif; ?>
     </div>
     <div class="abas-card text-sm">

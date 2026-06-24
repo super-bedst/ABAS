@@ -18,7 +18,11 @@ if ($domain === '') {
 $conn = abas_db();
 $installer = abas_installer_approved_for_domain($conn, $domain);
 if (!$installer) {
-    echo json_encode(['company' => null, 'message' => 'Domænet er ikke godkendt til montør-registrering']);
+    echo json_encode([
+        'company' => null,
+        'message' => 'Domænet er ikke godkendt til montør-registrering',
+        'unknown_domain' => true,
+    ], JSON_UNESCAPED_UNICODE);
     exit;
 }
 

@@ -35,6 +35,8 @@ function abas_load_env(string $root): void
         }
     }
     $loaded = true;
+    require_once __DIR__ . '/datetime.php';
+    abas_datetime_bootstrap();
 }
 
 function abas_env(string $key, ?string $default = null): ?string

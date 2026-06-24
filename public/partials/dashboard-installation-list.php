@@ -48,9 +48,9 @@ if (!isset($installations) || $installations === []) {
                 <td class="hidden lg:table-cell text-sm text-gray-600">
                     <?php if (!empty($showServiceInfo)): ?>
                         <?php if (!empty($inst['service_started_at'])): ?>
-                            Siden <?= htmlspecialchars((string) $inst['service_started_at']) ?>
+                            Siden <?= htmlspecialchars(abas_format_datetime((string) $inst['service_started_at'])) ?>
                             <?php if (!empty($inst['service_expires_at'])): ?>
-                                <span class="text-gray-400">· udløber <?= htmlspecialchars((string) $inst['service_expires_at']) ?></span>
+                                <span class="text-gray-400">· udløber <?= htmlspecialchars(abas_format_datetime((string) $inst['service_expires_at'])) ?></span>
                             <?php endif; ?>
                         <?php endif; ?>
                     <?php else: ?>
@@ -87,7 +87,7 @@ if (!isset($installations) || $installations === []) {
             <div class="text-sm text-gray-500 mt-1"><?= htmlspecialchars((string) $inst['city']) ?></div>
             <?php if (!empty($showServiceInfo) && !empty($inst['service_started_at'])): ?>
                 <div class="text-xs text-gray-500 mt-2">
-                    Service siden <?= htmlspecialchars((string) $inst['service_started_at']) ?>
+                    Service siden <?= htmlspecialchars(abas_format_datetime((string) $inst['service_started_at'])) ?>
                 </div>
             <?php elseif (!empty($inst['mon_stat']) || !empty($inst['in_service'])): ?>
                 <div class="abas-installation-badges mt-2">

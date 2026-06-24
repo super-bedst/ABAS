@@ -45,6 +45,12 @@ function abas_sms_dispatch(mysqli $conn, int $logId): bool
 
     $result = abas_sms_send_via_bas((string) $row['to_number'], (string) $row['body'], (string) $row['trigger_type']);
     if (!empty($result['skipped'])) {
+        $status = 'skipped';
+        $upd = $conn->prepare('UPDATE sms_outbound_log SET status = ? WHERE id = ?');
+        $upd->bind_param('si', $status, $logId);
+        $upd->execute();
+        $upd->close();
+
         return false;
     }
 

@@ -102,19 +102,7 @@ function abas_email_domain(string $email): string
     return $parts[1] ?? '';
 }
 
-function abas_installer_approved_for_domain(mysqli $conn, string $domain): ?array
-{
-    if ($domain === '') {
-        return null;
-    }
-    $stmt = $conn->prepare('SELECT * FROM approved_installers WHERE email_domain = ? AND active = 1 LIMIT 1');
-    $stmt->bind_param('s', $domain);
-    $stmt->execute();
-    $row = $stmt->get_result()->fetch_assoc();
-    $stmt->close();
-
-    return $row ?: null;
-}
+require_once __DIR__ . '/installers.php';
 
 function abas_user_may_access_installation(mysqli $conn, array $user, array $installation): bool
 {

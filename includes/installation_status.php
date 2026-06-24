@@ -62,6 +62,32 @@ function abas_installation_allows_service(string $monStat): bool
     return $code !== '' && str_starts_with($code, 'AKT');
 }
 
+function abas_render_installation_in_service_banner(?array $session): string
+{
+    if ($session === null) {
+        return '';
+    }
+
+    $started = abas_format_datetime((string) ($session['started_at'] ?? ''));
+    $expires = abas_format_datetime((string) ($session['expires_at'] ?? ''));
+
+    ob_start();
+    ?>
+    <div class="abas-in-service-banner" id="inst-in-service-banner" role="status" aria-live="polite">
+        <span class="abas-in-service-banner__dot" aria-hidden="true"></span>
+        <div class="min-w-0">
+            <p class="abas-in-service-banner__title">Anlægget er i service</p>
+            <p class="abas-in-service-banner__times" id="inst-service-status">
+                Aktiv siden <?= htmlspecialchars($started) ?><?= $expires !== '' ? ' — udløber ' . htmlspecialchars($expires) : '' ?>
+            </p>
+            <p class="abas-in-service-banner__hint">Brandalarmen er i test/service. Ved brand: ring <strong>112</strong> indtil anlægget er sat i normal drift igen.</p>
+        </div>
+    </div>
+    <?php
+
+    return (string) ob_get_clean();
+}
+
 function abas_render_installation_status_badges(array $installation, bool $inService): string
 {
     $monStat = (string) ($installation['mon_stat'] ?? '');
@@ -74,7 +100,7 @@ function abas_render_installation_status_badges(array $installation, bool $inSer
     <div class="abas-installation-badges">
         <span class="<?= htmlspecialchars($badgeClass) ?>"<?= $desc !== '' ? ' title="' . htmlspecialchars($desc) . '"' : '' ?>><?= htmlspecialchars($label) ?></span>
         <?php if ($inService): ?>
-            <span class="abas-badge-in-service">I service</span>
+            <span class="abas-badge-in-service text-sm px-3 py-1">I service</span>
         <?php endif; ?>
     </div>
     <?php

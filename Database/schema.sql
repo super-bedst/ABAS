@@ -19,12 +19,20 @@ ON DUPLICATE KEY UPDATE `value` = VALUES(`value`);
 CREATE TABLE IF NOT EXISTS approved_installers (
     id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     company_name VARCHAR(255) NOT NULL,
-    email_domain VARCHAR(255) NOT NULL,
     active TINYINT(1) NOT NULL DEFAULT 1,
     approved_at DATETIME NULL,
     approved_by_user_id INT UNSIGNED NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS approved_installer_domains (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    installer_id INT UNSIGNED NOT NULL,
+    email_domain VARCHAR(255) NOT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uq_email_domain (email_domain)
+    UNIQUE KEY uq_email_domain (email_domain),
+    KEY idx_installer (installer_id),
+    CONSTRAINT fk_aid_installer FOREIGN KEY (installer_id) REFERENCES approved_installers(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS users (
@@ -41,6 +49,7 @@ CREATE TABLE IF NOT EXISTS users (
     active TINYINT(1) NOT NULL DEFAULT 1,
     registration_status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'approved',
     registration_type ENUM('montor','anlaegsejer','anlaegsafprover') NULL,
+    registration_requested_company_name VARCHAR(255) NULL,
     registration_requested_at DATETIME NULL,
     registration_reviewed_at DATETIME NULL,
     registration_reviewed_by_user_id INT UNSIGNED NULL,

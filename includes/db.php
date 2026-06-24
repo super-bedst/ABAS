@@ -16,6 +16,8 @@ function abas_db(): mysqli
         throw new RuntimeException('Database connection failed: ' . $conn->connect_error);
     }
     $conn->set_charset('utf8mb4');
+    $offset = abas_mysql_timezone_offset();
+    $conn->query("SET time_zone = '" . $conn->real_escape_string($offset) . "'");
 
     return $conn;
 }

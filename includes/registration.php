@@ -52,7 +52,9 @@ function abas_submit_registration(
     string $displayName,
     string $email,
     string $phone,
-    array $miscno2List
+    array $miscno2List,
+    bool $requestNewCompany = false,
+    string $requestedCompanyName = ''
 ): array {
     $type = strtolower(trim($type));
     if (!in_array($type, abas_registration_types(), true)) {
@@ -74,12 +76,18 @@ function abas_submit_registration(
     }
 
     $installerId = null;
+    $requestedCompanyName = trim($requestedCompanyName);
     if ($type === 'montor') {
         $installer = abas_installer_approved_for_domain($conn, abas_email_domain($email));
-        if (!$installer) {
-            return ['ok' => false, 'message' => 'E-mail-domænet er ikke godkendt til montør-registrering.'];
+        if ($installer) {
+            $installerId = (int) $installer['id'];
+        } elseif ($requestNewCompany && $requestedCompanyName !== '') {
+            if (strlen($requestedCompanyName) < 2) {
+                return ['ok' => false, 'message' => 'Angiv et gyldigt virksomhedsnavn.'];
+            }
+        } else {
+            return ['ok' => false, 'message' => 'E-mail-domænet er ikke godkendt til montør-registrering. Kryds af for at ansøge om oprettelse af ny virksomhed.'];
         }
-        $installerId = (int) $installer['id'];
     } else {
         $miscno2List = array_values(array_unique(array_filter(array_map(
             static fn (string $m): string => strtolower(trim($m)),
@@ -117,6 +125,7 @@ function abas_submit_registration(
     }
 
     $role = $type;
+    $storeRequestedCompany = ($type === 'montor' && $installerId === null && $requestedCompanyName !== '') ? $requestedCompanyName : null;
 
     if ($installerId !== null) {
         $stmt = $conn->prepare(
@@ -124,6 +133,12 @@ function abas_submit_registration(
              VALUES (?, ?, ?, ?, ?, 0, "pending", ?, NOW())'
         );
         $stmt->bind_param('ssssis', $email, $displayName, $role, $phone, $installerId, $type);
+    } elseif ($storeRequestedCompany !== null) {
+        $stmt = $conn->prepare(
+            'INSERT INTO users (email, username, role, phone, active, registration_status, registration_type, registration_requested_company_name, registration_requested_at)
+             VALUES (?, ?, ?, ?, 0, "pending", ?, ?, NOW())'
+        );
+        $stmt->bind_param('ssssss', $email, $displayName, $role, $phone, $type, $storeRequestedCompany);
     } else {
         $stmt = $conn->prepare(
             'INSERT INTO users (email, username, role, phone, active, registration_status, registration_type, registration_requested_at)
@@ -177,6 +192,24 @@ function abas_approve_registration(mysqli $conn, int $userId, int $adminId, bool
     }
 
     $role = (string) $user['role'];
+    if ($role === 'montor' && empty($user['installer_id'])) {
+        $requestedCompany = trim((string) ($user['registration_requested_company_name'] ?? ''));
+        if ($requestedCompany === '') {
+            return ['ok' => false, 'message' => 'Montør-ansøgning mangler tilknyttet firma. Opret firma/domæne først eller afvis ansøgningen.'];
+        }
+        $domain = abas_email_domain((string) $user['email']);
+        $create = abas_installer_create($conn, $requestedCompany, $domain, $adminId);
+        if (!$create['ok']) {
+            return ['ok' => false, 'message' => $create['message'] ?? 'Kunne ikke oprette firma.'];
+        }
+        $newInstallerId = (int) $create['id'];
+        $link = $conn->prepare('UPDATE users SET installer_id = ? WHERE id = ?');
+        $link->bind_param('ii', $newInstallerId, $userId);
+        $link->execute();
+        $link->close();
+        $user['installer_id'] = $newInstallerId;
+    }
+
     if (in_array($role, ['anlaegsejer', 'anlaegsafprover'], true)) {
         $requests = abas_registration_installation_requests($conn, $userId);
         if ($requests === []) {
@@ -230,4 +263,40 @@ function abas_reject_registration(mysqli $conn, int $userId, int $adminId): arra
     return $ok
         ? ['ok' => true, 'message' => 'Ansøgning afvist.']
         : ['ok' => false, 'message' => 'Kunne ikke afvise ansøgning.'];
+}
+
+function abas_pending_registration_count(mysqli $conn): int
+{
+    $res = $conn->query('SELECT COUNT(*) AS c FROM users WHERE registration_status = "pending"');
+    if (!$res) {
+        return 0;
+    }
+    $row = $res->fetch_assoc();
+    $res->free();
+
+    return (int) ($row['c'] ?? 0);
+}
+
+function abas_render_pending_registrations_banner(int $count): string
+{
+    if ($count <= 0) {
+        return '';
+    }
+
+    $label = $count === 1 ? '1 ventende godkendelse' : $count . ' ventende godkendelser';
+    $url = abas_url('admin/registration-requests.php');
+
+    ob_start();
+    ?>
+    <div class="abas-pending-banner mb-5" role="status">
+        <span class="abas-pending-banner__dot" aria-hidden="true"></span>
+        <div class="min-w-0 flex-1">
+            <p class="abas-pending-banner__title"><?= htmlspecialchars($label) ?></p>
+            <p class="abas-pending-banner__hint">Der er nye registreringsanmodninger, der afventer din godkendelse.</p>
+        </div>
+        <a href="<?= htmlspecialchars($url) ?>" class="abas-pending-banner__action shrink-0">Gå til godkendelse</a>
+    </div>
+    <?php
+
+    return (string) ob_get_clean();
 }

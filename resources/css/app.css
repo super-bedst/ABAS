@@ -66,7 +66,7 @@
   }
 
   .abas-btn-primary {
-    @apply abas-btn bg-brand text-white hover:bg-brand-dark shadow-sm;
+    @apply abas-btn bg-brand text-white hover:bg-brand-dark shadow-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-brand;
   }
 
   .abas-btn-secondary {
@@ -147,6 +147,50 @@
 
   .abas-badge-in-service {
     @apply abas-badge bg-red-100 text-red-800 border border-red-200;
+  }
+
+  .abas-in-service-banner {
+    @apply flex gap-3 items-start rounded-2xl border-2 border-red-500 bg-red-50 px-4 py-4 sm:px-5 sm:py-5 shadow-sm;
+  }
+
+  .abas-in-service-banner__dot {
+    @apply mt-1.5 h-3.5 w-3.5 shrink-0 rounded-full bg-red-600 ring-4 ring-red-200 animate-pulse;
+  }
+
+  .abas-in-service-banner__title {
+    @apply text-lg sm:text-xl font-bold uppercase tracking-wide text-red-900;
+  }
+
+  .abas-in-service-banner__times {
+    @apply mt-1 text-sm sm:text-base font-semibold text-red-800;
+  }
+
+  .abas-in-service-banner__hint {
+    @apply mt-2 text-sm text-red-900/90 leading-relaxed;
+  }
+
+  .abas-card--in-service {
+    @apply border-2 border-red-400 bg-red-50/40 ring-2 ring-red-100;
+  }
+
+  .abas-pending-banner {
+    @apply flex flex-col sm:flex-row gap-3 sm:items-center rounded-2xl border-2 border-amber-500 bg-amber-50 px-4 py-4 sm:px-5 sm:py-4 shadow-sm;
+  }
+
+  .abas-pending-banner__dot {
+    @apply h-3.5 w-3.5 shrink-0 rounded-full bg-amber-500 ring-4 ring-amber-200 animate-pulse;
+  }
+
+  .abas-pending-banner__title {
+    @apply text-base sm:text-lg font-bold text-amber-950;
+  }
+
+  .abas-pending-banner__hint {
+    @apply mt-0.5 text-sm text-amber-900/90;
+  }
+
+  .abas-pending-banner__action {
+    @apply abas-btn bg-amber-600 text-white hover:bg-amber-700 shadow-sm text-sm whitespace-nowrap;
   }
 
   .abas-installation-badges {

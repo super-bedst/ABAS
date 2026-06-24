@@ -26,7 +26,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         (string) ($_POST['name'] ?? ''),
         (string) ($_POST['email'] ?? ''),
         (string) ($_POST['phone'] ?? ''),
-        $miscList
+        $miscList,
+        !empty($_POST['request_new_company']),
+        (string) ($_POST['requested_company_name'] ?? '')
     );
     if ($result['ok']) {
         $success = true;
@@ -78,6 +80,17 @@ require __DIR__ . '/partials/public-header.php';
                 <div id="company-preview" class="abas-input bg-gray-50 text-gray-500 text-sm">Dit firma vises automatisk når du indtaster din e-mail</div>
             </div>
 
+            <div class="abas-field hidden border border-amber-200 bg-amber-50 rounded-xl p-4 space-y-3" id="field-new-company">
+                <label class="flex items-start gap-2 text-sm text-gray-800">
+                    <input type="checkbox" name="request_new_company" value="1" class="abas-checkbox mt-1" id="request_new_company"<?= !empty($_POST['request_new_company']) ? ' checked' : '' ?>>
+                    <span id="request-new-company-label">Ønsker at oprette virksomhed med domænet …</span>
+                </label>
+                <div class="abas-field !mb-0">
+                    <label class="abas-label text-sm" for="requested_company_name">Virksomhedsnavn</label>
+                    <input id="requested_company_name" name="requested_company_name" class="abas-input" placeholder="Fx Friis Brandteknik ApS" value="<?= htmlspecialchars($_POST['requested_company_name'] ?? '') ?>">
+                </div>
+            </div>
+
             <div class="abas-field">
                 <label class="abas-label" for="email">E-mail *</label>
                 <input id="email" name="email" type="email" required class="abas-input" placeholder="navn@firma.dk" value="<?= htmlspecialchars($_POST['email'] ?? '') ?>">
@@ -99,7 +112,7 @@ require __DIR__ . '/partials/public-header.php';
             </div>
 
             <div class="abas-portal-note text-sm" id="note-montor">
-                Bemærk: Din e-mail skal matche dit firmas godkendte domæne. Efter godkendelse modtager du login via e-mail.
+                Bemærk: Din e-mail skal matche dit firmas godkendte domæne — eller du kan ansøge om oprettelse af en ny virksomhed. Efter godkendelse modtager du login via e-mail.
             </div>
             <div class="abas-portal-note text-sm hidden" id="note-owner">
                 Bemærk: Angiv de anlæg du skal have adgang til. TrekantBrand godkender og tilknytter anlæggene.
@@ -121,7 +134,33 @@ require __DIR__ . '/partials/public-header.php';
     var noteOwner = document.getElementById('note-owner');
     var emailInput = document.getElementById('email');
     var companyPreview = document.getElementById('company-preview');
+    var fieldNewCompany = document.getElementById('field-new-company');
+    var requestNewCompany = document.getElementById('request_new_company');
+    var requestNewCompanyLabel = document.getElementById('request-new-company-label');
+    var requestedCompanyName = document.getElementById('requested_company_name');
     var lookupUrl = <?= json_encode(abas_url('api/register-domain-lookup.php')) ?>;
+    var domainKnown = false;
+
+    function updateNewCompanyUi() {
+        var email = emailInput.value.trim();
+        var domain = '';
+        if (email.indexOf('@') > 0) {
+            domain = email.split('@').pop().toLowerCase();
+        }
+        if (requestNewCompanyLabel) {
+            requestNewCompanyLabel.textContent = domain
+                ? 'Ønsker at oprette virksomhed med domænet ' + domain
+                : 'Ønsker at oprette ny virksomhed';
+        }
+        var showNew = document.querySelector('input[name="registration_type"]:checked')?.value === 'montor' && !domainKnown && domain !== '';
+        fieldNewCompany.classList.toggle('hidden', !showNew);
+        if (!showNew) {
+            requestNewCompany.checked = false;
+            requestedCompanyName.required = false;
+        } else {
+            requestedCompanyName.required = requestNewCompany.checked;
+        }
+    }
 
     function updateType() {
         var type = document.querySelector('input[name="registration_type"]:checked');
@@ -133,31 +172,58 @@ require __DIR__ . '/partials/public-header.php';
         fieldInst.querySelectorAll('input').forEach(function (inp) {
             inp.required = !isMontor;
         });
+        updateNewCompanyUi();
     }
     typeInputs.forEach(function (el) { el.addEventListener('change', updateType); });
     updateType();
 
     function lookupCompany() {
         var email = emailInput.value.trim();
+        domainKnown = false;
         if (!email || email.indexOf('@') < 1) {
             companyPreview.textContent = 'Dit firma vises automatisk når du indtaster din e-mail';
-            companyPreview.classList.add('text-gray-500');
+            companyPreview.className = 'abas-input bg-gray-50 text-gray-500 text-sm';
+            updateNewCompanyUi();
             return;
         }
         fetch(lookupUrl + '?email=' + encodeURIComponent(email))
             .then(function (r) { return r.json(); })
             .then(function (data) {
                 if (data.company) {
+                    domainKnown = true;
                     companyPreview.textContent = data.company;
-                    companyPreview.classList.remove('text-gray-500');
-                    companyPreview.classList.add('text-gray-900', 'font-medium');
+                    companyPreview.className = 'abas-input bg-gray-50 text-gray-900 font-medium text-sm';
                 } else {
-                    companyPreview.textContent = data.message || 'Domænet er ikke godkendt';
-                    companyPreview.classList.add('text-amber-700');
+                    domainKnown = false;
+                    companyPreview.textContent = data.message || 'Domænet er ikke godkendt endnu';
+                    companyPreview.className = 'abas-input bg-amber-50 text-amber-800 text-sm';
                 }
+                updateNewCompanyUi();
             });
     }
     emailInput.addEventListener('blur', lookupCompany);
+    emailInput.addEventListener('input', updateNewCompanyUi);
+    if (emailInput.value.trim()) {
+        lookupCompany();
+    } else {
+        updateNewCompanyUi();
+    }
+
+    requestNewCompany.addEventListener('change', function () {
+        requestedCompanyName.required = requestNewCompany.checked;
+    });
+    if (requestNewCompany.checked) {
+        requestedCompanyName.required = true;
+    }
+
+    document.getElementById('register-form').addEventListener('submit', function (e) {
+        var isMontor = document.querySelector('input[name="registration_type"]:checked')?.value === 'montor';
+        if (isMontor && !domainKnown && requestNewCompany.checked && !requestedCompanyName.value.trim()) {
+            e.preventDefault();
+            alert('Angiv virksomhedsnavn når du ansøger om oprettelse af ny virksomhed.');
+            requestedCompanyName.focus();
+        }
+    });
 
     document.getElementById('add-miscno2').addEventListener('click', function () {
         var row = document.createElement('div');
