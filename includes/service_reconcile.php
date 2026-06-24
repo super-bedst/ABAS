@@ -310,38 +310,112 @@ function abas_find_installation_by_s_ins(mysqli $conn, int $sIns, string $dealId
 }
 
 /**
- * @return list<array<string, mixed>>
+ * @return list<array{id:int, s_ins:int, deal_id:string}>
  */
-function abas_installations_for_reconcile_scan(mysqli $conn, int $limit = 0): array
+function abas_installations_for_reconcile_scan(mysqli $conn, int $limit, int $afterId = 0): array
 {
-    $sql = 'SELECT id, s_ins, deal_id FROM installations WHERE s_ins > 0 ORDER BY id ASC';
-    if ($limit > 0) {
-        $sql .= ' LIMIT ' . (int) $limit;
-    }
-    $result = $conn->query($sql);
-    if (!$result) {
+    if ($limit <= 0) {
         return [];
     }
-    $rows = $result->fetch_all(MYSQLI_ASSOC);
-    $result->close();
+
+    if ($afterId > 0) {
+        $stmt = $conn->prepare(
+            'SELECT id, s_ins, deal_id FROM installations WHERE s_ins > 0 AND id > ? ORDER BY id ASC LIMIT ?'
+        );
+        $stmt->bind_param('ii', $afterId, $limit);
+    } else {
+        $stmt = $conn->prepare(
+            'SELECT id, s_ins, deal_id FROM installations WHERE s_ins > 0 ORDER BY id ASC LIMIT ?'
+        );
+        $stmt->bind_param('i', $limit);
+    }
+    $stmt->execute();
+    $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
 
     return $rows;
 }
 
 /**
+ * @return list<array{id:int, s_ins:int, deal_id:string}>
+ */
+function abas_reconcile_scan_targets(mysqli $conn, int $batchLimit, int $cursorId): array
+{
+    $targets = [];
+    $seen = [];
+
+    foreach (abas_external_testqueue_installations($conn) as $ext) {
+        $id = (int) $ext['installation_id'];
+        if (isset($seen[$id])) {
+            continue;
+        }
+        $seen[$id] = true;
+        $targets[] = [
+            'id' => $id,
+            's_ins' => (int) $ext['s_ins'],
+            'deal_id' => (string) $ext['deal_id'],
+        ];
+    }
+
+    $batch = abas_installations_for_reconcile_scan($conn, $batchLimit, $cursorId);
+    if ($batch === [] && $cursorId > 0) {
+        $batch = abas_installations_for_reconcile_scan($conn, $batchLimit, 0);
+    }
+
+    foreach ($batch as $installation) {
+        $id = (int) $installation['id'];
+        if (isset($seen[$id])) {
+            continue;
+        }
+        $seen[$id] = true;
+        $targets[] = [
+            'id' => $id,
+            's_ins' => (int) $installation['s_ins'],
+            'deal_id' => (string) $installation['deal_id'],
+        ];
+    }
+
+    return ['targets' => $targets, 'batch' => $batch];
+}
+
+/**
  * @param list<string> $errors
- * @return array{rows: list<array<string, mixed>>, scanned: int}
+ * @return array{
+ *   rows: list<array<string, mixed>>,
+ *   scanned: int,
+ *   checked_installation_ids: array<int, true>,
+ *   scan_cursor: int
+ * }
  */
 function abas_reconcile_scan_installations_testqueue(mysqli $conn, TrekantClient $client, array &$errors): array
 {
-    $limit = max(0, (int) abas_env('SERVICE_RECONCILE_SCAN_LIMIT', '0'));
-    $installations = abas_installations_for_reconcile_scan($conn, $limit);
+    if (abas_env('SERVICE_RECONCILE_SCAN', '1') === '0') {
+        return ['rows' => [], 'scanned' => 0, 'checked_installation_ids' => [], 'scan_cursor' => 0];
+    }
+
+    $batchLimit = max(1, (int) abas_env('SERVICE_RECONCILE_SCAN_LIMIT', '50'));
+    $budgetSec = max(10, (int) abas_env('SERVICE_RECONCILE_SCAN_BUDGET_SEC', '85'));
+    $deadline = microtime(true) + $budgetSec;
+    $cursorId = max(0, (int) abas_setting($conn, 'reconcile_scan_cursor', '0'));
+
+    $plan = abas_reconcile_scan_targets($conn, $batchLimit, $cursorId);
+    $targets = $plan['targets'];
+    $batch = $plan['batch'];
+
     $rows = [];
     $scanned = 0;
+    $checkedInstallationIds = [];
+    $nextCursor = $cursorId;
 
-    foreach ($installations as $installation) {
-        $scanned++;
+    foreach ($targets as $installation) {
+        if (microtime(true) >= $deadline) {
+            break;
+        }
+
         $installationId = (int) $installation['id'];
+        $scanned++;
+        $checkedInstallationIds[$installationId] = true;
+
         if (abas_active_session_for_installation($conn, $installationId) !== null) {
             continue;
         }
@@ -369,11 +443,22 @@ function abas_reconcile_scan_installations_testqueue(mysqli $conn, TrekantClient
         }
     }
 
-    return ['rows' => $rows, 'scanned' => $scanned];
+    if ($batch !== []) {
+        $last = $batch[count($batch) - 1];
+        $nextCursor = (int) $last['id'];
+        abas_set_setting($conn, 'reconcile_scan_cursor', (string) $nextCursor);
+    }
+
+    return [
+        'rows' => $rows,
+        'scanned' => $scanned,
+        'checked_installation_ids' => $checkedInstallationIds,
+        'scan_cursor' => $nextCursor,
+    ];
 }
 
 /**
- * @return array{ok:bool, closed_abas:int, external_found:int, external_cleared:int, queue_rows:int, scanned_installations:int, scan_mode:bool, summary_warning:?string, errors:list<string>, duration_ms:int}
+ * @return array{ok:bool, closed_abas:int, external_found:int, external_cleared:int, queue_rows:int, scanned_installations:int, scan_mode:bool, scan_cursor:int, summary_warning:?string, errors:list<string>, duration_ms:int}
  */
 function abas_reconcile_service_testqueue(mysqli $conn): array
 {
@@ -386,6 +471,8 @@ function abas_reconcile_service_testqueue(mysqli $conn): array
     $summaryWarning = null;
     $scanMode = false;
     $scanned = 0;
+    $scanCursor = max(0, (int) abas_setting($conn, 'reconcile_scan_cursor', '0'));
+    $checkedInstallationIds = [];
     try {
         $summaryResp = $client->getTestQueueSummary($userid, $dealId);
         $code = abas_trekant_return_code($summaryResp);
@@ -406,7 +493,9 @@ function abas_reconcile_service_testqueue(mysqli $conn): array
         $scan = abas_reconcile_scan_installations_testqueue($conn, $client, $errors);
         $summaryRows = $scan['rows'];
         $scanned = $scan['scanned'];
-        $scanMode = true;
+        $checkedInstallationIds = $scan['checked_installation_ids'];
+        $scanCursor = $scan['scan_cursor'];
+        $scanMode = $scanned > 0 || abas_env('SERVICE_RECONCILE_SCAN', '1') !== '0';
     }
 
     $queueBySIns = [];
@@ -426,7 +515,7 @@ function abas_reconcile_service_testqueue(mysqli $conn): array
         $key = $sIns . ':' . $dealId;
         $inQueue = isset($queueBySIns[$key]);
 
-        if (!$inQueue && $summaryRows === []) {
+        if (!$inQueue) {
             try {
                 $inQueue = abas_installation_in_testqueue($conn, $sIns, $dealId);
             } catch (Throwable $e) {
@@ -475,7 +564,15 @@ function abas_reconcile_service_testqueue(mysqli $conn): array
         }
     }
 
-    if ($summaryRows !== []) {
+    if ($scanMode) {
+        foreach (abas_external_testqueue_installations($conn) as $ext) {
+            $installationId = (int) $ext['installation_id'];
+            if (isset($checkedInstallationIds[$installationId]) && !isset($seenInstallationIds[$installationId])) {
+                abas_clear_external_testqueue($conn, $installationId);
+                $externalCleared++;
+            }
+        }
+    } elseif ($summaryRows !== []) {
         $existing = abas_external_testqueue_installations($conn);
         foreach ($existing as $ext) {
             $installationId = (int) $ext['installation_id'];
@@ -494,6 +591,7 @@ function abas_reconcile_service_testqueue(mysqli $conn): array
         'queue_rows' => count($summaryRows),
         'scanned_installations' => $scanned,
         'scan_mode' => $scanMode,
+        'scan_cursor' => $scanCursor,
         'summary_warning' => $summaryWarning,
         'errors' => $errors,
         'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
@@ -508,7 +606,7 @@ function abas_handle_reconcile_service_webhook(mysqli $conn): never
         abas_api_json(403, ['ok' => false, 'error' => abas_reconcile_request_auth_error()]);
     }
 
-    @set_time_limit(120);
+    @set_time_limit(150);
 
     try {
         $result = abas_reconcile_service_testqueue($conn);
