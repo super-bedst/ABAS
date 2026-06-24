@@ -62,7 +62,13 @@ function abas_require_login(): array
     $conn = abas_db();
 
     if (!empty($_SESSION['mfa_pending_user_id']) && empty($_SESSION['user_id'])) {
-        abas_redirect('mfa-verify.php');
+        require_once __DIR__ . '/mfa.php';
+        $conn = abas_db();
+        $pendingUser = abas_mfa_pending_user($conn);
+        if ($pendingUser) {
+            abas_mfa_redirect_for_user($conn, $pendingUser);
+        }
+        abas_redirect('login.php');
         exit;
     }
 
@@ -78,9 +84,7 @@ function abas_require_login(): array
 
     require_once __DIR__ . '/mfa.php';
     if (abas_mfa_needs_step($conn, $user)) {
-        $_SESSION['mfa_pending_user_id'] = (int) $user['id'];
-        unset($_SESSION['user_id'], $_SESSION['user_role'], $_SESSION['user_name']);
-        abas_redirect('mfa-verify.php');
+        abas_mfa_redirect_for_user($conn, $user);
         exit;
     }
 

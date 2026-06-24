@@ -23,6 +23,10 @@ if (!$user) {
 }
 
 $method = abas_user_mfa_method($conn, $pendingId);
+if ($method !== 'sms_otp' && !abas_user_mfa_enrolled($conn, $pendingId)) {
+    abas_redirect('mfa-enroll.php');
+}
+
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -32,9 +36,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             abas_login_user($user);
             abas_mfa_complete_verification();
             unset($_SESSION['mfa_pending_user_id']);
-            if (!abas_user_mfa_enrolled($conn, $pendingId)) {
-                abas_redirect('mfa-enroll.php');
-            }
             abas_redirect('dashboard.php');
         }
         $error = 'Forkert eller udløbet kode.';
@@ -71,6 +72,10 @@ require __DIR__ . '/partials/public-header.php';
                 <button type="submit" name="resend" value="1" class="text-sm abas-link" formaction="?resend=1">Send ny kode</button>
             </form>
         <?php else: ?>
+            <div class="abas-portal-note text-sm mb-4">
+                <p class="font-semibold text-gray-900 mb-1">Brug din mobiltelefon</p>
+                <p>Oprettede du passkey på mobil (Face ID eller Touch ID), skal du også logge ind herfra. Passkeys er knyttet til den enhed, hvor de blev oprettet.</p>
+            </div>
             <p class="text-sm text-gray-600 mb-4">Brug din passkey (Face ID, Touch ID eller sikkerhedsnøgle) for at fortsætte.</p>
             <form method="post" id="passkey-form" class="abas-form">
                 <input type="hidden" name="credential" id="credential" value="">

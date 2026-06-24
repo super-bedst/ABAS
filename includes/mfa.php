@@ -223,3 +223,69 @@ function abas_mfa_clear_verification(): void
 {
     unset($_SESSION['mfa_verified'], $_SESSION['mfa_pending_user_id']);
 }
+
+function abas_mfa_pending_user(mysqli $conn): ?array
+{
+    $pendingId = (int) ($_SESSION['mfa_pending_user_id'] ?? 0);
+    if ($pendingId > 0) {
+        $stmt = $conn->prepare('SELECT * FROM users WHERE id = ? AND active = 1 AND registration_status = "approved" LIMIT 1');
+        $stmt->bind_param('i', $pendingId);
+        $stmt->execute();
+        $user = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return $user ?: null;
+    }
+
+    if (!empty($_SESSION['user_id']) && empty($_SESSION['mfa_verified'])) {
+        $stmt = $conn->prepare('SELECT * FROM users WHERE id = ? AND active = 1 AND registration_status = "approved" LIMIT 1');
+        $userId = (int) $_SESSION['user_id'];
+        $stmt->bind_param('i', $userId);
+        $stmt->execute();
+        $user = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return $user ?: null;
+    }
+
+    return null;
+}
+
+function abas_mfa_redirect_for_user(mysqli $conn, array $user): void
+{
+    $userId = (int) $user['id'];
+    $_SESSION['mfa_pending_user_id'] = $userId;
+    unset($_SESSION['mfa_verified'], $_SESSION['user_id'], $_SESSION['user_role'], $_SESSION['user_name']);
+
+    if (!abas_user_mfa_enrolled($conn, $userId)) {
+        abas_redirect('mfa-enroll.php');
+    }
+
+    if (abas_user_mfa_method($conn, $userId) === 'sms_otp') {
+        abas_mfa_send_otp($conn, $user);
+    }
+    abas_redirect('mfa-verify.php');
+}
+
+function abas_require_mfa_enrollment(): array
+{
+    $conn = abas_db();
+    $user = abas_mfa_pending_user($conn);
+    if (!$user) {
+        abas_redirect('login.php');
+        exit;
+    }
+    if (abas_user_mfa_enrolled($conn, (int) $user['id'])) {
+        abas_mfa_redirect_for_user($conn, $user);
+        exit;
+    }
+
+    return $user;
+}
+
+function abas_mfa_finish_enrollment(mysqli $conn, array $user): void
+{
+    abas_login_user($user);
+    abas_mfa_complete_verification();
+    unset($_SESSION['mfa_pending_user_id']);
+}

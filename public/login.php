@@ -36,16 +36,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             abas_login_user($user);
             abas_mfa_complete_verification();
             if (!abas_user_mfa_enrolled($conn, (int) $user['id'])) {
+                $_SESSION['mfa_pending_user_id'] = (int) $user['id'];
+                unset($_SESSION['mfa_verified']);
                 abas_redirect('mfa-enroll.php');
             }
             abas_redirect('dashboard.php');
         }
 
-        $method = abas_user_mfa_method($conn, (int) $user['id']);
-        if ($method === 'sms_otp') {
-            abas_mfa_send_otp($conn, $user);
-        }
-        abas_redirect('mfa-verify.php');
+        abas_mfa_redirect_for_user($conn, $user);
     }
 }
 
