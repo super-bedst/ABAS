@@ -69,7 +69,7 @@ todos:
 | `c_ma_testqueue` | Sæt anlæg i test/service | `s_ins`, `deal_id`, `test_time` (`DDDD:HH:MM:SS > 0`), `comm`, `zoneix` (-1 = alle zoner) |
 | `d_ma_testqueue` | Fjern anlæg fra test/service | `s_ins`, `deal_id`, `term` (påkrævet), `s_inc`, `comment` |
 | `g_ma_testqueue` | Status for anlæg i testkø | `s_ins`, `deal_id`, `lines` |
-| `g_ma_testqueue_summary` | Overblik over testkø for bruger | `userid` |
+| `g_ma_testqueue_summary` | Overblik over testkø for bruger | `userid`, `s_ins` (0 = alle), `deal_id`, `s_inc` (-1), `scrolldir`, `tstrun`, `noaccess`, `noprofile` — RC 15342 = tom global liste; brug `g_ma_testqueue` per anlæg |
 | `c_ma_testqueue_remaining` | Forlæng/justér resterende testtid | `s_ins`, `s_inc` |
 | `g_ma_alarmlog` | Læs alarmlog | `s_ins`, `deal_id`, `lines` (antal), `startdate`/`enddate`, `starttime`/`endtime` |
 | `c_ma_alarmlog_comment` | Tilføj kommentar til log | `s_ins`, `deal_id`, `s_inc` (0 = log-only), `comm` |

@@ -310,26 +310,103 @@ function abas_find_installation_by_s_ins(mysqli $conn, int $sIns, string $dealId
 }
 
 /**
- * @return array{ok:bool, closed_abas:int, external_found:int, external_cleared:int, queue_rows:int, summary_warning:?string, errors:list<string>, duration_ms:int}
+ * @return list<array<string, mixed>>
+ */
+function abas_installations_for_reconcile_scan(mysqli $conn, int $limit = 0): array
+{
+    $sql = 'SELECT id, s_ins, deal_id FROM installations WHERE s_ins > 0 ORDER BY id ASC';
+    if ($limit > 0) {
+        $sql .= ' LIMIT ' . (int) $limit;
+    }
+    $result = $conn->query($sql);
+    if (!$result) {
+        return [];
+    }
+    $rows = $result->fetch_all(MYSQLI_ASSOC);
+    $result->close();
+
+    return $rows;
+}
+
+/**
+ * @param list<string> $errors
+ * @return array{rows: list<array<string, mixed>>, scanned: int}
+ */
+function abas_reconcile_scan_installations_testqueue(mysqli $conn, TrekantClient $client, array &$errors): array
+{
+    $limit = max(0, (int) abas_env('SERVICE_RECONCILE_SCAN_LIMIT', '0'));
+    $installations = abas_installations_for_reconcile_scan($conn, $limit);
+    $rows = [];
+    $scanned = 0;
+
+    foreach ($installations as $installation) {
+        $scanned++;
+        $installationId = (int) $installation['id'];
+        if (abas_active_session_for_installation($conn, $installationId) !== null) {
+            continue;
+        }
+
+        $sIns = (int) $installation['s_ins'];
+        $dealId = (string) $installation['deal_id'];
+        try {
+            $resp = $client->getTestQueueStatus($sIns, $dealId, 1);
+            if (abas_trekant_return_code($resp) !== 0) {
+                continue;
+            }
+            $testRows = abas_trekant_rows($resp);
+            if ($testRows === []) {
+                continue;
+            }
+            $row = $testRows[0];
+            if (!is_array($row)) {
+                continue;
+            }
+            $row['s_ins'] = (int) ($row['s_ins'] ?? $sIns);
+            $row['deal_id'] = (string) ($row['deal_id'] ?? $dealId);
+            $rows[] = $row;
+        } catch (Throwable $e) {
+            $errors[] = 'scan ' . $sIns . ':' . $dealId . ': ' . $e->getMessage();
+        }
+    }
+
+    return ['rows' => $rows, 'scanned' => $scanned];
+}
+
+/**
+ * @return array{ok:bool, closed_abas:int, external_found:int, external_cleared:int, queue_rows:int, scanned_installations:int, scan_mode:bool, summary_warning:?string, errors:list<string>, duration_ms:int}
  */
 function abas_reconcile_service_testqueue(mysqli $conn): array
 {
     $startedAt = microtime(true);
     $client = abas_trekant();
     $userid = strtoupper((string) abas_config()['trekant']['user']);
+    $dealId = strtoupper((string) abas_env('TREKANT_DEAL_ID', 'TB'));
 
     $summaryRows = [];
     $summaryWarning = null;
+    $scanMode = false;
+    $scanned = 0;
     try {
-        $summaryResp = $client->getTestQueueSummary($userid);
+        $summaryResp = $client->getTestQueueSummary($userid, $dealId);
         $code = abas_trekant_return_code($summaryResp);
-        if ($code === 0) {
+        if (abas_trekant_summary_return_ok($code)) {
             $summaryRows = abas_trekant_rows($summaryResp);
+            if ($summaryRows === [] && $code === 15342) {
+                $summaryWarning = 'g_ma_testqueue_summary s_ins=0 gav ingen raekker (RC 15342) - scanner anlaeg med g_ma_testqueue';
+            }
         } else {
             $summaryWarning = 'g_ma_testqueue_summary returncode ' . $code . ': ' . abas_trekant_response_hint($summaryResp);
         }
     } catch (Throwable $e) {
         $summaryWarning = $e->getMessage();
+    }
+
+    $errors = [];
+    if ($summaryRows === []) {
+        $scan = abas_reconcile_scan_installations_testqueue($conn, $client, $errors);
+        $summaryRows = $scan['rows'];
+        $scanned = $scan['scanned'];
+        $scanMode = true;
     }
 
     $queueBySIns = [];
@@ -342,7 +419,6 @@ function abas_reconcile_service_testqueue(mysqli $conn): array
     }
 
     $closedAbas = 0;
-    $errors = [];
 
     foreach (abas_active_abas_service_sessions($conn) as $session) {
         $sIns = (int) $session['s_ins'];
@@ -416,6 +492,8 @@ function abas_reconcile_service_testqueue(mysqli $conn): array
         'external_found' => $externalFound,
         'external_cleared' => $externalCleared,
         'queue_rows' => count($summaryRows),
+        'scanned_installations' => $scanned,
+        'scan_mode' => $scanMode,
         'summary_warning' => $summaryWarning,
         'errors' => $errors,
         'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),

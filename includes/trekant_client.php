@@ -69,10 +69,18 @@ class TrekantClient
         return $this->call('g_search_installations', $body);
     }
 
-    public function getTestQueueSummary(string $userid): array
+    public function getTestQueueSummary(string $userid, string $dealId = 'TB', int $sIns = 0): array
     {
         return $this->call('g_ma_testqueue_summary', [
             'userid' => strtoupper($userid),
+            'noaccess' => 0,
+            'noprofile' => 0,
+            's_ins' => $sIns,
+            'deal_id' => $dealId,
+            's_inc' => -1,
+            'scrolldir' => 1,
+            'tstrun' => 1,
+            'debug' => 0,
         ]);
     }
 
@@ -293,6 +301,12 @@ function abas_trekant_return_code(array $response): int
     ]);
 
     return $code === null ? -1 : (int) $code;
+}
+
+/** g_ma_testqueue_summary returnerer 15342 naar s_ins=0 (ingen global liste). */
+function abas_trekant_summary_return_ok(int $code): bool
+{
+    return $code === 0 || $code === 15342;
 }
 
 function abas_trekant_extract_s_inc(array $response): ?int
