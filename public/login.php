@@ -71,7 +71,7 @@ require __DIR__ . '/partials/public-header.php';
         <p class="mt-5 text-sm text-center text-gray-600">
             <a href="<?= abas_url('forgot-password.php') ?>" class="abas-link">Glemt adgangskode</a>
             <span class="mx-1">·</span>
-            <a href="<?= abas_url('register.php') ?>" class="abas-link">Anmod om adgang</a>
+            <a href="<?= abas_url('index.php') ?>" class="abas-link">Anmod om adgang</a>
         </p>
     </div>
 </div>

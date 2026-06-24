@@ -57,7 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $onBehalf = $onBehalf ? (int) $onBehalf['id'] : null;
         }
         if (!$onBehalf && $phone !== '') {
-            $msg = 'Du er inviteret til ABA Service. Registrér dig som montør: ' . abas_full_url('register.php');
+            $msg = 'Du er inviteret til ABA Service. Registrér dig som montør: ' . abas_full_url('index.php');
             abas_sms_queue($conn, $phone, $msg, 'montor_invite');
             $vcId = (int) $user['id'];
             $instId = (int) $installation['id'];

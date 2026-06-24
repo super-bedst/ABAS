@@ -7,6 +7,10 @@ require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/registration.php';
 
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && basename($_SERVER['SCRIPT_NAME'] ?? '') === 'register.php') {
+    abas_redirect('index.php');
+}
+
 $conn = abas_db();
 $error = '';
 $success = false;
