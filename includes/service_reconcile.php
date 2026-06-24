@@ -310,7 +310,7 @@ function abas_find_installation_by_s_ins(mysqli $conn, int $sIns, string $dealId
 }
 
 /**
- * @return array{ok:bool, closed_abas:int, external_found:int, external_cleared:int, errors:list<string>, duration_ms:int}
+ * @return array{ok:bool, closed_abas:int, external_found:int, external_cleared:int, queue_rows:int, summary_warning:?string, errors:list<string>, duration_ms:int}
  */
 function abas_reconcile_service_testqueue(mysqli $conn): array
 {
@@ -318,8 +318,19 @@ function abas_reconcile_service_testqueue(mysqli $conn): array
     $client = abas_trekant();
     $userid = strtoupper((string) abas_config()['trekant']['user']);
 
-    $summaryResp = $client->getTestQueueSummary($userid, 300);
-    $summaryRows = abas_trekant_return_code($summaryResp) === 0 ? abas_trekant_rows($summaryResp) : [];
+    $summaryRows = [];
+    $summaryWarning = null;
+    try {
+        $summaryResp = $client->getTestQueueSummary($userid);
+        $code = abas_trekant_return_code($summaryResp);
+        if ($code === 0) {
+            $summaryRows = abas_trekant_rows($summaryResp);
+        } else {
+            $summaryWarning = 'g_ma_testqueue_summary returncode ' . $code . ': ' . abas_trekant_response_hint($summaryResp);
+        }
+    } catch (Throwable $e) {
+        $summaryWarning = $e->getMessage();
+    }
 
     $queueBySIns = [];
     foreach ($summaryRows as $row) {
@@ -405,6 +416,7 @@ function abas_reconcile_service_testqueue(mysqli $conn): array
         'external_found' => $externalFound,
         'external_cleared' => $externalCleared,
         'queue_rows' => count($summaryRows),
+        'summary_warning' => $summaryWarning,
         'errors' => $errors,
         'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
     ];
@@ -422,7 +434,11 @@ function abas_handle_reconcile_service_webhook(mysqli $conn): never
 
     try {
         $result = abas_reconcile_service_testqueue($conn);
-        abas_api_json(200, $result);
+        $status = $result['ok'] ? 200 : 500;
+        if (!$result['ok'] && $result['summary_warning'] && $result['errors'] === []) {
+            $status = 200;
+        }
+        abas_api_json($status, $result);
     } catch (Throwable $e) {
         abas_api_json(500, ['ok' => false, 'error' => $e->getMessage()]);
     }

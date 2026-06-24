@@ -25,11 +25,7 @@ require __DIR__ . '/../partials/header.php';
     <a href="<?= abas_url('admin/registration-requests.php') ?>" class="abas-admin-tile">Registreringsanmodninger</a>
     <a href="<?= abas_url('admin/mfa-whitelist.php') ?>" class="abas-admin-tile">MFA IP-whitelist</a>
     <a href="<?= abas_url('admin/api-tokens.php') ?>" class="abas-admin-tile">API-tokens</a>
+    <a href="<?= abas_url('admin/endpoints.php') ?>" class="abas-admin-tile">API-endpoints</a>
     <a href="<?= abas_url('admin/sms-inbound-log.php') ?>" class="abas-admin-tile">SMS inbound log</a>
 </div>
-<p class="text-sm text-gray-500 mt-6 space-y-1">
-    <span class="block">Anlægssynk (Node-RED): <code class="text-xs bg-gray-100 px-1 rounded">/api/v1/cron/sync-installations?key=…</code></span>
-    <span class="block">Service-reconcile: <code class="text-xs bg-gray-100 px-1 rounded">/api/v1/cron/reconcile-service?key=…</code> <span class="text-gray-400">(samme SYNC_CRON_SECRET)</span></span>
-    <span class="block text-xs text-gray-400">Legacy: <code>/cron/sync_installations.php?key=…</code> og <code>/cron/reconcile_service.php?key=…</code></span>
-</p>
 <?php require __DIR__ . '/../partials/footer.php';

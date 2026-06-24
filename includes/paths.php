@@ -73,6 +73,16 @@ function abas_full_url(string $path): string
     return rtrim(abas_app_url(), '/') . '/' . ltrim($path, '/');
 }
 
+/** URL til filer uden for public/ (fx cron/*.php). */
+function abas_app_root_url(string $path = ''): string
+{
+    $app = rtrim(abas_app_url(), '/');
+    $root = (string) preg_replace('#/public$#', '', $app);
+    $path = ltrim(str_replace('\\', '/', $path), '/');
+
+    return $path === '' ? $root : $root . '/' . $path;
+}
+
 /** Officiel BAS/Inmobile webhook-URL (kræver mod_rewrite i public/.htaccess). */
 function abas_sms_inbound_webhook_url(): string
 {
