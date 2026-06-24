@@ -36,13 +36,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $installerId = null;
-    if ($role === 'montor') {
+    if ($role === 'montor' || $role === 'virksomhedsadmin') {
         $installerId = abas_assign_installer_for_montor($conn, $email);
         if ($installerId === null) {
-            abas_flash_set('error', 'Montør skal have e-mail fra et godkendt installatør-domæne.');
+            $msg = $role === 'virksomhedsadmin'
+                ? 'Virksomhedsadmin skal have e-mail fra et godkendt installatør-domæne.'
+                : 'Montør skal have e-mail fra et godkendt installatør-domæne.';
+            abas_flash_set('error', $msg);
             abas_redirect('admin/users.php');
         }
     }
+
+    $smsAllowed = !empty($_POST['sms_service_allowed']) ? 1 : 0;
 
     $chk = $conn->prepare('SELECT id FROM users WHERE email=? OR username=? LIMIT 1');
     $chk->bind_param('ss', $email, $username);
@@ -52,11 +57,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         $adminId = (int) $user['id'];
         if ($installerId !== null) {
-            $stmt = $conn->prepare('INSERT INTO users (email, username, role, phone, installer_id, active, created_by_user_id) VALUES (?, ?, ?, ?, ?, 1, ?)');
-            $stmt->bind_param('ssssii', $email, $username, $role, $phone, $installerId, $adminId);
+            $stmt = $conn->prepare('INSERT INTO users (email, username, role, phone, installer_id, active, sms_service_allowed, registration_status, created_by_user_id) VALUES (?, ?, ?, ?, ?, 1, ?, "approved", ?)');
+            $stmt->bind_param('ssssiii', $email, $username, $role, $phone, $installerId, $smsAllowed, $adminId);
         } else {
-            $stmt = $conn->prepare('INSERT INTO users (email, username, role, phone, active, created_by_user_id) VALUES (?, ?, ?, ?, 1, ?)');
-            $stmt->bind_param('ssssi', $email, $username, $role, $phone, $adminId);
+            $stmt = $conn->prepare('INSERT INTO users (email, username, role, phone, active, sms_service_allowed, registration_status, created_by_user_id) VALUES (?, ?, ?, ?, 1, ?, "approved", ?)');
+            $stmt->bind_param('ssssii', $email, $username, $role, $phone, $smsAllowed, $adminId);
         }
         $stmt->execute();
         $uid = (int) $stmt->insert_id;
@@ -65,7 +70,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             abas_set_user_sms_code($conn, $uid, $smsCode);
         }
         abas_password_send_flow_email($conn, $uid, 'welcome');
-        if ($role === 'anlaegsejer' && $miscno2 !== '') {
+        if (($role === 'anlaegsejer' || $role === 'anlaegsafprover') && $miscno2 !== '') {
             $linkError = abas_link_user_installation_by_miscno2($conn, $uid, $miscno2);
             if ($linkError !== null) {
                 abas_flash_set('error', 'Bruger oprettet, men anlæg: ' . $linkError);

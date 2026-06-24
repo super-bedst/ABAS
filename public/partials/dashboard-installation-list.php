@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once dirname(__DIR__, 2) . '/includes/installation_status.php';
+
 /** @var list<array<string, mixed>> $installations */
 /** @var bool $showServiceInfo */
 /** @var bool $showServiceScope */
@@ -54,7 +56,13 @@ if (!isset($installations) || $installations === []) {
                             <?php endif; ?>
                         <?php endif; ?>
                     <?php else: ?>
-                        <?= htmlspecialchars((string) $inst['mon_stat']) ?>
+                        <?php
+                        $inSvc = !empty($inst['in_service']);
+                        echo abas_mon_stat_label((string) ($inst['mon_stat'] ?? ''));
+                        if ($inSvc) {
+                            echo ' · I service';
+                        }
+                        ?>
                     <?php endif; ?>
                 </td>
             </tr>
@@ -83,8 +91,13 @@ if (!isset($installations) || $installations === []) {
                 <div class="text-xs text-gray-500 mt-2">
                     Service siden <?= htmlspecialchars((string) $inst['service_started_at']) ?>
                 </div>
-            <?php elseif (!empty($inst['mon_stat'])): ?>
-                <span class="abas-badge-ok mt-2"><?= htmlspecialchars((string) $inst['mon_stat']) ?></span>
+            <?php elseif (!empty($inst['mon_stat']) || !empty($inst['in_service'])): ?>
+                <div class="abas-installation-badges mt-2">
+                    <span class="<?= htmlspecialchars(abas_mon_stat_badge_class((string) ($inst['mon_stat'] ?? ''))) ?>"><?= htmlspecialchars(abas_mon_stat_label((string) ($inst['mon_stat'] ?? ''))) ?></span>
+                    <?php if (!empty($inst['in_service'])): ?>
+                        <span class="abas-badge-in-service">I service</span>
+                    <?php endif; ?>
+                </div>
             <?php endif; ?>
         </a>
     <?php endforeach; ?>

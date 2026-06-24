@@ -9,6 +9,8 @@ require_once __DIR__ . '/../includes/roles.php';
 require_once __DIR__ . '/../includes/service.php';
 require_once __DIR__ . '/../includes/installation_sync.php';
 require_once __DIR__ . '/../includes/installation_details.php';
+require_once __DIR__ . '/../includes/installation_status.php';
+require_once __DIR__ . '/../includes/users.php';
 
 $conn = abas_db();
 $user = abas_require_login();
@@ -38,10 +40,15 @@ if ($logMode === 'custom' && !empty($_GET['from']) && !empty($_GET['to'])) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     if ($action === 'start') {
+        if (empty($_POST['responsibility_ack'])) {
+            abas_flash_set('error', 'Du skal acceptere ansvarserklæringen.');
+            abas_redirect('installation.php?id=' . $id);
+        }
         $unlimited = !empty($_POST['unlimited']);
         $hours = $unlimited ? null : (float) ($_POST['hours'] ?? 2);
         $comment = trim($_POST['comment'] ?? '');
-        $r = abas_start_service_session($conn, $user, $installation, $hours, $unlimited, null, $comment);
+        abas_set_user_responsibility_ack($conn, (int) $user['id']);
+        $r = abas_start_service_session($conn, $user, $installation, $hours, $unlimited, null, $comment, 'web', true);
         abas_flash_set($r['ok'] ? 'success' : 'error', $r['ok'] ? 'Service startet.' : ($r['message'] ?? 'Fejl'));
     } elseif ($action === 'stop') {
         $r = abas_stop_service_session($conn, $user, $installation, $session ? (int) $session['id'] : null, trim($_POST['comment'] ?? ''));
@@ -61,6 +68,8 @@ $instDetails = abas_fetch_installation_details($installation, $user);
 $mapLat = $instDetails['lat'];
 $mapLon = $instDetails['lon'];
 $contacts = $instDetails['contacts'];
+$canStartService = abas_installation_allows_service((string) ($installation['mon_stat'] ?? ''));
+$inService = $session !== null;
 
 $pageTitle = $installation['miscno2'] ?? 'Anlæg';
 $currentUser = $user;
@@ -73,14 +82,15 @@ require __DIR__ . '/partials/header.php';
     <a href="<?= abas_url('dashboard.php') ?>" class="abas-back-link">&larr; Tilbage til dashboard</a>
 </div>
 <h1 class="abas-page-title"><?= htmlspecialchars((string) $installation['miscno2']) ?></h1>
+<div class="mb-2"><?= abas_render_installation_status_badges($installation, $inService) ?></div>
 <p class="abas-page-lead"><?= htmlspecialchars((string) $installation['name']) ?> — <?= htmlspecialchars((string) $installation['address']) ?>, <?= htmlspecialchars((string) $installation['city']) ?></p>
 
 <div class="grid md:grid-cols-2 gap-4 mb-6">
-    <div class="abas-card">
+    <div class="abas-card" id="service-card">
         <h2 class="abas-card-title">Service</h2>
         <?php if ($session): ?>
             <p id="inst-service-status" class="abas-badge-active mb-4">Aktiv service siden <?= htmlspecialchars($session['started_at']) ?><?= $session['expires_at'] ? ' — udløber ' . htmlspecialchars($session['expires_at']) : ' (uden tidsbegrænsning)' ?></p>
-            <form method="post" class="abas-form">
+            <form method="post" class="abas-form" data-abas-loading="Stopper service…">
                 <input type="hidden" name="action" value="stop">
                 <div class="abas-field">
                     <label class="abas-label" for="stop-comment">Kommentar ved stop</label>
@@ -88,8 +98,10 @@ require __DIR__ . '/partials/header.php';
                 </div>
                 <button class="abas-btn-danger">Stop service</button>
             </form>
+        <?php elseif (!$canStartService): ?>
+            <p class="text-amber-800 text-sm mb-4">Anlægget er <strong><?= htmlspecialchars(strtolower(abas_mon_stat_label((string) $installation['mon_stat']))) ?></strong> og kan ikke sættes i service.</p>
         <?php else: ?>
-            <form method="post" class="abas-form">
+            <form method="post" class="abas-form" id="start-service-form" data-abas-loading="Sætter i service…">
                 <input type="hidden" name="action" value="start">
                 <label class="flex items-center gap-2 text-sm">
                     <input type="checkbox" name="unlimited" value="1" class="abas-checkbox">
@@ -106,8 +118,23 @@ require __DIR__ . '/partials/header.php';
                         <p class="abas-hint">Din kommentar får automatisk tilføjet navn, telefon og rolle<?= $user['role'] === 'montor' ? ' samt firmanavn' : '' ?>.</p>
                     <?php endif; ?>
                 </div>
-                <button class="abas-btn-primary">Start service</button>
+                <div class="abas-field border border-amber-200 bg-amber-50 rounded-xl p-3">
+                    <label class="flex items-start gap-2 text-sm text-gray-800">
+                        <input type="checkbox" name="responsibility_ack" value="1" class="abas-checkbox mt-1" id="responsibility_ack" required>
+                        <span>Jeg bekræfter, at jeg overtager ansvaret for bygningen, herunder ansvar for brandvagter m.v. Ved brand er jeg ansvarlig for at ringe <strong>112</strong> inden anlægget sættes i service.</span>
+                    </label>
+                </div>
+                <button type="submit" class="abas-btn-primary" id="start-service-btn" disabled>Start service</button>
             </form>
+            <script>
+            (function () {
+                var ack = document.getElementById('responsibility_ack');
+                var btn = document.getElementById('start-service-btn');
+                if (ack && btn) {
+                    ack.addEventListener('change', function () { btn.disabled = !ack.checked; });
+                }
+            })();
+            </script>
         <?php endif; ?>
     </div>
     <div class="abas-card text-sm">
@@ -151,7 +178,7 @@ require __DIR__ . '/partials/header.php';
             <dt class="text-gray-500">s_ins</dt><dd><?= (int) $installation['s_ins'] ?></dd>
             <dt class="text-gray-500">deal_id</dt><dd><?= htmlspecialchars((string) $installation['deal_id']) ?></dd>
             <dt class="text-gray-500">ins_no</dt><dd><?= htmlspecialchars((string) $installation['ins_no']) ?></dd>
-            <dt class="text-gray-500">mon_stat</dt><dd><?= htmlspecialchars((string) $installation['mon_stat']) ?></dd>
+            <dt class="text-gray-500">Driftstatus</dt><dd><?= htmlspecialchars(abas_mon_stat_label((string) $installation['mon_stat'])) ?></dd>
         </dl>
     </div>
 </div>
@@ -176,6 +203,7 @@ require __DIR__ . '/partials/header.php';
 <div class="abas-card !p-0 overflow-hidden">
     <div class="abas-log-toolbar">
         <h2 class="abas-card-title !mb-0 flex-1">Alarmlog</h2>
+        <span id="inst-log-spinner" class="hidden text-xs text-gray-500 animate-pulse">Opdaterer…</span>
         <a href="?id=<?= $id ?>&log=last20" class="<?= $logMode === 'last20' ? 'abas-chip-active' : 'abas-chip' ?>">Sidste 20</a>
         <a href="?id=<?= $id ?>&log=24h" class="<?= $logMode === '24h' ? 'abas-chip-active' : 'abas-chip' ?>">24 timer</a>
     </div>

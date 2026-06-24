@@ -4,5 +4,6 @@
         TrekantBrand ABA Service &copy; <?= date('Y') ?>
     </div>
 </footer>
+<script src="<?= htmlspecialchars(abas_asset_url('assets/js/abas-ui.js')) ?>" defer></script>
 </body>
 </html>

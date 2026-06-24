@@ -17,7 +17,7 @@ $installations = [];
 $listHeading = '';
 $showServiceInfo = false;
 $showServiceScope = false;
-$isOwner = $user['role'] === 'anlaegsejer';
+$isOwner = in_array($user['role'], ['anlaegsejer', 'anlaegsafprover'], true);
 $isMontor = $user['role'] === 'montor';
 $userId = (int) $user['id'];
 $includeCompany = !$isMontor || ($_GET['scope'] ?? 'all') !== 'mine';

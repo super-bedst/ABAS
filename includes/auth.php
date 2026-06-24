@@ -12,7 +12,7 @@ function abas_current_user(mysqli $conn): ?array
     if ($id <= 0) {
         return null;
     }
-    $stmt = $conn->prepare('SELECT * FROM users WHERE id = ? AND active = 1 LIMIT 1');
+    $stmt = $conn->prepare('SELECT * FROM users WHERE id = ? AND active = 1 AND registration_status = "approved" LIMIT 1');
     $stmt->bind_param('i', $id);
     $stmt->execute();
     $user = $stmt->get_result()->fetch_assoc();
@@ -26,6 +26,25 @@ function abas_login_user(array $user): void
     $_SESSION['user_id'] = (int) $user['id'];
     $_SESSION['user_role'] = $user['role'];
     $_SESSION['user_name'] = $user['username'];
+    unset($_SESSION['mfa_verified']);
+}
+
+function abas_login_error_for_user(?array $user): string
+{
+    if (!$user) {
+        return 'Forkert login eller adgangskode.';
+    }
+    if (($user['registration_status'] ?? 'approved') === 'pending') {
+        return 'Din ansøgning afventer stadig godkendelse.';
+    }
+    if (($user['registration_status'] ?? '') === 'rejected') {
+        return 'Din ansøgning blev afvist. Kontakt TrekantBrand.';
+    }
+    if (!(int) ($user['active'] ?? 0)) {
+        return 'Kontoen er deaktiveret.';
+    }
+
+    return 'Forkert login eller adgangskode.';
 }
 
 function abas_logout(): void
@@ -41,6 +60,12 @@ function abas_logout(): void
 function abas_require_login(): array
 {
     $conn = abas_db();
+
+    if (!empty($_SESSION['mfa_pending_user_id']) && empty($_SESSION['user_id'])) {
+        abas_redirect('mfa-verify.php');
+        exit;
+    }
+
     $user = abas_current_user($conn);
     if (!$user) {
         abas_redirect('login.php');
@@ -50,6 +75,15 @@ function abas_require_login(): array
         abas_redirect('forgot-password.php');
         exit;
     }
+
+    require_once __DIR__ . '/mfa.php';
+    if (abas_mfa_needs_step($conn, $user)) {
+        $_SESSION['mfa_pending_user_id'] = (int) $user['id'];
+        unset($_SESSION['user_id'], $_SESSION['user_role'], $_SESSION['user_name']);
+        abas_redirect('mfa-verify.php');
+        exit;
+    }
+
     if (abas_access_needs_confirm($user) && !str_contains($_SERVER['PHP_SELF'] ?? '', 'access-confirm')) {
         abas_redirect('access-confirm.php');
         exit;

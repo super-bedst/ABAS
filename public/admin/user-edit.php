@@ -10,6 +10,7 @@ require_once __DIR__ . '/../../includes/password_flow.php';
 require_once __DIR__ . '/../../includes/users.php';
 require_once __DIR__ . '/../../includes/installation_sync.php';
 require_once __DIR__ . '/../../includes/service.php';
+require_once __DIR__ . '/../../includes/mfa.php';
 
 $conn = abas_db();
 $admin = abas_require_login();
@@ -65,6 +66,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         abas_redirect('admin/user-edit.php?id=' . $id);
     }
 
+    if ($action === 'reset_mfa') {
+        abas_mfa_reset_user($conn, $id);
+        abas_flash_set('success', '2FA nulstillet — brugeren skal opsætte igen ved næste login.');
+        abas_redirect('admin/user-edit.php?id=' . $id);
+    }
+
     $email = strtolower(trim($_POST['email'] ?? ''));
     $username = trim($_POST['username'] ?? '');
     $phone = abas_normalize_phone(trim($_POST['phone'] ?? ''));
@@ -73,6 +80,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $trekantUserid = trim($_POST['trekant_userid'] ?? '');
     $trekantUserid = $trekantUserid !== '' ? strtoupper($trekantUserid) : null;
     $sendWelcome = !empty($_POST['send_welcome']);
+    $smsServiceAllowed = !empty($_POST['sms_service_allowed']) ? 1 : 0;
+    $mfaMethod = $_POST['mfa_method'] ?? 'passkey';
+    if (!in_array($mfaMethod, ['passkey', 'sms_otp'], true)) {
+        $mfaMethod = 'passkey';
+    }
 
     if (!in_array($role, abas_roles(), true)) {
         $role = (string) $editUser['role'];
@@ -117,17 +129,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($installerId !== null) {
         $upd = $conn->prepare(
-            'UPDATE users SET email=?, username=?, phone=?, role=?, active=?, trekant_userid=?, installer_id=? WHERE id=?'
+            'UPDATE users SET email=?, username=?, phone=?, role=?, active=?, trekant_userid=?, installer_id=?, sms_service_allowed=? WHERE id=?'
         );
-        $upd->bind_param('ssssisii', $email, $username, $phone, $role, $active, $trekantUserid, $installerId, $id);
+        $upd->bind_param('ssssisiii', $email, $username, $phone, $role, $active, $trekantUserid, $installerId, $smsServiceAllowed, $id);
     } else {
         $upd = $conn->prepare(
-            'UPDATE users SET email=?, username=?, phone=?, role=?, active=?, trekant_userid=?, installer_id=NULL WHERE id=?'
+            'UPDATE users SET email=?, username=?, phone=?, role=?, active=?, trekant_userid=?, installer_id=NULL, sms_service_allowed=? WHERE id=?'
         );
-        $upd->bind_param('ssssisi', $email, $username, $phone, $role, $active, $trekantUserid, $id);
+        $upd->bind_param('ssssisii', $email, $username, $phone, $role, $active, $trekantUserid, $smsServiceAllowed, $id);
     }
     $upd->execute();
     $upd->close();
+
+    abas_mfa_set_method($conn, $id, $mfaMethod);
 
     if ($smsCode !== '') {
         abas_set_user_sms_code($conn, $id, $smsCode);
@@ -208,6 +222,17 @@ require __DIR__ . '/../partials/header.php';
         Aktiv konto
     </label>
     <label class="flex items-center gap-2 text-sm">
+        <input type="checkbox" name="sms_service_allowed" value="1" class="abas-checkbox" <?= !empty($editUser['sms_service_allowed']) ? 'checked' : '' ?>>
+        Må betjene anlæg via SMS
+    </label>
+    <div class="abas-field">
+        <label class="abas-label" for="mfa_method">2FA-metode</label>
+        <select id="mfa_method" name="mfa_method" class="abas-select">
+            <option value="passkey" <?= abas_user_mfa_method($conn, $id) === 'passkey' ? 'selected' : '' ?>>Passkey (standard)</option>
+            <option value="sms_otp" <?= abas_user_mfa_method($conn, $id) === 'sms_otp' ? 'selected' : '' ?>>SMS engangskode</option>
+        </select>
+    </div>
+    <label class="flex items-center gap-2 text-sm">
         <input type="checkbox" name="send_welcome" value="1" class="abas-checkbox">
         Send velkomst/e-mail til valg af adgangskode
     </label>
@@ -217,7 +242,13 @@ require __DIR__ . '/../partials/header.php';
     </div>
 </form>
 
-<?php if ($editUser['role'] === 'anlaegsejer'): ?>
+<form method="post" class="mb-6">
+    <input type="hidden" name="id" value="<?= (int) $editUser['id'] ?>">
+    <input type="hidden" name="action" value="reset_mfa">
+    <button class="abas-btn-secondary text-sm">Nulstil 2FA</button>
+</form>
+
+<?php if (in_array($editUser['role'], ['anlaegsejer', 'anlaegsafprover'], true)): ?>
 <div class="abas-card max-w-lg abas-form mb-6">
     <h2 class="abas-card-title">Tilknyttede anlæg</h2>
     <?php if ($linkedInstallations === []): ?>

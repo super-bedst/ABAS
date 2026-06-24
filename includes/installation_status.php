@@ -1,0 +1,83 @@
+<?php
+
+declare(strict_types=1);
+
+function abas_mon_stat_normalize(string $monStat): string
+{
+    return strtoupper(trim($monStat));
+}
+
+function abas_mon_stat_label(string $monStat): string
+{
+    $code = abas_mon_stat_normalize($monStat);
+
+    return match ($code) {
+        'AKT', 'AKT-' => 'Aktiv',
+        'NED' => 'Nedtaget',
+        'LOG' => 'Logges',
+        'MNED' => 'Midlertidigt nedtaget',
+        'UOPR' => 'Under oprettelse',
+        'UREP' => 'Under reparation',
+        default => str_starts_with($code, 'AKT') ? 'Aktiv' : ($code === '' ? 'Status ukendt' : 'Status ukendt'),
+    };
+}
+
+function abas_mon_stat_description(string $monStat): string
+{
+    $code = abas_mon_stat_normalize($monStat);
+
+    return match ($code) {
+        'AKT' => 'Automatisk geokodning ud fra adresse',
+        'AKT-' => 'Prik sat manuelt',
+        'NED' => 'Ingen signaler logges',
+        'LOG' => 'Alle signaler logges, men genereres ikke',
+        'MNED' => 'Signaler logges ikke',
+        'UOPR' => 'Signaler logges',
+        'UREP' => 'Signaler logges',
+        default => str_starts_with($code, 'AKT') ? 'Anlæg i aktiv drift' : '',
+    };
+}
+
+function abas_mon_stat_badge_class(string $monStat): string
+{
+    $code = abas_mon_stat_normalize($monStat);
+
+    if (str_starts_with($code, 'AKT')) {
+        return 'abas-badge-ok';
+    }
+
+    return match ($code) {
+        'NED' => 'abas-badge bg-gray-100 text-gray-700 border-gray-200',
+        'LOG' => 'abas-badge bg-amber-100 text-amber-900 border-amber-200',
+        'MNED' => 'abas-badge bg-orange-100 text-orange-900 border-orange-200',
+        'UOPR', 'UREP' => 'abas-badge bg-sky-100 text-sky-900 border-sky-200',
+        default => 'abas-badge bg-gray-50 text-gray-500 border-gray-200 border-dashed',
+    };
+}
+
+function abas_installation_allows_service(string $monStat): bool
+{
+    $code = abas_mon_stat_normalize($monStat);
+
+    return $code !== '' && str_starts_with($code, 'AKT');
+}
+
+function abas_render_installation_status_badges(array $installation, bool $inService): string
+{
+    $monStat = (string) ($installation['mon_stat'] ?? '');
+    $label = abas_mon_stat_label($monStat);
+    $desc = abas_mon_stat_description($monStat);
+    $badgeClass = abas_mon_stat_badge_class($monStat);
+
+    ob_start();
+    ?>
+    <div class="abas-installation-badges">
+        <span class="<?= htmlspecialchars($badgeClass) ?>"<?= $desc !== '' ? ' title="' . htmlspecialchars($desc) . '"' : '' ?>><?= htmlspecialchars($label) ?></span>
+        <?php if ($inService): ?>
+            <span class="abas-badge-in-service">I service</span>
+        <?php endif; ?>
+    </div>
+    <?php
+
+    return (string) ob_get_clean();
+}

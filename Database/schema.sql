@@ -11,7 +11,9 @@ CREATE TABLE IF NOT EXISTS system_settings (
 INSERT INTO system_settings (`key`, `value`) VALUES
     ('access_confirm_months', '3'),
     ('password_reset_ttl_hours', '24'),
-    ('welcome_token_ttl_hours', '72')
+    ('welcome_token_ttl_hours', '72'),
+    ('support_email', 'alarmadm@trekantbrand.dk'),
+    ('mfa_required', '1')
 ON DUPLICATE KEY UPDATE `value` = VALUES(`value`);
 
 CREATE TABLE IF NOT EXISTS approved_installers (
@@ -30,15 +32,22 @@ CREATE TABLE IF NOT EXISTS users (
     email VARCHAR(255) NOT NULL,
     username VARCHAR(100) NOT NULL,
     password_hash VARCHAR(255) NULL,
-    role ENUM('admin','vagtcentral','montor','anlaegsejer') NOT NULL,
+    role ENUM('admin','vagtcentral','montor','anlaegsejer','anlaegsafprover','virksomhedsadmin') NOT NULL,
     phone VARCHAR(32) NULL,
     trekant_userid VARCHAR(8) NULL,
     sms_secret_hash VARCHAR(255) NULL,
+    sms_service_allowed TINYINT(1) NOT NULL DEFAULT 0,
     installer_id INT UNSIGNED NULL,
     active TINYINT(1) NOT NULL DEFAULT 1,
+    registration_status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'approved',
+    registration_type ENUM('montor','anlaegsejer','anlaegsafprover') NULL,
+    registration_requested_at DATETIME NULL,
+    registration_reviewed_at DATETIME NULL,
+    registration_reviewed_by_user_id INT UNSIGNED NULL,
     password_set_at DATETIME NULL,
     access_confirmed_at DATETIME NULL,
     access_confirm_due_at DATETIME NULL,
+    responsibility_ack_at DATETIME NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by_user_id INT UNSIGNED NULL,
     UNIQUE KEY uq_email (email),
@@ -151,12 +160,66 @@ CREATE TABLE IF NOT EXISTS service_actions (
     action ENUM('start_service','stop_service','extend_service','add_comment') NOT NULL,
     test_time VARCHAR(13) NULL,
     comm VARCHAR(255) NULL,
+    responsibility_ack_at DATETIME NULL,
     source ENUM('web','sms','api','bas_sso','cron') NOT NULL DEFAULT 'web',
     trekant_return_code INT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     KEY idx_s_ins (s_ins),
     CONSTRAINT fk_sa_user FOREIGN KEY (user_id) REFERENCES users(id),
     CONSTRAINT fk_sa_on_behalf FOREIGN KEY (on_behalf_of_user_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS registration_installation_requests (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    user_id INT UNSIGNED NOT NULL,
+    miscno2 VARCHAR(32) NOT NULL,
+    installation_id INT UNSIGNED NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_user (user_id),
+    CONSTRAINT fk_rir_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_rir_installation FOREIGN KEY (installation_id) REFERENCES installations(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS user_mfa (
+    user_id INT UNSIGNED NOT NULL PRIMARY KEY,
+    method ENUM('passkey','sms_otp') NOT NULL DEFAULT 'passkey',
+    enrolled_at DATETIME NULL,
+    admin_override TINYINT(1) NOT NULL DEFAULT 0,
+    CONSTRAINT fk_umfa_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS webauthn_credentials (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    user_id INT UNSIGNED NOT NULL,
+    credential_id VARBINARY(255) NOT NULL,
+    public_key TEXT NOT NULL,
+    sign_count INT UNSIGNED NOT NULL DEFAULT 0,
+    label VARCHAR(100) NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_credential_id (credential_id),
+    KEY idx_user (user_id),
+    CONSTRAINT fk_wac_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS mfa_ip_whitelist (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    ip_cidr VARCHAR(64) NOT NULL,
+    label VARCHAR(100) NULL,
+    active TINYINT(1) NOT NULL DEFAULT 1,
+    created_by_user_id INT UNSIGNED NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_ip_cidr (ip_cidr)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS mfa_otp_challenges (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    user_id INT UNSIGNED NOT NULL,
+    code_hash CHAR(64) NOT NULL,
+    expires_at DATETIME NOT NULL,
+    used_at DATETIME NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_user (user_id),
+    CONSTRAINT fk_moc_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS api_tokens (
@@ -202,8 +265,8 @@ CREATE TABLE IF NOT EXISTS sms_outbound_log (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Seed admin (password: admin123 — SKIFT I PRODUKTION)
-INSERT INTO users (email, username, password_hash, role, active, password_set_at, access_confirmed_at, access_confirm_due_at)
-SELECT 'admin@trekantbrand.dk', 'admin', '$2y$10$9FGUS7MEwUvmHpY91XlkaewV.H09u0J.uJkXT88xNZ67CJAJSizHS', 'admin', 1, NOW(), NOW(), DATE_ADD(NOW(), INTERVAL 3 MONTH)
+INSERT INTO users (email, username, password_hash, role, active, registration_status, password_set_at, access_confirmed_at, access_confirm_due_at)
+SELECT 'admin@trekantbrand.dk', 'admin', '$2y$10$9FGUS7MEwUvmHpY91XlkaewV.H09u0J.uJkXT88xNZ67CJAJSizHS', 'admin', 1, 'approved', NOW(), NOW(), DATE_ADD(NOW(), INTERVAL 3 MONTH)
 WHERE NOT EXISTS (SELECT 1 FROM users WHERE role = 'admin');
 
 SET FOREIGN_KEY_CHECKS = 1;

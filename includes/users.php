@@ -19,7 +19,25 @@ function abas_validate_phone(string $phone): bool
 
 function abas_user_role_uses_sms_code(string $role): bool
 {
-    return in_array($role, ['montor', 'anlaegsejer'], true);
+    return in_array($role, ['montor', 'anlaegsejer', 'anlaegsafprover'], true);
+}
+
+function abas_user_sms_service_allowed(array $user): bool
+{
+    return !empty($user['sms_service_allowed']);
+}
+
+function abas_user_has_responsibility_ack(array $user): bool
+{
+    return !empty($user['responsibility_ack_at']);
+}
+
+function abas_set_user_responsibility_ack(mysqli $conn, int $userId): void
+{
+    $stmt = $conn->prepare('UPDATE users SET responsibility_ack_at = NOW() WHERE id = ? AND responsibility_ack_at IS NULL');
+    $stmt->bind_param('i', $userId);
+    $stmt->execute();
+    $stmt->close();
 }
 
 function abas_validate_sms_code(string $code): bool

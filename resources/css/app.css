@@ -208,4 +208,32 @@
   .abas-log-entry-detail {
     @apply text-xs text-gray-700;
   }
+
+  .abas-portal-info {
+    @apply bg-amber-50/80 border border-amber-100 rounded-2xl p-5;
+  }
+
+  .abas-portal-form {
+    @apply bg-white rounded-2xl shadow-card overflow-hidden border border-gray-100;
+  }
+
+  .abas-portal-form-head {
+    @apply bg-brand text-white font-semibold uppercase tracking-wide text-sm px-5 py-3;
+  }
+
+  .abas-portal-note {
+    @apply bg-amber-50 border border-amber-100 rounded-xl p-3 text-gray-700;
+  }
+
+  .abas-portal-steps {
+    @apply text-gray-600;
+  }
+
+  .abas-loading-overlay {
+    @apply relative opacity-75 pointer-events-none;
+  }
+
+  .abas-btn-loading {
+    @apply opacity-80 cursor-wait;
+  }
 }

@@ -21,7 +21,8 @@ require __DIR__ . '/../partials/header.php';
     <a href="<?= abas_url('admin/installers.php') ?>" class="abas-admin-tile">Godkendte installatører</a>
     <a href="<?= abas_url('admin/sync.php') ?>" class="abas-admin-tile">Sync-prefixes</a>
     <a href="<?= abas_url('admin/settings.php') ?>" class="abas-admin-tile">Systemindstillinger</a>
-    <a href="<?= abas_url('admin/users.php') ?>" class="abas-admin-tile">Brugere</a>
+    <a href="<?= abas_url('admin/registration-requests.php') ?>" class="abas-admin-tile">Registreringsanmodninger</a>
+    <a href="<?= abas_url('admin/mfa-whitelist.php') ?>" class="abas-admin-tile">MFA IP-whitelist</a>
     <a href="<?= abas_url('admin/api-tokens.php') ?>" class="abas-admin-tile">API-tokens</a>
     <a href="<?= abas_url('admin/sms-inbound-log.php') ?>" class="abas-admin-tile">SMS inbound log</a>
 </div>

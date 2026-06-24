@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/trekant_client.php';
 require_once __DIR__ . '/users.php';
+require_once __DIR__ . '/installation_status.php';
 
 function abas_log_service_action(
     mysqli $conn,
@@ -17,13 +18,15 @@ function abas_log_service_action(
     ?string $testTime,
     ?string $comm,
     string $source,
-    ?int $returnCode
+    ?int $returnCode,
+    bool $responsibilityAck = false
 ): void {
+    $ackAt = $responsibilityAck ? date('Y-m-d H:i:s') : null;
     $stmt = $conn->prepare(
-        'INSERT INTO service_actions (user_id, on_behalf_of_user_id, session_id, s_ins, deal_id, action, test_time, comm, source, trekant_return_code)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        'INSERT INTO service_actions (user_id, on_behalf_of_user_id, session_id, s_ins, deal_id, action, test_time, comm, responsibility_ack_at, source, trekant_return_code)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
-    $stmt->bind_param('iiiisssssi', $userId, $onBehalfId, $sessionId, $sIns, $dealId, $action, $testTime, $comm, $source, $returnCode);
+    $stmt->bind_param('iiiissssssi', $userId, $onBehalfId, $sessionId, $sIns, $dealId, $action, $testTime, $comm, $ackAt, $source, $returnCode);
     $stmt->execute();
     $stmt->close();
 }
@@ -36,8 +39,15 @@ function abas_start_service_session(
     bool $unlimited,
     ?int $onBehalfUserId,
     string $comment,
-    string $source = 'web'
+    string $source = 'web',
+    bool $responsibilityAck = false
 ): array {
+    if (!abas_installation_allows_service((string) ($installation['mon_stat'] ?? ''))) {
+        $label = abas_mon_stat_label((string) ($installation['mon_stat'] ?? ''));
+
+        return ['ok' => false, 'code' => -1, 'message' => 'Anlægget er ' . strtolower($label) . ' og kan ikke sættes i service.'];
+    }
+
     $client = abas_trekant();
     $sIns = (int) $installation['s_ins'];
     $dealId = (string) $installation['deal_id'];
@@ -46,7 +56,7 @@ function abas_start_service_session(
     $resp = $client->startService($sIns, $dealId, $testTime, $comm);
     $code = abas_trekant_return_code($resp);
     $userId = (int) $user['id'];
-    abas_log_service_action($conn, $userId, $onBehalfUserId, null, $sIns, $dealId, 'start_service', $testTime, $comm, $source, $code);
+    abas_log_service_action($conn, $userId, $onBehalfUserId, null, $sIns, $dealId, 'start_service', $testTime, $comm, $source, $code, $responsibilityAck);
     if ($code !== 0 && $code !== 15997) {
         return ['ok' => false, 'code' => $code, 'message' => $resp['message']['message'] ?? 'Start fejlede'];
     }
@@ -364,7 +374,31 @@ function abas_format_alarmlog_parts(array $row): array
         $add('Hændelse', $event);
     }
 
-    foreach (['zone_text' => 'Zone', 'zone' => 'Zone', 'zone_no' => 'Zone nr.', 'detector' => 'Detektor', 'point' => 'Punkt'] as $key => $label) {
+    foreach (['zone_text' => 'Zone', 'zone' => 'Zone', 'zone_no' => 'Zone nr.'] as $key => $label) {
+        if (!empty($row[$key])) {
+            $add($label, (string) $row[$key]);
+        }
+    }
+
+    foreach (['area_text' => 'Område', 'area' => 'Område', 'sect' => 'Område', 'section' => 'Område'] as $key => $label) {
+        if (!empty($row[$key])) {
+            $add('Område', (string) $row[$key]);
+        }
+    }
+
+    foreach (['code' => 'Kode', 'alarm_code' => 'Kode', 'sig_code' => 'Kode', 'event_code' => 'Kode'] as $key => $label) {
+        if (!empty($row[$key])) {
+            $add('Kode', (string) $row[$key]);
+        }
+    }
+
+    foreach (['type' => 'Type', 'alarm_type' => 'Type', 'evt_type' => 'Type', 'signal_type' => 'Type'] as $key => $label) {
+        if (!empty($row[$key])) {
+            $add('Type', (string) $row[$key]);
+        }
+    }
+
+    foreach (['detector' => 'Detektor', 'point' => 'Punkt'] as $key => $label) {
         if (!empty($row[$key])) {
             $add($label, (string) $row[$key]);
         }

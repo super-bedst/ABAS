@@ -243,6 +243,9 @@ function abas_sms_handle_inbound(mysqli $conn, string $from, string $body): stri
     if (!$user || !abas_user_role_uses_sms_code((string) ($user['role'] ?? ''))) {
         return 'Ukendt afsender.';
     }
+    if (!abas_user_sms_service_allowed($user)) {
+        return 'SMS-betjening er ikke aktiveret for din bruger.';
+    }
     if (!abas_user_has_sms_code($user)) {
         return 'Ingen SMS-kode registreret for brugeren.';
     }
@@ -259,6 +262,9 @@ function abas_sms_handle_inbound(mysqli $conn, string $from, string $body): stri
 
     $result = '';
     if ($parsed['command'] === 'START') {
+        if (!abas_user_has_responsibility_ack($user)) {
+            return 'ABA: Accepter ansvarserklæring via web før SMS-start.';
+        }
         $hours = (float) ($parsed['hours'] ?? 2);
         $r = abas_start_service_session($conn, $user, $installation, $hours, false, null, 'SMS start', 'sms');
         $result = $r['ok'] ? 'ABA: Service startet på ' . $installation['miscno2'] . '.' : ($r['message'] ?? 'Start fejlede');
