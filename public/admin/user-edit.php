@@ -33,6 +33,9 @@ if (!$editUser) {
     exit('Bruger ikke fundet.');
 }
 
+$listFilter = $_GET['filter'] ?? $_POST['filter'] ?? '';
+$listUrl = 'admin/users.php' . ($listFilter !== '' && $listFilter !== 'alle' ? '?filter=' . rawurlencode($listFilter) : '');
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? 'save';
 
@@ -43,7 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $result = abas_delete_user($conn, $id, (int) $admin['id']);
         abas_flash_set($result['ok'] ? 'success' : 'error', $result['message']);
-        abas_redirect($result['ok'] ? 'admin/users.php' : 'admin/user-edit.php?id=' . $id);
+        abas_redirect($result['ok'] ? $listUrl : 'admin/user-edit.php?id=' . $id . ($listFilter !== '' ? '&filter=' . rawurlencode($listFilter) : ''));
     }
 
     if ($action === 'unlink') {
@@ -168,7 +171,7 @@ $currentUser = $admin;
 require __DIR__ . '/../partials/header.php';
 ?>
 <div class="mb-2">
-    <a href="<?= abas_url('admin/users.php') ?>" class="abas-back-link">&larr; Tilbage til brugere</a>
+    <a href="<?= abas_url($listUrl) ?>" class="abas-back-link">&larr; Tilbage til brugere</a>
 </div>
 <h1 class="abas-page-title !text-xl">Rediger bruger</h1>
 <p class="abas-page-lead"><?= htmlspecialchars(abas_role_label((string) $editUser['role'])) ?> — <?= htmlspecialchars((string) $editUser['username']) ?></p>
@@ -176,6 +179,7 @@ require __DIR__ . '/../partials/header.php';
 <form method="post" class="abas-card max-w-lg abas-form mb-6">
     <input type="hidden" name="id" value="<?= (int) $editUser['id'] ?>">
     <input type="hidden" name="action" value="save">
+    <?php if ($listFilter !== ''): ?><input type="hidden" name="filter" value="<?= htmlspecialchars($listFilter) ?>"><?php endif; ?>
     <div class="abas-field">
         <label class="abas-label" for="email">E-mail</label>
         <input id="email" name="email" type="email" required value="<?= htmlspecialchars((string) $editUser['email']) ?>" class="abas-input">
@@ -238,7 +242,7 @@ require __DIR__ . '/../partials/header.php';
     </label>
     <div class="flex flex-wrap gap-2 pt-2">
         <button class="abas-btn-primary">Gem</button>
-        <a href="<?= abas_url('admin/users.php') ?>" class="abas-btn-secondary">Annuller</a>
+        <a href="<?= abas_url($listUrl) ?>" class="abas-btn-secondary">Annuller</a>
     </div>
 </form>
 

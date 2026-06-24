@@ -70,7 +70,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     abas_redirect('vc-anlaegsbrugere.php');
 }
 
-$owners = $conn->query("SELECT id, email, username, phone FROM users WHERE role='anlaegsejer' ORDER BY username")->fetch_all(MYSQLI_ASSOC);
+$owners = $conn->query(
+    "SELECT id, email, username, phone, role, active FROM users
+     WHERE role IN ('anlaegsejer', 'anlaegsafprover')
+     ORDER BY username"
+)->fetch_all(MYSQLI_ASSOC);
 $ownerInstallations = abas_user_installations_with_service_status($conn);
 $installations = $conn->query('SELECT id, miscno2, name FROM installations ORDER BY miscno2 LIMIT 200')->fetch_all(MYSQLI_ASSOC);
 
@@ -79,7 +83,13 @@ $currentUser = $user;
 require __DIR__ . '/partials/header.php';
 ?>
 <h1 class="abas-page-title">Anlægsbrugere</h1>
-<p class="abas-page-lead">Opret og tilknyt anlægsejere til deres anlæg.</p>
+<p class="abas-page-lead">Opret og tilknyt anlægsejere og anlægsafprøvere til deres anlæg.</p>
+<?php if ($user['role'] === 'admin'): ?>
+<p class="text-sm text-gray-600 mb-4">
+    Rediger og slet brugere under
+    <a href="<?= abas_url('admin/users.php?filter=anlaegsbrugere') ?>" class="abas-link">Admin → Brugere → Anlægsbrugere</a>.
+</p>
+<?php endif; ?>
 
 <div class="grid lg:grid-cols-2 gap-6">
     <form method="post" class="abas-card abas-form">
@@ -118,14 +128,28 @@ require __DIR__ . '/partials/header.php';
 
 <div class="mt-6 abas-table-wrap">
     <table class="abas-table">
-        <thead><tr><th>Bruger</th><th>E-mail</th><th>Telefon</th><th>Anlæg</th></tr></thead>
+        <thead>
+            <tr>
+                <th>Bruger</th>
+                <th>E-mail</th>
+                <th>Telefon</th>
+                <th>Rolle</th>
+                <th>Anlæg</th>
+            </tr>
+        </thead>
         <tbody>
         <?php foreach ($owners as $o): ?>
             <?php $linked = $ownerInstallations[(int) $o['id']] ?? []; ?>
-            <tr>
-                <td><?= htmlspecialchars($o['username']) ?></td>
+            <tr class="<?= empty($o['active']) ? 'opacity-60' : '' ?>">
+                <td>
+                    <?= htmlspecialchars($o['username']) ?>
+                    <?php if (empty($o['active'])): ?>
+                        <span class="text-xs text-amber-700">(inaktiv)</span>
+                    <?php endif; ?>
+                </td>
                 <td><?= htmlspecialchars($o['email']) ?></td>
                 <td><?= htmlspecialchars((string) ($o['phone'] ?? '—')) ?></td>
+                <td><?= htmlspecialchars(abas_role_label((string) $o['role'])) ?></td>
                 <td>
                     <?php if ($linked === []): ?>
                         <span class="text-gray-400 text-sm">Ingen anlæg</span>

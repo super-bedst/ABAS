@@ -7,6 +7,7 @@ require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/roles.php';
 require_once __DIR__ . '/../includes/service.php';
+require_once __DIR__ . '/../includes/service_reconcile.php';
 require_once __DIR__ . '/../includes/installation_sync.php';
 require_once __DIR__ . '/../includes/installation_details.php';
 require_once __DIR__ . '/../includes/installation_status.php';
@@ -26,6 +27,7 @@ if (!$installation || !abas_user_may_access_installation($conn, $user, $installa
 }
 
 $session = abas_active_session_for_installation($conn, $id);
+$externalTest = abas_external_testqueue_for_installation($conn, $id);
 $logMode = $_GET['log'] ?? 'last20';
 $customRange = null;
 if ($logMode === 'custom' && !empty($_GET['from']) && !empty($_GET['to'])) {
@@ -52,6 +54,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($action === 'stop') {
         $r = abas_stop_service_session($conn, $user, $installation, $session ? (int) $session['id'] : null, trim($_POST['comment'] ?? ''));
         abas_flash_set($r['ok'] ? 'success' : 'error', $r['ok'] ? 'Service stoppet.' : ($r['message'] ?? 'Fejl'));
+    } elseif ($action === 'stop_external') {
+        $r = abas_stop_external_testqueue($conn, $user, $installation, trim($_POST['comment'] ?? ''));
+        abas_flash_set($r['ok'] ? 'success' : 'error', $r['ok'] ? 'Anlæg sat i drift igen.' : ($r['message'] ?? 'Fejl'));
     }
     abas_redirect('installation.php?id=' . $id);
 }
@@ -68,7 +73,9 @@ $mapLat = $instDetails['lat'];
 $mapLon = $instDetails['lon'];
 $contacts = $instDetails['contacts'];
 $canStartService = abas_installation_allows_service((string) ($installation['mon_stat'] ?? ''));
-$inService = $session !== null;
+$inAbasService = $session !== null;
+$externalService = $externalTest !== null && !$inAbasService;
+$inService = $inAbasService || $externalService;
 $maxExtendHours = abas_service_remaining_extend_hours($session);
 
 $pageTitle = $installation['miscno2'] ?? 'Anlæg';
@@ -82,18 +89,22 @@ require __DIR__ . '/partials/header.php';
     <a href="<?= abas_url('dashboard.php') ?>" class="abas-back-link">&larr; Tilbage til dashboard</a>
 </div>
 <h1 class="abas-page-title"><?= htmlspecialchars((string) $installation['miscno2']) ?></h1>
-<div class="mb-2"><?= abas_render_installation_status_badges($installation, $inService) ?></div>
-<?php if ($inService): ?>
+<div class="mb-2"><?= abas_render_installation_status_badges($installation, $inAbasService, $externalService) ?></div>
+<?php if ($inAbasService): ?>
     <?= abas_render_installation_in_service_banner($session) ?>
+<?php elseif ($externalService): ?>
+    <?= abas_render_installation_external_service_banner($externalTest) ?>
 <?php endif; ?>
 <p class="abas-page-lead mb-6"><?= htmlspecialchars((string) $installation['name']) ?> — <?= htmlspecialchars((string) $installation['address']) ?>, <?= htmlspecialchars((string) $installation['city']) ?></p>
 
 <div class="grid md:grid-cols-2 gap-4 mb-6">
-    <div class="abas-card<?= $inService ? ' abas-card--in-service' : '' ?>" id="service-card">
+    <div class="abas-card<?= $inAbasService ? ' abas-card--in-service' : ($externalService ? ' abas-card--external-service' : '') ?>" id="service-card">
         <h2 class="abas-card-title flex flex-wrap items-center gap-2">
             Service
-            <?php if ($inService): ?>
-                <span class="abas-badge-in-service text-sm px-3 py-1">Aktiv nu</span>
+            <?php if ($inAbasService): ?>
+                <span class="abas-badge-in-service text-sm px-3 py-1">ABA aktiv</span>
+            <?php elseif ($externalService): ?>
+                <span class="abas-badge-external-service text-sm px-3 py-1">Ekstern test</span>
             <?php endif; ?>
         </h2>
         <?php if ($session): ?>
@@ -129,6 +140,18 @@ require __DIR__ . '/partials/header.php';
                 </div>
                 <button class="abas-btn-danger">Stop service</button>
             </form>
+        <?php elseif ($externalService && $canStartService): ?>
+            <p class="text-sm text-sky-900 mb-4">Anlægget er i test/service via TrekantBrand/VC. Du kan sætte det i normal drift igen herfra.</p>
+            <form method="post" class="abas-form" data-abas-loading="Sætter i drift…">
+                <input type="hidden" name="action" value="stop_external">
+                <div class="abas-field">
+                    <label class="abas-label" for="external-stop-comment">Kommentar</label>
+                    <textarea id="external-stop-comment" name="comment" rows="2" class="abas-textarea" placeholder="Beskriv kort hvad der er udført"></textarea>
+                </div>
+                <button class="abas-btn-primary">Sæt i drift igen</button>
+            </form>
+        <?php elseif ($externalService): ?>
+            <p class="text-amber-800 text-sm mb-4">Anlægget er i ekstern test, men linjen er <strong><?= htmlspecialchars(strtolower(abas_mon_stat_label((string) $installation['mon_stat']))) ?></strong> — kan ikke sættes i drift fra ABAS.</p>
         <?php elseif (!$canStartService): ?>
             <p class="text-amber-800 text-sm mb-4">Anlægget er <strong><?= htmlspecialchars(strtolower(abas_mon_stat_label((string) $installation['mon_stat']))) ?></strong> og kan ikke sættes i service.</p>
         <?php else: ?>
@@ -263,6 +286,7 @@ require __DIR__ . '/partials/header.php';
             ? '&from=' . rawurlencode((string) $_GET['from']) . '&to=' . rawurlencode((string) $_GET['to'])
             : ''))) ?>;
     var initialSessionActive = <?= $session ? 'true' : 'false' ?>;
+    var initialExternalActive = <?= $externalService ? 'true' : 'false' ?>;
     var logRows = document.getElementById('inst-log-rows');
     var logBody = document.getElementById('inst-log-body');
     var logEmpty = document.getElementById('inst-log-empty');
@@ -276,7 +300,7 @@ require __DIR__ . '/partials/header.php';
                 if (data.error) {
                     return;
                 }
-                if (data.sessionActive !== initialSessionActive) {
+                if (data.sessionActive !== initialSessionActive || data.externalActive !== initialExternalActive) {
                     window.location.reload();
                     return;
                 }

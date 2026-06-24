@@ -13,9 +13,15 @@ require_once __DIR__ . '/../includes/service.php';
 $conn = abas_db();
 $user = abas_require_login();
 $pendingRegistrations = 0;
+$externalInQueue = [];
+$showExternalQueue = in_array($user['role'] ?? '', ['admin', 'vagtcentral'], true);
 if (($user['role'] ?? '') === 'admin') {
     require_once __DIR__ . '/../includes/registration.php';
     $pendingRegistrations = abas_pending_registration_count($conn);
+}
+if ($showExternalQueue) {
+    require_once __DIR__ . '/../includes/service_reconcile.php';
+    $externalInQueue = abas_external_testqueue_installations($conn);
 }
 $q = trim($_GET['q'] ?? '');
 $installations = [];
@@ -91,12 +97,46 @@ require __DIR__ . '/partials/header.php';
     </div>
 </form>
 
+<?php if ($showExternalQueue && $externalInQueue !== [] && $q === ''): ?>
+    <div class="mb-8">
+        <h2 class="abas-card-title mb-3">I testkø uden for ABA Service (<?= count($externalInQueue) ?>)</h2>
+        <p class="text-sm text-gray-600 mb-3">Startet af VC eller andet — vises ikke på montør-dashboard. Opdateres via reconcile-poller.</p>
+        <div class="abas-table-wrap">
+            <table class="abas-table">
+                <thead>
+                    <tr>
+                        <th>ABA-nr.</th>
+                        <th>Navn</th>
+                        <th>By</th>
+                        <th>Udløber</th>
+                        <th>Kommentar</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <?php foreach ($externalInQueue as $ext): ?>
+                    <tr class="abas-table-row-link" role="link" tabindex="0"
+                        data-href="<?= htmlspecialchars(abas_url('installation.php?id=' . (int) $ext['installation_id'])) ?>">
+                        <td class="font-mono font-medium text-sky-800"><?= htmlspecialchars((string) $ext['miscno2']) ?></td>
+                        <td><?= htmlspecialchars((string) $ext['name']) ?></td>
+                        <td><?= htmlspecialchars((string) $ext['city']) ?></td>
+                        <td class="text-sm"><?= htmlspecialchars(abas_format_datetime((string) ($ext['end_at'] ?? '')) ?: '—') ?></td>
+                        <td class="text-sm text-gray-600"><?= htmlspecialchars((string) ($ext['queue_comment'] ?? '')) ?></td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+<?php endif; ?>
+
 <?php if ($installations === []): ?>
     <div class="abas-panel">
         <?php if ($isOwner && $q === ''): ?>
             Du har ingen tilknyttede anlæg. Kontakt vagtcentralen.
         <?php elseif ($q !== ''): ?>
             Ingen anlæg fundet. Prøv et andet søgeord.
+        <?php elseif ($showExternalQueue && $externalInQueue !== []): ?>
+            Ingen anlæg i ABAS-service lige nu. <?= count($externalInQueue) ?> anlæg i ekstern testkø — se listen ovenfor.
         <?php elseif ($isMontor): ?>
             Ingen anlæg i service lige nu<?= $includeCompany ? '' : ' for dig' ?>. Søg efter et anlæg ovenfor.
         <?php else: ?>

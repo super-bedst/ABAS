@@ -69,6 +69,14 @@ class TrekantClient
         return $this->call('g_search_installations', $body);
     }
 
+    public function getTestQueueSummary(string $userid, int $lines = 200): array
+    {
+        return $this->call('g_ma_testqueue_summary', [
+            'userid' => strtoupper($userid),
+            'lines' => min(500, max(1, $lines)),
+        ]);
+    }
+
     public function getTestQueueStatus(int $sIns, string $dealId, int $lines = 5): array
     {
         return $this->call('g_ma_testqueue', [

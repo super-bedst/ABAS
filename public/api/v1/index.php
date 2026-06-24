@@ -29,6 +29,11 @@ if ($path === 'cron/sync-installations' && in_array($method, ['GET', 'POST'], tr
     abas_handle_sync_cron_webhook($conn);
 }
 
+if ($path === 'cron/reconcile-service' && in_array($method, ['GET', 'POST'], true)) {
+    require_once dirname(__DIR__, 3) . '/includes/service_reconcile.php';
+    abas_handle_reconcile_service_webhook($conn);
+}
+
 $token = abas_api_authenticate($conn);
 $apiUser = abas_api_user_from_token($conn, $token);
 

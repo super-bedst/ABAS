@@ -193,6 +193,34 @@
     @apply abas-btn bg-amber-600 text-white hover:bg-amber-700 shadow-sm text-sm whitespace-nowrap;
   }
 
+  .abas-badge-external-service {
+    @apply abas-badge bg-sky-100 text-sky-900 border border-sky-300;
+  }
+
+  .abas-external-service-banner {
+    @apply flex gap-3 items-start rounded-2xl border-2 border-sky-500 bg-sky-50 px-4 py-4 sm:px-5 sm:py-5 shadow-sm;
+  }
+
+  .abas-external-service-banner__dot {
+    @apply mt-1.5 h-3.5 w-3.5 shrink-0 rounded-full bg-sky-600 ring-4 ring-sky-200 animate-pulse;
+  }
+
+  .abas-external-service-banner__title {
+    @apply text-lg sm:text-xl font-bold text-sky-950;
+  }
+
+  .abas-external-service-banner__times {
+    @apply mt-1 text-sm sm:text-base font-semibold text-sky-900;
+  }
+
+  .abas-external-service-banner__hint {
+    @apply mt-2 text-sm text-sky-900/90 leading-relaxed;
+  }
+
+  .abas-card--external-service {
+    @apply border-2 border-sky-400 bg-sky-50/40 ring-2 ring-sky-100;
+  }
+
   .abas-installation-badges {
     @apply flex flex-wrap gap-1.5;
   }

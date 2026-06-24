@@ -160,6 +160,17 @@ CREATE TABLE IF NOT EXISTS service_sessions (
     CONSTRAINT fk_ss_installation FOREIGN KEY (installation_id) REFERENCES installations(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS installation_external_testqueue (
+    installation_id INT UNSIGNED NOT NULL PRIMARY KEY,
+    s_inc INT UNSIGNED NOT NULL DEFAULT 0,
+    trekant_user_id VARCHAR(16) NULL,
+    queue_comment VARCHAR(255) NULL,
+    end_at DATETIME NULL,
+    detected_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_iet_installation FOREIGN KEY (installation_id) REFERENCES installations(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS service_actions (
     id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     user_id INT UNSIGNED NOT NULL,

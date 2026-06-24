@@ -88,7 +88,44 @@ function abas_render_installation_in_service_banner(?array $session): string
     return (string) ob_get_clean();
 }
 
-function abas_render_installation_status_badges(array $installation, bool $inService): string
+function abas_render_installation_external_service_banner(?array $external): string
+{
+    if ($external === null) {
+        return '';
+    }
+
+    $endAt = abas_format_datetime((string) ($external['end_at'] ?? ''));
+    $comment = trim((string) ($external['queue_comment'] ?? ''));
+    $operator = trim((string) ($external['trekant_user_id'] ?? ''));
+
+    ob_start();
+    ?>
+    <div class="abas-external-service-banner mb-5" id="inst-external-service-banner" role="status" aria-live="polite">
+        <span class="abas-external-service-banner__dot" aria-hidden="true"></span>
+        <div class="min-w-0">
+            <p class="abas-external-service-banner__title">I service uden for ABA Service</p>
+            <p class="abas-external-service-banner__times" id="inst-external-service-status">
+                <?php if ($endAt !== ''): ?>
+                    Testkø udløber <?= htmlspecialchars($endAt) ?>
+                <?php else: ?>
+                    Anlægget står i TrekantBrand testkø
+                <?php endif; ?>
+                <?php if ($operator !== ''): ?>
+                    · bruger <?= htmlspecialchars($operator) ?>
+                <?php endif; ?>
+            </p>
+            <?php if ($comment !== ''): ?>
+                <p class="abas-external-service-banner__hint"><?= htmlspecialchars($comment) ?></p>
+            <?php endif; ?>
+            <p class="abas-external-service-banner__hint">Startet af VC eller andet system — ikke fra ABA Service. Montør/admin kan sætte anlægget i drift igen herunder.</p>
+        </div>
+    </div>
+    <?php
+
+    return (string) ob_get_clean();
+}
+
+function abas_render_installation_status_badges(array $installation, bool $inAbasService, bool $externalService = false): string
 {
     $monStat = (string) ($installation['mon_stat'] ?? '');
     $label = abas_mon_stat_label($monStat);
@@ -99,8 +136,10 @@ function abas_render_installation_status_badges(array $installation, bool $inSer
     ?>
     <div class="abas-installation-badges">
         <span class="<?= htmlspecialchars($badgeClass) ?>"<?= $desc !== '' ? ' title="' . htmlspecialchars($desc) . '"' : '' ?>><?= htmlspecialchars($label) ?></span>
-        <?php if ($inService): ?>
-            <span class="abas-badge-in-service text-sm px-3 py-1">I service</span>
+        <?php if ($inAbasService): ?>
+            <span class="abas-badge-in-service text-sm px-3 py-1">I service (ABA)</span>
+        <?php elseif ($externalService): ?>
+            <span class="abas-badge-external-service text-sm px-3 py-1">I service (ekstern)</span>
         <?php endif; ?>
     </div>
     <?php

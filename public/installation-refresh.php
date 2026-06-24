@@ -7,6 +7,7 @@ require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/roles.php';
 require_once __DIR__ . '/../includes/service.php';
+require_once __DIR__ . '/../includes/service_reconcile.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -38,6 +39,7 @@ if (!$installation || !abas_user_may_access_installation($conn, $user, $installa
 }
 
 $session = abas_active_session_for_installation($conn, $id);
+$externalTest = abas_external_testqueue_for_installation($conn, $id);
 $log = ['rows' => [], 'code' => -1];
 
 try {
@@ -55,9 +57,20 @@ if ($session) {
     }
 }
 
+$externalLabel = '';
+if ($externalTest && !$session) {
+    $externalLabel = trim((string) ($externalTest['queue_comment'] ?? ''));
+    if ($externalLabel === '') {
+        $externalLabel = 'Ekstern testkø';
+    }
+}
+
 echo json_encode([
     'sessionActive' => $session !== null,
+    'externalActive' => $externalTest !== null && $session === null,
+    'serviceViewChanged' => false,
     'sessionLabel' => $sessionLabel,
+    'externalLabel' => $externalLabel,
     'logCode' => (int) $log['code'],
     'logHtml' => $log['code'] === 0 ? abas_render_alarmlog_rows_html($log['rows']) : '',
     'logEmpty' => $log['code'] === 0 && $log['rows'] === [],

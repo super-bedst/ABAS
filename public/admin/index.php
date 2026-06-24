@@ -18,6 +18,7 @@ require __DIR__ . '/../partials/header.php';
 <h1 class="abas-page-title">Administration</h1>
 <p class="abas-page-lead">Brugere, installatører, sync og systemindstillinger.</p>
 <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    <a href="<?= abas_url('admin/users.php') ?>" class="abas-admin-tile">Brugere</a>
     <a href="<?= abas_url('admin/installers.php') ?>" class="abas-admin-tile">Godkendte installatører</a>
     <a href="<?= abas_url('admin/sync.php') ?>" class="abas-admin-tile">Sync-prefixes</a>
     <a href="<?= abas_url('admin/settings.php') ?>" class="abas-admin-tile">Systemindstillinger</a>
@@ -26,4 +27,5 @@ require __DIR__ . '/../partials/header.php';
     <a href="<?= abas_url('admin/api-tokens.php') ?>" class="abas-admin-tile">API-tokens</a>
     <a href="<?= abas_url('admin/sms-inbound-log.php') ?>" class="abas-admin-tile">SMS inbound log</a>
 </div>
+<p class="text-sm text-gray-500 mt-6">Service-reconcile (Node-RED): <code class="text-xs bg-gray-100 px-1 rounded">/api/v1/cron/reconcile-service?key=…</code></p>
 <?php require __DIR__ . '/../partials/footer.php';
