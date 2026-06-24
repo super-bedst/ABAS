@@ -117,6 +117,53 @@ function Install-NpmDependencies {
     throw "npm fejlede (exit $exitCode) og Tailwind er ikke tilgaengelig."
 }
 
+function Restore-LocalEnvFile {
+    param(
+        [string]$EnvPath,
+        [string]$Content
+    )
+
+    $name = Split-Path -Leaf $EnvPath
+
+    if (Test-Path -LiteralPath $EnvPath) {
+        try {
+            $existing = Get-Content -LiteralPath $EnvPath -Raw -Encoding UTF8
+            if ($existing -ceq $Content) {
+                Write-Host "Uændret lokalt: $name" -ForegroundColor Gray
+                return
+            }
+        } catch {
+            Write-Host "Kunne ikke læse $name til sammenligning: $($_.Exception.Message)" -ForegroundColor Yellow
+        }
+    }
+
+    try {
+        $parent = Split-Path -Parent $EnvPath
+        if ($parent -and -not (Test-Path -LiteralPath $parent)) {
+            New-Item -ItemType Directory -Path $parent -Force | Out-Null
+        }
+
+        if (Test-Path -LiteralPath $EnvPath) {
+            $item = Get-Item -LiteralPath $EnvPath -Force
+            if ($item.IsReadOnly) {
+                $item.IsReadOnly = $false
+            }
+        }
+
+        $utf8NoBom = New-Object System.Text.UTF8Encoding $false
+        [System.IO.File]::WriteAllText($EnvPath, $Content, $utf8NoBom)
+        Write-Host "Gendannet lokalt: $name" -ForegroundColor Gray
+    } catch {
+        if (Test-Path -LiteralPath $EnvPath) {
+            Write-Host "Kunne ikke overskrive $name ($($_.Exception.Message))." -ForegroundColor Yellow
+            Write-Host "Filen findes stadig — fortsætter deploy (gitignore beskytter typisk env-filer)." -ForegroundColor Yellow
+            return
+        }
+
+        throw "Kunne ikke gendanne $name : $($_.Exception.Message)"
+    }
+}
+
 function Sync-GitRepository {
     param(
         [string]$Branch,
@@ -136,30 +183,26 @@ function Sync-GitRepository {
         Write-Host "`nForce: synkroniserer med origin/$Branch (lokale aendringer kasseres)" -ForegroundColor Magenta
 
         if (Test-Path (Join-Path $RepoPath '.git\MERGE_HEAD')) {
-            Invoke-NativeCommand -Label 'git merge --abort' -FilePath 'git' -ArgumentList @('merge', '--abort')
+            $null = Invoke-NativeCommand -Label 'git merge --abort' -FilePath 'git' -ArgumentList @('merge', '--abort')
         }
 
         if ((Test-Path (Join-Path $RepoPath '.git\rebase-merge')) -or (Test-Path (Join-Path $RepoPath '.git\rebase-apply'))) {
-            Invoke-NativeCommand -Label 'git rebase --abort' -FilePath 'git' -ArgumentList @('rebase', '--abort') -AllowFailure
+            $null = Invoke-NativeCommand -Label 'git rebase --abort' -FilePath 'git' -ArgumentList @('rebase', '--abort') -AllowFailure
         }
 
-        Invoke-NativeCommand -Label "[1/3] git fetch origin $Branch" -FilePath 'git' -ArgumentList @('fetch', 'origin', $Branch)
-        Invoke-NativeCommand -Label "git reset --hard origin/$Branch" -FilePath 'git' -ArgumentList @('reset', '--hard', "origin/$Branch")
+        $null = Invoke-NativeCommand -Label "[1/3] git fetch origin $Branch" -FilePath 'git' -ArgumentList @('fetch', 'origin', $Branch)
+        $null = Invoke-NativeCommand -Label "git reset --hard origin/$Branch" -FilePath 'git' -ArgumentList @('reset', '--hard', "origin/$Branch")
 
         foreach ($envFile in $envBackups.Keys) {
-            $envPath = Join-Path $RepoPath $envFile
-            Set-Content -Path $envPath -Value $envBackups[$envFile] -Encoding UTF8 -NoNewline
-            Write-Host "Gendannet lokalt: $envFile" -ForegroundColor Gray
+            Restore-LocalEnvFile -EnvPath (Join-Path $RepoPath $envFile) -Content $envBackups[$envFile]
         }
         return
     }
 
-    Invoke-NativeCommand -Label "[1/3] git pull origin $Branch" -FilePath 'git' -ArgumentList @('pull', 'origin', $Branch)
+    $null = Invoke-NativeCommand -Label "[1/3] git pull origin $Branch" -FilePath 'git' -ArgumentList @('pull', 'origin', $Branch)
 
     foreach ($envFile in $envBackups.Keys) {
-        $envPath = Join-Path $RepoPath $envFile
-        Set-Content -Path $envPath -Value $envBackups[$envFile] -Encoding UTF8 -NoNewline
-        Write-Host "Gendannet lokalt: $envFile" -ForegroundColor Gray
+        Restore-LocalEnvFile -EnvPath (Join-Path $RepoPath $envFile) -Content $envBackups[$envFile]
     }
 }
 
@@ -170,8 +213,12 @@ Set-Location $RepoPath
 try {
     Sync-GitRepository -Branch $Branch -Force:$Force
 } catch {
-    Write-Host "`nGit pull fejlede. Prov med -Force:" -ForegroundColor Red
-    Write-Host "  .\scripts\deploy.ps1 -Force" -ForegroundColor Yellow
+    Write-Host "`nDeploy fejlede under git-synkronisering:" -ForegroundColor Red
+    Write-Host "  $($_.Exception.Message)" -ForegroundColor Yellow
+    if (-not $Force) {
+        Write-Host "Prov med -Force:" -ForegroundColor Yellow
+        Write-Host "  .\scripts\deploy.ps1 -Force" -ForegroundColor Yellow
+    }
     throw
 }
 
