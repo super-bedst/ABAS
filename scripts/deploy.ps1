@@ -129,11 +129,11 @@ function Restore-LocalEnvFile {
         try {
             $existing = Get-Content -LiteralPath $EnvPath -Raw -Encoding UTF8
             if ($existing -ceq $Content) {
-                Write-Host "Uændret lokalt: $name" -ForegroundColor Gray
+                Write-Host "Uaendret lokalt: $name" -ForegroundColor Gray
                 return
             }
         } catch {
-            Write-Host "Kunne ikke læse $name til sammenligning: $($_.Exception.Message)" -ForegroundColor Yellow
+            Write-Host "Kunne ikke laese $name til sammenligning: $($_.Exception.Message)" -ForegroundColor Yellow
         }
     }
 
@@ -156,7 +156,7 @@ function Restore-LocalEnvFile {
     } catch {
         if (Test-Path -LiteralPath $EnvPath) {
             Write-Host "Kunne ikke overskrive $name ($($_.Exception.Message))." -ForegroundColor Yellow
-            Write-Host "Filen findes stadig — fortsætter deploy (gitignore beskytter typisk env-filer)." -ForegroundColor Yellow
+            Write-Host "Filen findes stadig - fortsaetter deploy (gitignore beskytter typisk env-filer)." -ForegroundColor Yellow
             return
         }
 
