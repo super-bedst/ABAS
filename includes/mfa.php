@@ -257,14 +257,36 @@ function abas_mfa_redirect_for_user(mysqli $conn, array $user): void
     $_SESSION['mfa_pending_user_id'] = $userId;
     unset($_SESSION['mfa_verified'], $_SESSION['user_id'], $_SESSION['user_role'], $_SESSION['user_name']);
 
+    $method = abas_user_mfa_method($conn, $userId);
+
+    if ($method === 'sms_otp') {
+        abas_mfa_send_otp($conn, $user);
+        abas_redirect('mfa-verify.php');
+    }
+
     if (!abas_user_mfa_enrolled($conn, $userId)) {
         abas_redirect('mfa-enroll.php');
     }
 
-    if (abas_user_mfa_method($conn, $userId) === 'sms_otp') {
-        abas_mfa_send_otp($conn, $user);
-    }
     abas_redirect('mfa-verify.php');
+}
+
+function abas_mfa_webauthn_allow_credentials(mysqli $conn, int $userId): array
+{
+    $stmt = $conn->prepare('SELECT credential_id FROM webauthn_credentials WHERE user_id = ?');
+    $stmt->bind_param('i', $userId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $credentials = [];
+    while ($row = $result->fetch_assoc()) {
+        $credentials[] = [
+            'type' => 'public-key',
+            'id' => rtrim(strtr(base64_encode((string) $row['credential_id']), '+/', '-_'), '='),
+        ];
+    }
+    $stmt->close();
+
+    return $credentials;
 }
 
 function abas_require_mfa_enrollment(): array

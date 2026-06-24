@@ -72,41 +72,83 @@ require __DIR__ . '/partials/public-header.php';
                 <button type="submit" name="resend" value="1" class="text-sm abas-link" formaction="?resend=1">Send ny kode</button>
             </form>
         <?php else: ?>
+            <?php $allowCredentials = abas_mfa_webauthn_allow_credentials($conn, $pendingId); ?>
             <div class="abas-portal-note text-sm mb-4">
                 <p class="font-semibold text-gray-900 mb-1">Brug din mobiltelefon</p>
                 <p>Oprettede du passkey på mobil (Face ID eller Touch ID), skal du også logge ind herfra. Passkeys er knyttet til den enhed, hvor de blev oprettet.</p>
             </div>
-            <p class="text-sm text-gray-600 mb-4">Brug din passkey (Face ID, Touch ID eller sikkerhedsnøgle) for at fortsætte.</p>
+            <p id="passkey-status" class="text-sm text-gray-600 mb-4">Bekræft med din passkey (Face ID, Touch ID eller sikkerhedsnøgle)…</p>
             <form method="post" id="passkey-form" class="abas-form">
                 <input type="hidden" name="credential" id="credential" value="">
-                <button type="button" id="passkey-btn" class="abas-btn-primary abas-btn-block">Brug passkey</button>
+                <button type="button" id="passkey-btn" class="abas-btn-primary abas-btn-block hidden">Brug passkey igen</button>
             </form>
             <script>
-            document.getElementById('passkey-btn').addEventListener('click', function () {
-                if (!window.PublicKeyCredential) {
-                    alert('Din browser understøtter ikke passkeys.');
-                    return;
+            (function () {
+                var allowCredentialsJson = <?= json_encode($allowCredentials, JSON_UNESCAPED_SLASHES) ?>;
+                var autoStart = <?= json_encode($error === '') ?>;
+                var statusEl = document.getElementById('passkey-status');
+                var retryBtn = document.getElementById('passkey-btn');
+
+                function decodeBase64Url(value) {
+                    var base64 = value.replace(/-/g, '+').replace(/_/g, '/');
+                    while (base64.length % 4) {
+                        base64 += '=';
+                    }
+                    var binary = atob(base64);
+                    var bytes = new Uint8Array(binary.length);
+                    for (var i = 0; i < binary.length; i++) {
+                        bytes[i] = binary.charCodeAt(i);
+                    }
+                    return bytes;
                 }
-                var userId = <?= (int) $pendingId ?>;
-                var challenge = new Uint8Array(32);
-                crypto.getRandomValues(challenge);
-                navigator.credentials.get({
-                    publicKey: {
+
+                function startPasskey() {
+                    if (!window.PublicKeyCredential) {
+                        statusEl.textContent = 'Din browser understøtter ikke passkeys.';
+                        return;
+                    }
+                    statusEl.textContent = 'Venter på passkey…';
+                    retryBtn.disabled = true;
+
+                    var challenge = new Uint8Array(32);
+                    crypto.getRandomValues(challenge);
+                    var publicKey = {
                         challenge: challenge,
                         timeout: 60000,
                         userVerification: 'preferred',
                         rpId: location.hostname
+                    };
+                    if (allowCredentialsJson.length > 0) {
+                        publicKey.allowCredentials = allowCredentialsJson.map(function (descriptor) {
+                            return {
+                                type: descriptor.type,
+                                id: decodeBase64Url(descriptor.id)
+                            };
+                        });
                     }
-                }).then(function (cred) {
-                    document.getElementById('credential').value = JSON.stringify({
-                        id: cred.id,
-                        type: cred.type
+
+                    navigator.credentials.get({ publicKey: publicKey }).then(function (cred) {
+                        document.getElementById('credential').value = JSON.stringify({
+                            id: cred.id,
+                            type: cred.type
+                        });
+                        document.getElementById('passkey-form').submit();
+                    }).catch(function () {
+                        statusEl.textContent = 'Passkey blev annulleret eller fejlede. Prøv igen.';
+                        retryBtn.disabled = false;
+                        retryBtn.classList.remove('hidden');
                     });
-                    document.getElementById('passkey-form').submit();
-                }).catch(function () {
-                    alert('Passkey blev annulleret eller fejlede.');
-                });
-            });
+                }
+
+                retryBtn.addEventListener('click', startPasskey);
+                if (autoStart) {
+                    startPasskey();
+                } else {
+                    statusEl.textContent = 'Brug din passkey (Face ID, Touch ID eller sikkerhedsnøgle) for at fortsætte.';
+                    retryBtn.textContent = 'Brug passkey';
+                    retryBtn.classList.remove('hidden');
+                }
+            })();
             </script>
         <?php endif; ?>
     </div>
