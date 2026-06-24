@@ -48,14 +48,12 @@ try {
 }
 
 $sessionLabel = '';
-if ($session) {
-    $sessionLabel = 'Aktiv service siden ' . $session['started_at'];
-    if (!empty($session['unlimited'])) {
-        $sessionLabel .= ' (uden tidsbegrænsning)';
-    } elseif (!empty($session['expires_at'])) {
-        $sessionLabel .= ' — udløber ' . $session['expires_at'];
+    if ($session) {
+        $sessionLabel = 'Aktiv service siden ' . $session['started_at'];
+        if (!empty($session['expires_at'])) {
+            $sessionLabel .= ' — udløber ' . $session['expires_at'];
+        }
     }
-}
 
 echo json_encode([
     'sessionActive' => $session !== null,

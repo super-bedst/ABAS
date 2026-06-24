@@ -49,9 +49,7 @@ if (!isset($installations) || $installations === []) {
                     <?php if (!empty($showServiceInfo)): ?>
                         <?php if (!empty($inst['service_started_at'])): ?>
                             Siden <?= htmlspecialchars((string) $inst['service_started_at']) ?>
-                            <?php if (!empty($inst['service_unlimited'])): ?>
-                                <span class="text-gray-400">(uden tidsbegrænsning)</span>
-                            <?php elseif (!empty($inst['service_expires_at'])): ?>
+                            <?php if (!empty($inst['service_expires_at'])): ?>
                                 <span class="text-gray-400">· udløber <?= htmlspecialchars((string) $inst['service_expires_at']) ?></span>
                             <?php endif; ?>
                         <?php endif; ?>

@@ -28,7 +28,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $montorId = (int) ($_POST['montor_id'] ?? 0);
     $phone = trim($_POST['invite_phone'] ?? '');
     $hours = (float) ($_POST['hours'] ?? 2);
-    $unlimited = !empty($_POST['unlimited']);
     $comment = trim($_POST['comment'] ?? 'VC service');
     $installation = abas_find_installation_by_miscno2($conn, $misc);
     if (!$installation) {
@@ -66,7 +65,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $log->execute();
             $log->close();
         }
-        $r = abas_start_service_session($conn, $user, $installation, $hours, $unlimited, $onBehalf, $comment);
+        $r = abas_start_service_session($conn, $user, $installation, $hours, $onBehalf, $comment);
         abas_flash_set($r['ok'] ? 'success' : 'error', $r['ok'] ? 'Service startet på vegne af montør.' : ($r['message'] ?? 'Fejl'));
         if ($r['ok']) {
             abas_redirect('installation.php?id=' . (int) $installation['id']);
@@ -105,13 +104,10 @@ require __DIR__ . '/partials/header.php';
         <label class="abas-label" for="invite_phone">Eller inviter via telefon (SMS)</label>
         <input id="invite_phone" name="invite_phone" placeholder="+45..." class="abas-input">
     </div>
-    <label class="flex items-center gap-2 text-sm">
-        <input type="checkbox" name="unlimited" value="1" class="abas-checkbox">
-        Uden tidsbegrænsning
-    </label>
     <div class="abas-field">
         <label class="abas-label" for="hours">Varighed (timer)</label>
-        <input id="hours" type="number" name="hours" step="0.5" value="2" class="abas-input">
+        <input id="hours" type="number" name="hours" step="0.5" min="0.5" max="<?= (int) abas_service_max_hours_per_start() ?>" value="2" class="abas-input">
+        <p class="abas-hint">Maks. <?= (int) abas_service_max_hours_per_start() ?> timer ad gangen.</p>
     </div>
     <div class="abas-field">
         <label class="abas-label" for="comment">Kommentar</label>

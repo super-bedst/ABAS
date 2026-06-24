@@ -143,26 +143,31 @@ function abas_is_miscno2_query(string $q): bool
 
 /**
  * Batch-søgenøgler til g_search_installations (prefix-match på miscno2).
- * Fx prefix fab + max 9999 → fab00, fab01, … fab99 (hvert kald dækker ~100 anlæg).
+ * Fx prefix fab, min 5000, max 9999 → fab50 … fab99 (springer fab00–fab49 over).
  *
  * @return list<string>
  */
-function abas_sync_batch_search_keys(string $prefix, int $maxSuffix): array
+function abas_sync_batch_search_keys(string $prefix, int $maxSuffix, int $minSuffix = 0): array
 {
     $pfx = strtolower(trim($prefix));
     if ($pfx === '' || $maxSuffix < 0) {
+        return [];
+    }
+    $minSuffix = max(0, $minSuffix);
+    if ($minSuffix > $maxSuffix) {
         return [];
     }
     if ($maxSuffix < 100) {
         return [$pfx];
     }
 
-    $numBatches = (int) ceil(($maxSuffix + 1) / 100);
     $suffixWidth = strlen(str_pad((string) $maxSuffix, 4, '0', STR_PAD_LEFT));
     $batchKeyDigits = max(1, $suffixWidth - 2);
+    $startBatch = (int) floor($minSuffix / 100);
+    $endBatch = (int) floor($maxSuffix / 100);
 
     $keys = [];
-    for ($b = 0; $b < $numBatches; $b++) {
+    for ($b = $startBatch; $b <= $endBatch; $b++) {
         $keys[] = $pfx . str_pad((string) $b, $batchKeyDigits, '0', STR_PAD_LEFT);
     }
 
@@ -213,9 +218,10 @@ function abas_sync_prefix(mysqli $conn, int $prefixId, ?string $trekantUserid = 
     $runStmt->close();
 
     $pfx = strtolower((string) $prefix['prefix']);
+    $minSuffix = max(0, (int) ($prefix['min_suffix'] ?? 0));
     $maxSuffix = (int) $prefix['max_suffix'];
     $maxRows = min(100, max(1, (int) $prefix['batch_size']));
-    $searchKeys = abas_sync_batch_search_keys($pfx, $maxSuffix);
+    $searchKeys = abas_sync_batch_search_keys($pfx, $maxSuffix, $minSuffix);
     $batches = 0;
     $received = 0;
     $upserted = 0;

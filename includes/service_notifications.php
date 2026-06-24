@@ -31,7 +31,8 @@ function abas_notify_service_started(
     ?int $onBehalfUserId,
     ?int $sessionId,
     bool $unlimited,
-    ?float $hours
+    ?float $hours,
+    bool $extended = false
 ): void {
     $phone = abas_service_notification_phone($conn, $actor, $onBehalfUserId);
     if ($phone === '') {
@@ -45,19 +46,17 @@ function abas_notify_service_started(
         && in_array((string) ($actor['role'] ?? ''), ['vagtcentral', 'admin'], true);
 
     if ($vcOnBehalf) {
-        $body = 'ABA: Vagtcentralen har sat ' . $misc . ' i service på dine vegne.';
+        $body = 'ABA: Vagtcentralen har ' . ($extended ? 'forlænget service på ' : 'sat ') . $misc . ($extended ? '' : ' i service') . ' på dine vegne.';
     } else {
         $body = 'ABA: Anlæg ' . $misc;
         if ($name !== '') {
             $body .= ' (' . $name . ')';
         }
-        $body .= ' er sat i service.';
+        $body .= $extended ? ' — service forlænget.' : ' er sat i service.';
     }
 
-    if (!$unlimited && $hours !== null && $hours > 0) {
+    if ($hours !== null && $hours > 0) {
         $body .= ' Varighed: ' . rtrim(rtrim(number_format($hours, 1, ',', ''), '0'), ',') . ' t.';
-    } elseif ($unlimited) {
-        $body .= ' Uden tidsbegrænsning.';
     }
 
     abas_sms_queue($conn, $phone, $body, 'service_start', $sessionId);

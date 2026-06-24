@@ -53,9 +53,8 @@ if (preg_match('#^installations/([^/]+)/service$#', $path, $m) && $method === 'P
     }
     $action = $body['action'] ?? 'start';
     if ($action === 'start') {
-        $unlimited = !empty($body['unlimited']);
-        $hours = $unlimited ? null : (float) ($body['hours'] ?? 2);
-        $r = abas_start_service_session($conn, $apiUser, $installation, $hours, $unlimited, null, (string) ($body['comment'] ?? 'API'), 'api');
+        $hours = (float) ($body['hours'] ?? 2);
+        $r = abas_start_service_session($conn, $apiUser, $installation, $hours, null, (string) ($body['comment'] ?? 'API'), 'api');
         abas_api_json($r['ok'] ? 200 : 400, $r);
     }
     $session = abas_active_session_for_installation($conn, (int) $installation['id']);

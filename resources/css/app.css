@@ -202,7 +202,39 @@
   }
 
   .abas-log-entry {
-    @apply space-y-1;
+    @apply space-y-1 border-l-4 pl-3;
+  }
+
+  .abas-log-entry--ok {
+    @apply border-green-500;
+  }
+
+  .abas-log-entry--warn {
+    @apply border-amber-400;
+  }
+
+  .abas-log-entry--neutral {
+    @apply border-gray-300;
+  }
+
+  .abas-log-dot {
+    @apply mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full;
+  }
+
+  .abas-log-dot--ok {
+    @apply bg-green-500;
+  }
+
+  .abas-log-dot--warn {
+    @apply bg-amber-400;
+  }
+
+  .abas-log-dot--neutral {
+    @apply bg-gray-300;
+  }
+
+  .abas-log-subline {
+    @apply text-xs text-gray-700 pl-4 border-l border-gray-200 ml-1;
   }
 
   .abas-log-entry-detail {

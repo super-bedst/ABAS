@@ -265,8 +265,8 @@ function abas_sms_handle_inbound(mysqli $conn, string $from, string $body): stri
         if (!abas_user_has_responsibility_ack($user)) {
             return 'ABA: Accepter ansvarserklæring via web før SMS-start.';
         }
-        $hours = (float) ($parsed['hours'] ?? 2);
-        $r = abas_start_service_session($conn, $user, $installation, $hours, false, null, 'SMS start', 'sms');
+        $hours = min((float) ($parsed['hours'] ?? 2), abas_service_max_hours_per_start());
+        $r = abas_start_service_session($conn, $user, $installation, $hours, null, 'SMS start', 'sms');
         $result = $r['ok'] ? 'ABA: Service startet på ' . $installation['miscno2'] . '.' : ($r['message'] ?? 'Start fejlede');
     } elseif ($parsed['command'] === 'STOP') {
         $r = abas_stop_service_session($conn, $user, $installation, null, 'SMS stop', 'sms');

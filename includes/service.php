@@ -31,12 +31,101 @@ function abas_log_service_action(
     $stmt->close();
 }
 
+function abas_service_max_hours_per_start(): float
+{
+    return 8.0;
+}
+
+function abas_service_max_consecutive_hours(): float
+{
+    return 12.0;
+}
+
+function abas_service_remaining_extend_hours(?array $session): float
+{
+    if (!$session) {
+        return abas_service_max_hours_per_start();
+    }
+    $chainStart = strtotime((string) $session['started_at']);
+    if ($chainStart === false) {
+        return 0.0;
+    }
+    $maxEndTs = $chainStart + (int) round(abas_service_max_consecutive_hours() * 3600);
+    $remaining = ($maxEndTs - time()) / 3600;
+
+    return max(0.0, min(abas_service_max_hours_per_start(), round($remaining, 2)));
+}
+
+/**
+ * @return array{ok:bool, message?:string, hours?:float, is_extend?:bool, session?:?array, max_end_ts?:int}
+ */
+function abas_service_resolve_hours(mysqli $conn, array $installation, float $requestedHours): array
+{
+    $maxPerStart = abas_service_max_hours_per_start();
+    $maxConsecutive = abas_service_max_consecutive_hours();
+    $activeSession = abas_active_session_for_installation($conn, (int) $installation['id']);
+
+    if ($requestedHours < 0.5) {
+        return ['ok' => false, 'message' => 'Varighed skal være mindst 0,5 time.'];
+    }
+    if ($requestedHours > $maxPerStart) {
+        return ['ok' => false, 'message' => 'Maks. ' . (int) $maxPerStart . ' timer ad gangen.'];
+    }
+
+    if ($activeSession) {
+        $chainStart = strtotime((string) $activeSession['started_at']);
+        if ($chainStart === false) {
+            return ['ok' => false, 'message' => 'Kunne ikke beregne servicevarighed.'];
+        }
+        $maxEndTs = $chainStart + (int) round($maxConsecutive * 3600);
+        $remainingWindowHours = ($maxEndTs - time()) / 3600;
+        if ($remainingWindowHours < 0.5) {
+            return [
+                'ok' => false,
+                'message' => 'Maks. ' . (int) $maxConsecutive . ' sammenhængende timer i service er nået. Stop service først.',
+            ];
+        }
+        $hours = min($requestedHours, $remainingWindowHours);
+
+        return [
+            'ok' => true,
+            'hours' => round($hours, 2),
+            'is_extend' => true,
+            'session' => $activeSession,
+            'max_end_ts' => $maxEndTs,
+        ];
+    }
+
+    $hours = min($requestedHours, $maxConsecutive);
+
+    return [
+        'ok' => true,
+        'hours' => round($hours, 2),
+        'is_extend' => false,
+        'session' => null,
+        'max_end_ts' => time() + (int) round($hours * 3600),
+    ];
+}
+
+function abas_service_compute_expires_at(array $resolved, float $hours): string
+{
+    if (!empty($resolved['is_extend']) && !empty($resolved['session'])) {
+        $session = $resolved['session'];
+        $baseTs = max(time(), strtotime((string) ($session['expires_at'] ?? 'now')) ?: time());
+        $candidate = $baseTs + (int) round($hours * 3600);
+        $maxEnd = (int) ($resolved['max_end_ts'] ?? $candidate);
+
+        return date('Y-m-d H:i:s', min($candidate, $maxEnd));
+    }
+
+    return date('Y-m-d H:i:s', time() + (int) round($hours * 3600));
+}
+
 function abas_start_service_session(
     mysqli $conn,
     array $user,
     array $installation,
-    ?float $hours,
-    bool $unlimited,
+    float $hours,
     ?int $onBehalfUserId,
     string $comment,
     string $source = 'web',
@@ -48,38 +137,59 @@ function abas_start_service_session(
         return ['ok' => false, 'code' => -1, 'message' => 'Anlægget er ' . strtolower($label) . ' og kan ikke sættes i service.'];
     }
 
+    $resolved = abas_service_resolve_hours($conn, $installation, $hours);
+    if (!$resolved['ok']) {
+        return ['ok' => false, 'code' => -1, 'message' => $resolved['message'] ?? 'Ugyldig varighed.'];
+    }
+    $hours = (float) $resolved['hours'];
+    $isExtend = !empty($resolved['is_extend']);
+    $activeSession = $resolved['session'] ?? null;
+
     $client = abas_trekant();
     $sIns = (int) $installation['s_ins'];
     $dealId = (string) $installation['deal_id'];
-    $testTime = $unlimited ? abas_unlimited_test_time() : abas_format_test_time_hours((float) $hours);
-    $comm = $comment !== '' ? abas_enrich_service_start_comment($conn, $user, $comment) : 'ABA Service start';
+    $testTime = abas_format_test_time_hours($hours);
+    $comm = $comment !== '' ? abas_enrich_service_start_comment($conn, $user, $comment) : ($isExtend ? 'ABA Service forlængelse' : 'ABA Service start');
     $resp = $client->startService($sIns, $dealId, $testTime, $comm);
     $code = abas_trekant_return_code($resp);
     $userId = (int) $user['id'];
-    abas_log_service_action($conn, $userId, $onBehalfUserId, null, $sIns, $dealId, 'start_service', $testTime, $comm, $source, $code, $responsibilityAck);
+    $action = $isExtend ? 'extend_service' : 'start_service';
+    $sessionIdForLog = $activeSession ? (int) $activeSession['id'] : null;
+    abas_log_service_action($conn, $userId, $onBehalfUserId, $sessionIdForLog, $sIns, $dealId, $action, $testTime, $comm, $source, $code, $responsibilityAck);
     if ($code !== 0 && $code !== 15997) {
-        return ['ok' => false, 'code' => $code, 'message' => $resp['message']['message'] ?? 'Start fejlede'];
+        return ['ok' => false, 'code' => $code, 'message' => $resp['message']['message'] ?? ($isExtend ? 'Forlængelse fejlede' : 'Start fejlede')];
     }
-    $expiresAt = null;
-    if (!$unlimited && $hours !== null) {
-        $expiresAt = date('Y-m-d H:i:s', time() + (int) round($hours * 3600));
-    }
+
+    $expiresAt = abas_service_compute_expires_at($resolved, $hours);
     $instId = (int) $installation['id'];
-    $unl = $unlimited ? 1 : 0;
-    $dur = $unlimited ? null : $hours;
-    $stmt = $conn->prepare(
-        'INSERT INTO service_sessions (user_id, on_behalf_of_user_id, installation_id, started_at, expires_at, duration_hours, unlimited, status, source)
-         VALUES (?, ?, ?, NOW(), ?, ?, ?, "active", ?)'
-    );
-    $stmt->bind_param('iiisdis', $userId, $onBehalfUserId, $instId, $expiresAt, $dur, $unl, $source);
-    $stmt->execute();
-    $sessionId = (int) $stmt->insert_id;
-    $stmt->close();
+
+    if ($isExtend && $activeSession) {
+        $sessionId = (int) $activeSession['id'];
+        $chainStart = strtotime((string) $activeSession['started_at']);
+        $totalHours = $chainStart !== false
+            ? round((strtotime($expiresAt) - $chainStart) / 3600, 2)
+            : (float) ($activeSession['duration_hours'] ?? 0) + $hours;
+        $stmt = $conn->prepare(
+            'UPDATE service_sessions SET expires_at = ?, duration_hours = ?, unlimited = 0, warning_sent_at = NULL WHERE id = ?'
+        );
+        $stmt->bind_param('sdi', $expiresAt, $totalHours, $sessionId);
+        $stmt->execute();
+        $stmt->close();
+    } else {
+        $stmt = $conn->prepare(
+            'INSERT INTO service_sessions (user_id, on_behalf_of_user_id, installation_id, started_at, expires_at, duration_hours, unlimited, status, source)
+             VALUES (?, ?, ?, NOW(), ?, ?, 0, "active", ?)'
+        );
+        $stmt->bind_param('iiisds', $userId, $onBehalfUserId, $instId, $expiresAt, $hours, $source);
+        $stmt->execute();
+        $sessionId = (int) $stmt->insert_id;
+        $stmt->close();
+    }
 
     require_once __DIR__ . '/service_notifications.php';
-    abas_notify_service_started($conn, $user, $installation, $onBehalfUserId, $sessionId, $unlimited, $hours);
+    abas_notify_service_started($conn, $user, $installation, $onBehalfUserId, $sessionId, false, $hours, $isExtend);
 
-    return ['ok' => true, 'code' => $code, 'session_id' => $sessionId, 'response' => $resp];
+    return ['ok' => true, 'code' => $code, 'session_id' => $sessionId, 'extended' => $isExtend, 'response' => $resp];
 }
 
 function abas_stop_service_session(
@@ -348,6 +458,70 @@ function abas_format_alarmlog_text(array $row): string
     return implode(' · ', array_map(static fn (array $part): string => $part['text'], $parts));
 }
 
+function abas_alarmlog_field_value(array $row, string $key): string
+{
+    if (!array_key_exists($key, $row)) {
+        return '';
+    }
+
+    return trim((string) $row[$key]);
+}
+
+function abas_alarmlog_status_label(string $code): string
+{
+    return match (strtoupper($code)) {
+        'UA' => 'Udkald aktivt',
+        'UR' => 'Tilbagestillet',
+        'UO' => 'Udkald opstået',
+        default => strtoupper($code),
+    };
+}
+
+/**
+ * @return array{zone_display?:string, sub?:string, status_code?:string, status_label?:string, extra?:string, raw?:string}
+ */
+function abas_parse_alarmlog_zone_text(string $raw): array
+{
+    $raw = trim($raw);
+    if ($raw === '') {
+        return [];
+    }
+    if (preg_match('/^(\d+)\s+(\d+)\s+([A-Z]{2})(?:\s+(.*))?$/i', $raw, $m)) {
+        $code = strtoupper($m[3]);
+
+        return [
+            'zone_display' => $m[1],
+            'sub' => $m[2],
+            'status_code' => $code,
+            'status_label' => abas_alarmlog_status_label($code),
+            'extra' => trim((string) ($m[4] ?? '')),
+        ];
+    }
+
+    return ['raw' => $raw];
+}
+
+function abas_alarmlog_row_tone(array $row): string
+{
+    $color = strtoupper(trim((string) ($row['row_color'] ?? '')));
+    if ($color === '008000' || $color === '00FF00') {
+        return 'ok';
+    }
+    if (in_array($color, ['FFFF00', 'FFA500', 'FF0000'], true)) {
+        return 'warn';
+    }
+
+    $event = strtoupper(trim((string) ($row['event'] ?? '')));
+    if (str_contains($event, 'ALARM') || str_contains($event, 'FEJL')) {
+        return 'warn';
+    }
+    if (str_contains($event, 'RESTORE') || str_contains($event, 'SYS KOMM')) {
+        return 'ok';
+    }
+
+    return 'neutral';
+}
+
 /**
  * @return list<array{label:string, text:string}>
  */
@@ -369,54 +543,66 @@ function abas_format_alarmlog_parts(array $row): array
         $parts[] = ['label' => $label, 'text' => $text];
     };
 
-    $event = trim((string) ($row['event'] ?? ''));
+    $event = abas_alarmlog_field_value($row, 'event');
     if ($event !== '') {
         $add('Hændelse', $event);
     }
 
-    foreach (['zone_text' => 'Zone', 'zone' => 'Zone', 'zone_no' => 'Zone nr.'] as $key => $label) {
-        if (!empty($row[$key])) {
-            $add($label, (string) $row[$key]);
-        }
-    }
-
-    foreach (['area_text' => 'Område', 'area' => 'Område', 'sect' => 'Område', 'section' => 'Område'] as $key => $label) {
-        if (!empty($row[$key])) {
-            $add('Område', (string) $row[$key]);
-        }
-    }
-
-    foreach (['code' => 'Kode', 'alarm_code' => 'Kode', 'sig_code' => 'Kode', 'event_code' => 'Kode'] as $key => $label) {
-        if (!empty($row[$key])) {
-            $add('Kode', (string) $row[$key]);
-        }
-    }
-
-    foreach (['type' => 'Type', 'alarm_type' => 'Type', 'evt_type' => 'Type', 'signal_type' => 'Type'] as $key => $label) {
-        if (!empty($row[$key])) {
-            $add('Type', (string) $row[$key]);
-        }
-    }
-
-    foreach (['detector' => 'Detektor', 'point' => 'Punkt'] as $key => $label) {
-        if (!empty($row[$key])) {
-            $add($label, (string) $row[$key]);
-        }
-    }
-
-    $text = trim((string) ($row['text'] ?? ''));
+    $text = abas_alarmlog_field_value($row, 'text');
     if ($text !== '') {
         $add('Tekst', $text);
     }
 
+    $zoneNo = abas_alarmlog_field_value($row, 'zone');
+    $zoneParsed = abas_parse_alarmlog_zone_text(abas_alarmlog_field_value($row, 'zone_text'));
+    if (!empty($zoneParsed['zone_display'])) {
+        $add('Zone', $zoneParsed['zone_display']);
+    } elseif ($zoneNo !== '' && $zoneNo !== '0') {
+        $add('Zone nr.', $zoneNo);
+    }
+    if ($zoneParsed !== []) {
+        if (!empty($zoneParsed['status_label'])) {
+            $status = $zoneParsed['status_label'];
+            if (!empty($zoneParsed['status_code'])) {
+                $status .= ' (' . $zoneParsed['status_code'] . ')';
+            }
+            $add('Zonestatus', $status);
+        }
+        if (!empty($zoneParsed['extra'])) {
+            $add('Zoneinfo', $zoneParsed['extra']);
+        }
+        if (!empty($zoneParsed['raw'])) {
+            $add('Zone', $zoneParsed['raw']);
+        }
+    }
+
+    foreach (['area' => 'Område', 'earea' => 'Ekstra område'] as $key => $label) {
+        $value = abas_alarmlog_field_value($row, $key);
+        if ($value !== '') {
+            $add($label, $value);
+        }
+    }
+
+    foreach (['ecode' => 'Kode', 'type' => 'Type', 'alid' => 'Alarm-id'] as $key => $label) {
+        $value = abas_alarmlog_field_value($row, $key);
+        if ($value !== '') {
+            $add($label, $value);
+        }
+    }
+
+    $terminal = abas_alarmlog_field_value($row, 'terminal');
+    if ($terminal !== '') {
+        $add('Terminal', $terminal);
+    }
+
     foreach (['comm_gen', 'comm', 'comment'] as $commKey) {
-        $commText = trim((string) ($row[$commKey] ?? ''));
+        $commText = abas_alarmlog_field_value($row, $commKey);
         if ($commText !== '') {
             $add('Kommentar', $commText);
         }
     }
 
-    $operator = trim((string) ($row['operator'] ?? ''));
+    $operator = abas_alarmlog_field_value($row, 'operator');
     if ($operator !== '') {
         $add('Operatør', $operator);
     }
@@ -427,7 +613,7 @@ function abas_format_alarmlog_parts(array $row): array
                 continue;
             }
             $value = trim((string) $value);
-            if ($value === '' || in_array($key, ['tm_date', 'tm_time', 'logtime', 'datetime', 's_inc', 's_ins', 'deal_id'], true)) {
+            if ($value === '' || in_array($key, ['tm_date', 'tm_time', 'logtime', 'datetime', 's_inc', 's_ins', 'deal_id', 'row_color', 'seq', 'tm', 'ntm'], true)) {
                 continue;
             }
             $add((string) $key, $value);
@@ -437,6 +623,120 @@ function abas_format_alarmlog_parts(array $row): array
     return $parts;
 }
 
+/**
+ * @return list<list<array<string, mixed>>>
+ */
+function abas_group_alarmlog_rows(array $rows): array
+{
+    $groups = [];
+    $order = [];
+    foreach ($rows as $row) {
+        $key = (string) ($row['tm'] ?? '');
+        if ($key === '') {
+            $key = trim((string) ($row['tm_date'] ?? '')) . ' ' . trim((string) ($row['tm_time'] ?? ''));
+        }
+        if ($key === '') {
+            $key = 'row:' . count($order);
+        }
+        if (!isset($groups[$key])) {
+            $groups[$key] = [];
+            $order[] = $key;
+        }
+        $groups[$key][] = $row;
+    }
+
+    $result = [];
+    foreach ($order as $key) {
+        $group = $groups[$key];
+        usort($group, static function (array $a, array $b): int {
+            $tmod = ((int) ($a['tmod'] ?? 0)) <=> ((int) ($b['tmod'] ?? 0));
+            if ($tmod !== 0) {
+                return $tmod;
+            }
+
+            return ((int) ($a['seq'] ?? 0)) <=> ((int) ($b['seq'] ?? 0));
+        });
+        $result[] = $group;
+    }
+
+    return $result;
+}
+
+function abas_alarmlog_group_tone(array $group): string
+{
+    $toneRank = ['warn' => 3, 'ok' => 2, 'neutral' => 1];
+    $best = 'neutral';
+    foreach ($group as $row) {
+        $tone = abas_alarmlog_row_tone($row);
+        if (($toneRank[$tone] ?? 0) > ($toneRank[$best] ?? 0)) {
+            $best = $tone;
+        }
+    }
+
+    return $best;
+}
+
+function abas_format_alarmlog_compact(array $row, bool $includeEvent = true): string
+{
+    $bits = [];
+    $event = abas_alarmlog_field_value($row, 'event');
+    $text = abas_alarmlog_field_value($row, 'text');
+    $comm = abas_alarmlog_field_value($row, 'comm_gen');
+
+    if ($includeEvent && $event !== '') {
+        $bits[] = $event;
+    }
+
+    if ($text !== '') {
+        $bits[] = $text;
+    } elseif ($comm !== '') {
+        $bits[] = $comm;
+        $comm = '';
+    }
+
+    $zoneNo = abas_alarmlog_field_value($row, 'zone');
+    $zoneParsed = abas_parse_alarmlog_zone_text(abas_alarmlog_field_value($row, 'zone_text'));
+    $zoneLabel = '';
+    if (!empty($zoneParsed['zone_display'])) {
+        $zoneLabel = $zoneParsed['zone_display'];
+    } elseif ($zoneNo !== '' && $zoneNo !== '0') {
+        $zoneLabel = $zoneNo;
+    }
+    if ($zoneLabel !== '') {
+        $bits[] = 'Zone ' . $zoneLabel;
+    }
+    if (!empty($zoneParsed['status_label'])) {
+        $status = $zoneParsed['status_label'];
+        if (!empty($zoneParsed['status_code'])) {
+            $status .= ' (' . $zoneParsed['status_code'] . ')';
+        }
+        $bits[] = $status;
+    }
+    if (!empty($zoneParsed['extra'])) {
+        $bits[] = $zoneParsed['extra'];
+    }
+
+    $area = abas_alarmlog_field_value($row, 'area');
+    if ($area !== '') {
+        $bits[] = $area;
+    }
+
+    if ($text !== '' && $comm !== '') {
+        $bits[] = $comm;
+    }
+
+    $terminal = abas_alarmlog_field_value($row, 'terminal');
+    if ($terminal !== '') {
+        $bits[] = $terminal;
+    }
+
+    if ($bits === []) {
+        return abas_format_alarmlog_text($row);
+    }
+
+    return implode(' · ', $bits);
+}
+
 function abas_render_alarmlog_rows_html(array $rows): string
 {
     if ($rows === []) {
@@ -444,28 +744,33 @@ function abas_render_alarmlog_rows_html(array $rows): string
     }
 
     ob_start();
-    foreach ($rows as $row) {
-        $parts = abas_format_alarmlog_parts($row);
+    foreach (abas_group_alarmlog_rows($rows) as $group) {
+        $head = $group[0];
+        $tone = abas_alarmlog_group_tone($group);
         ?>
         <tr>
-            <td class="whitespace-nowrap align-top"><?= htmlspecialchars(abas_format_alarmlog_timestamp($row)) ?></td>
+            <td class="whitespace-nowrap align-top"><?= htmlspecialchars(abas_format_alarmlog_timestamp($head)) ?></td>
             <td class="align-top">
-                <?php if ($parts === []): ?>
-                    <span class="text-gray-400">—</span>
-                <?php else: ?>
-                    <div class="abas-log-entry">
-                        <?php foreach ($parts as $part): ?>
-                            <?php if ($part['label'] === 'Hændelse'): ?>
-                                <div class="font-medium text-gray-900"><?= htmlspecialchars($part['text']) ?></div>
-                            <?php else: ?>
-                                <div class="abas-log-entry-detail">
-                                    <span class="text-gray-500"><?= htmlspecialchars($part['label']) ?>:</span>
-                                    <?= htmlspecialchars($part['text']) ?>
-                                </div>
-                            <?php endif; ?>
-                        <?php endforeach; ?>
+                <div class="abas-log-entry abas-log-entry--<?= htmlspecialchars($tone) ?>">
+                    <div class="flex gap-2">
+                        <span class="abas-log-dot abas-log-dot--<?= htmlspecialchars($tone) ?>" aria-hidden="true"></span>
+                        <div class="flex-1 space-y-1 min-w-0">
+                            <?php foreach ($group as $index => $row): ?>
+                                <?php
+                                $summary = abas_format_alarmlog_compact($row, $index > 0);
+                                if ($summary === '') {
+                                    continue;
+                                }
+                                ?>
+                                <?php if ($index === 0): ?>
+                                    <div class="font-medium text-gray-900 break-words"><?= htmlspecialchars($summary) ?></div>
+                                <?php else: ?>
+                                    <div class="abas-log-subline break-words"><?= htmlspecialchars($summary) ?></div>
+                                <?php endif; ?>
+                            <?php endforeach; ?>
+                        </div>
                     </div>
-                <?php endif; ?>
+                </div>
             </td>
         </tr>
         <?php

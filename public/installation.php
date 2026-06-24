@@ -44,12 +44,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             abas_flash_set('error', 'Du skal acceptere ansvarserklæringen.');
             abas_redirect('installation.php?id=' . $id);
         }
-        $unlimited = !empty($_POST['unlimited']);
-        $hours = $unlimited ? null : (float) ($_POST['hours'] ?? 2);
+        $hours = (float) ($_POST['hours'] ?? 2);
         $comment = trim($_POST['comment'] ?? '');
         abas_set_user_responsibility_ack($conn, (int) $user['id']);
-        $r = abas_start_service_session($conn, $user, $installation, $hours, $unlimited, null, $comment, 'web', true);
-        abas_flash_set($r['ok'] ? 'success' : 'error', $r['ok'] ? 'Service startet.' : ($r['message'] ?? 'Fejl'));
+        $r = abas_start_service_session($conn, $user, $installation, $hours, null, $comment, 'web', true);
+        abas_flash_set($r['ok'] ? 'success' : 'error', $r['ok'] ? (($r['extended'] ?? false) ? 'Service forlænget.' : 'Service startet.') : ($r['message'] ?? 'Fejl'));
     } elseif ($action === 'stop') {
         $r = abas_stop_service_session($conn, $user, $installation, $session ? (int) $session['id'] : null, trim($_POST['comment'] ?? ''));
         abas_flash_set($r['ok'] ? 'success' : 'error', $r['ok'] ? 'Service stoppet.' : ($r['message'] ?? 'Fejl'));
@@ -70,6 +69,7 @@ $mapLon = $instDetails['lon'];
 $contacts = $instDetails['contacts'];
 $canStartService = abas_installation_allows_service((string) ($installation['mon_stat'] ?? ''));
 $inService = $session !== null;
+$maxExtendHours = abas_service_remaining_extend_hours($session);
 
 $pageTitle = $installation['miscno2'] ?? 'Anlæg';
 $currentUser = $user;
@@ -89,7 +89,31 @@ require __DIR__ . '/partials/header.php';
     <div class="abas-card" id="service-card">
         <h2 class="abas-card-title">Service</h2>
         <?php if ($session): ?>
-            <p id="inst-service-status" class="abas-badge-active mb-4">Aktiv service siden <?= htmlspecialchars($session['started_at']) ?><?= $session['expires_at'] ? ' — udløber ' . htmlspecialchars($session['expires_at']) : ' (uden tidsbegrænsning)' ?></p>
+            <p id="inst-service-status" class="abas-badge-active mb-4">Aktiv service siden <?= htmlspecialchars($session['started_at']) ?><?= $session['expires_at'] ? ' — udløber ' . htmlspecialchars($session['expires_at']) : '' ?></p>
+            <p class="text-sm text-gray-600 mb-4">Maks. <?= (int) abas_service_max_hours_per_start() ?> timer ad gangen og <?= (int) abas_service_max_consecutive_hours() ?> timer i alt fra første start.</p>
+            <?php if ($maxExtendHours >= 0.5): ?>
+            <form method="post" class="abas-form mb-4" data-abas-loading="Forlænger service…">
+                <input type="hidden" name="action" value="start">
+                <div class="abas-field">
+                    <label class="abas-label" for="extend-hours">Forlæng med (timer)</label>
+                    <input id="extend-hours" type="number" name="hours" step="0.5" min="0.5" max="<?= htmlspecialchars((string) $maxExtendHours) ?>" value="<?= htmlspecialchars((string) min(2.0, $maxExtendHours)) ?>" class="abas-input">
+                    <p class="abas-hint">Du kan forlænge med op til <?= htmlspecialchars(rtrim(rtrim(number_format($maxExtendHours, 1, ',', ''), '0'), ',')) ?> timer nu.</p>
+                </div>
+                <div class="abas-field">
+                    <label class="abas-label" for="extend-comment">Kommentar</label>
+                    <textarea id="extend-comment" name="comment" rows="2" class="abas-textarea" placeholder="Årsag til forlængelse"></textarea>
+                </div>
+                <div class="abas-field border border-amber-200 bg-amber-50 rounded-xl p-3">
+                    <label class="flex items-start gap-2 text-sm text-gray-800">
+                        <input type="checkbox" name="responsibility_ack" value="1" class="abas-checkbox mt-1" required>
+                        <span>Jeg bekræfter fortsat ansvar for bygningen og brandvagter m.v.</span>
+                    </label>
+                </div>
+                <button type="submit" class="abas-btn-primary">Forlæng service</button>
+            </form>
+            <?php else: ?>
+            <p class="text-sm text-amber-800 mb-4">Maks. <?= (int) abas_service_max_consecutive_hours() ?> timer i service er nået. Stop service for at starte forfra.</p>
+            <?php endif; ?>
             <form method="post" class="abas-form" data-abas-loading="Stopper service…">
                 <input type="hidden" name="action" value="stop">
                 <div class="abas-field">
@@ -103,13 +127,10 @@ require __DIR__ . '/partials/header.php';
         <?php else: ?>
             <form method="post" class="abas-form" id="start-service-form" data-abas-loading="Sætter i service…">
                 <input type="hidden" name="action" value="start">
-                <label class="flex items-center gap-2 text-sm">
-                    <input type="checkbox" name="unlimited" value="1" class="abas-checkbox">
-                    Uden tidsbegrænsning
-                </label>
                 <div class="abas-field">
                     <label class="abas-label" for="hours">Varighed (timer)</label>
-                    <input id="hours" type="number" name="hours" step="0.5" min="0.5" value="2" class="abas-input">
+                    <input id="hours" type="number" name="hours" step="0.5" min="0.5" max="<?= (int) abas_service_max_hours_per_start() ?>" value="2" class="abas-input">
+                    <p class="abas-hint">Maks. <?= (int) abas_service_max_hours_per_start() ?> timer ad gangen og <?= (int) abas_service_max_consecutive_hours() ?> timer i alt.</p>
                 </div>
                 <div class="abas-field">
                     <label class="abas-label" for="start-comment">Kommentar</label>
