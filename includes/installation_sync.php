@@ -141,6 +141,56 @@ function abas_is_miscno2_query(string $q): bool
     return (bool) preg_match('/^[a-z]{3}\d{4}$/i', trim($q));
 }
 
+/**
+ * Batch-søgenøgler til g_search_installations (prefix-match på miscno2).
+ * Fx prefix fab + max 9999 → fab00, fab01, … fab99 (hvert kald dækker ~100 anlæg).
+ *
+ * @return list<string>
+ */
+function abas_sync_batch_search_keys(string $prefix, int $maxSuffix): array
+{
+    $pfx = strtolower(trim($prefix));
+    if ($pfx === '' || $maxSuffix < 0) {
+        return [];
+    }
+    if ($maxSuffix < 100) {
+        return [$pfx];
+    }
+
+    $numBatches = (int) ceil(($maxSuffix + 1) / 100);
+    $suffixWidth = strlen(str_pad((string) $maxSuffix, 4, '0', STR_PAD_LEFT));
+    $batchKeyDigits = max(1, $suffixWidth - 2);
+
+    $keys = [];
+    for ($b = 0; $b < $numBatches; $b++) {
+        $keys[] = $pfx . str_pad((string) $b, $batchKeyDigits, '0', STR_PAD_LEFT);
+    }
+
+    return $keys;
+}
+
+function abas_sync_upsert_rows(mysqli $conn, array $rows): array
+{
+    $received = count($rows);
+    $upserted = 0;
+    $seen = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $key = ($row['s_ins'] ?? $row['insid'] ?? '') . ':' . ($row['deal_id'] ?? '');
+        if ($key === ':' || isset($seen[$key])) {
+            continue;
+        }
+        $seen[$key] = true;
+        if (abas_upsert_installation($conn, $row) > 0) {
+            $upserted++;
+        }
+    }
+
+    return ['received' => $received, 'upserted' => $upserted];
+}
+
 function abas_sync_prefix(mysqli $conn, int $prefixId, ?string $trekantUserid = null): array
 {
     $stmt = $conn->prepare('SELECT * FROM sync_prefixes WHERE id = ? AND active = 1 LIMIT 1');
@@ -164,42 +214,30 @@ function abas_sync_prefix(mysqli $conn, int $prefixId, ?string $trekantUserid = 
 
     $pfx = strtolower((string) $prefix['prefix']);
     $maxSuffix = (int) $prefix['max_suffix'];
-    $batchSize = min(100, max(1, (int) $prefix['batch_size']));
+    $maxRows = min(100, max(1, (int) $prefix['batch_size']));
+    $searchKeys = abas_sync_batch_search_keys($pfx, $maxSuffix);
     $batches = 0;
     $received = 0;
     $upserted = 0;
     $errors = [];
 
-    for ($start = 0; $start <= $maxSuffix; $start += $batchSize) {
-        $end = min($start + $batchSize - 1, $maxSuffix);
-        for ($i = $start; $i <= $end; $i++) {
-            $misc = $pfx . str_pad((string) $i, 4, '0', STR_PAD_LEFT);
-            try {
-                $resp = $client->searchInstallations($userid, $misc, null, 100);
-                $code = abas_trekant_return_code($resp);
-                if ($code !== 0) {
-                    continue;
-                }
-                $rows = abas_trekant_rows($resp);
-                $received += count($rows);
-                $seen = [];
-                foreach ($rows as $row) {
-                    $key = ($row['s_ins'] ?? '') . ':' . ($row['deal_id'] ?? '');
-                    if (isset($seen[$key])) {
-                        continue;
-                    }
-                    $seen[$key] = true;
-                    $id = abas_upsert_installation($conn, $row);
-                    if ($id > 0) {
-                        $upserted++;
-                    }
-                }
-            } catch (Throwable $e) {
-                $errors[] = $misc . ': ' . $e->getMessage();
+    foreach ($searchKeys as $misc) {
+        try {
+            $resp = $client->searchInstallations($userid, $misc, null, $maxRows);
+            $code = abas_trekant_return_code($resp);
+            if ($code !== 0) {
+                $hint = abas_trekant_response_hint($resp);
+                $errors[] = $misc . ': ReturnCode ' . $code . ($hint !== '' ? ' (' . $hint . ')' : '');
+                continue;
             }
+            $rows = abas_trekant_rows($resp);
+            $counts = abas_sync_upsert_rows($conn, $rows);
+            $received += $counts['received'];
+            $upserted += $counts['upserted'];
+        } catch (Throwable $e) {
+            $errors[] = $misc . ': ' . $e->getMessage();
         }
         $batches++;
-        usleep(100000);
     }
 
     $status = $errors === [] ? 'success' : ($upserted > 0 ? 'partial' : 'failed');
@@ -216,4 +254,83 @@ function abas_sync_prefix(mysqli $conn, int $prefixId, ?string $trekantUserid = 
     $pfxUpd->close();
 
     return ['run_id' => $runId, 'batches' => $batches, 'received' => $received, 'upserted' => $upserted, 'status' => $status, 'errors' => $errors];
+}
+
+function abas_sync_verify_cron_request(): bool
+{
+    $secret = (string) abas_env('SYNC_CRON_SECRET', '');
+    if ($secret === '') {
+        return false;
+    }
+
+    $hdr = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
+    $bearer = null;
+    if (preg_match('/Bearer\s+(\S+)/i', $hdr, $m)) {
+        $bearer = $m[1];
+    }
+    $key = trim((string) ($_GET['key'] ?? $_POST['key'] ?? ''));
+
+    return hash_equals($secret, (string) $bearer) || hash_equals($secret, $key);
+}
+
+function abas_sync_all_active(mysqli $conn): array
+{
+    $res = $conn->query('SELECT id, prefix FROM sync_prefixes WHERE active = 1 ORDER BY prefix');
+    if (!$res) {
+        throw new RuntimeException('Kunne ikke læse sync-prefixes');
+    }
+
+    $prefixes = [];
+    $totalUpserted = 0;
+    $startedAt = microtime(true);
+
+    while ($row = $res->fetch_assoc()) {
+        $prefixId = (int) $row['id'];
+        try {
+            $result = abas_sync_prefix($conn, $prefixId);
+            $totalUpserted += (int) $result['upserted'];
+            $prefixes[] = [
+                'prefix_id' => $prefixId,
+                'prefix' => (string) $row['prefix'],
+                'batches' => (int) $result['batches'],
+                'received' => (int) $result['received'],
+                'upserted' => (int) $result['upserted'],
+                'status' => (string) $result['status'],
+                'errors' => array_slice($result['errors'], 0, 5),
+            ];
+        } catch (Throwable $e) {
+            $prefixes[] = [
+                'prefix_id' => $prefixId,
+                'prefix' => (string) $row['prefix'],
+                'status' => 'failed',
+                'error' => $e->getMessage(),
+            ];
+        }
+    }
+    $res->close();
+
+    return [
+        'ok' => true,
+        'total_upserted' => $totalUpserted,
+        'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+        'prefixes' => $prefixes,
+    ];
+}
+
+function abas_handle_sync_cron_webhook(mysqli $conn): never
+{
+    require_once __DIR__ . '/api_auth.php';
+
+    if (!abas_sync_verify_cron_request()) {
+        abas_api_json(403, ['ok' => false, 'error' => 'Ugyldig eller manglende sync-nøgle']);
+    }
+
+    @set_time_limit(600);
+
+    try {
+        $result = abas_sync_all_active($conn);
+        abas_api_json(200, $result);
+    } catch (Throwable $e) {
+        abas_api_json(500, ['ok' => false, 'error' => $e->getMessage()]);
+    }
 }

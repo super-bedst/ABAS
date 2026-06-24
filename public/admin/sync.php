@@ -40,7 +40,7 @@ $currentUser = $user;
 require __DIR__ . '/../partials/header.php';
 ?>
 <h1 class="text-xl font-semibold text-brand mb-4">Anlægssynkronisering</h1>
-<p class="text-sm text-gray-600 mb-4">Synkroniserer via TrekantBrand <code>g_search_installations</code> i batches (max 100 pr. kald).</p>
+<p class="text-sm text-gray-600 mb-4">Synkroniserer via TrekantBrand <code>g_search_installations</code> i 100-blokke (fx <code>fab00</code>, <code>fab01</code> …).</p>
 <form method="post" class="bg-white border rounded p-4 mb-4 flex flex-wrap gap-2 items-end">
     <input type="hidden" name="action" value="add">
     <div><label class="text-xs block">Prefix</label><input name="prefix" placeholder="fab" required class="border rounded px-2 py-1"></div>

@@ -4,6 +4,9 @@ DirectorySlash Off
 # SMS inbound webhook (BAS)
 RewriteRule ^api/v1/sms/inbound/?$ api/v1/index.php?route=sms/inbound [QSA,L]
 
+# Cron: anlægssynk (Node-RED / planlagt HTTP)
+RewriteRule ^api/v1/cron/sync-installations/?$ api/v1/index.php?route=cron/sync-installations [QSA,L]
+
 # Øvrige API-ruter
 RewriteRule ^api/v1/(.*)$ api/v1/index.php?route=$1 [QSA,L]
 

@@ -130,6 +130,14 @@ Scriptet kører `git pull`, `npm install` og `npm run build`. Kræver [Node.js](
 */15 * * * * php /path/to/ABAS/cron/expire_sessions.php
 ```
 
+**Anlægssynk via HTTP (Node-RED):** Sæt `SYNC_CRON_SECRET` i `env.local`, kald derefter:
+
+```
+GET https://tkb.teamscreen.dk/Sandbox/ABAS/public/api/v1/cron/sync-installations?key=<secret>
+```
+
+Alternativt `Authorization: Bearer <secret>`. Svar er JSON med `total_upserted` og `duration_ms`. Sæt lang timeout i Node-RED (typisk 1–2 min for 100 batch-kald pr. prefix).
+
 ## API
 
 Se [docs/openapi.yaml](docs/openapi.yaml). Eksempel:

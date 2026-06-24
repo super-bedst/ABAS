@@ -25,6 +25,10 @@ if ($path === 'sms/inbound' && $method === 'POST') {
     abas_handle_sms_inbound_webhook($conn);
 }
 
+if ($path === 'cron/sync-installations' && in_array($method, ['GET', 'POST'], true)) {
+    abas_handle_sync_cron_webhook($conn);
+}
+
 $token = abas_api_authenticate($conn);
 $apiUser = abas_api_user_from_token($conn, $token);
 
