@@ -225,12 +225,15 @@ require __DIR__ . '/partials/header.php';
             </ul>
         <?php endif; ?>
 
-        <div class="mt-4 pt-3 border-t" id="inst-zones-wrap">
-            <h3 class="text-sm font-semibold text-gray-900 mb-2">Zonestatus</h3>
-            <div id="inst-zones-content">
+        <details class="mt-4 pt-3 border-t group" id="inst-zones-wrap">
+            <summary class="text-sm font-semibold text-gray-900 cursor-pointer list-none flex items-center justify-between gap-2">
+                <span>Zonestatus<?php if ($zones !== []): ?> (<?= count($zones) ?>)<?php endif; ?></span>
+                <span class="text-gray-400 text-xs group-open:rotate-180 transition-transform" aria-hidden="true">▼</span>
+            </summary>
+            <div class="mt-2" id="inst-zones-content">
                 <?= abas_render_installation_zones_html($zones, $zonesError) ?>
             </div>
-        </div>
+        </details>
 
         <dl class="grid grid-cols-2 gap-1 mt-4 pt-3 border-t text-xs">
             <dt class="text-gray-500">s_ins</dt><dd><?= (int) $installation['s_ins'] ?></dd>
@@ -258,10 +261,11 @@ require __DIR__ . '/partials/header.php';
 </script>
 <?php endif; ?>
 
-<div class="abas-card !p-0 overflow-hidden">
+<div class="abas-card !p-0" id="inst-log-card">
     <div class="abas-log-toolbar">
         <h2 class="abas-card-title !mb-0 flex-1">Alarmlog</h2>
         <span id="inst-log-spinner" class="hidden text-xs text-gray-500 animate-pulse">Opdaterer…</span>
+        <span class="text-xs text-gray-400 hidden sm:inline" title="Træk i nederste højre hjørne af loggen for at ændre højden">Justerbar højde</span>
         <a href="?id=<?= $id ?>&log=last20" class="<?= $logMode === 'last20' ? 'abas-chip-active' : 'abas-chip' ?>">Sidste 20</a>
         <a href="?id=<?= $id ?>&log=24h" class="<?= $logMode === '24h' ? 'abas-chip-active' : 'abas-chip' ?>">24 timer</a>
     </div>

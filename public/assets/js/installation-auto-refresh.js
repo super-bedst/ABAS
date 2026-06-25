@@ -16,7 +16,55 @@
         var serviceStatus = document.getElementById('inst-service-status');
         var zonesContent = document.getElementById('inst-zones-content');
         var spinner = document.getElementById('inst-log-spinner');
+        var logHeightKey = 'abas_inst_log_height';
         var busy = false;
+
+        function applySavedLogHeight() {
+            if (!logBody) {
+                return;
+            }
+            try {
+                var saved = localStorage.getItem(logHeightKey);
+                if (saved) {
+                    var px = parseInt(saved, 10);
+                    if (px >= 80 && px <= Math.min(window.innerHeight * 0.9, 1200)) {
+                        logBody.style.height = px + 'px';
+                    }
+                }
+            } catch (e) {}
+        }
+
+        function saveLogHeight() {
+            if (!logBody || !logBody.style.height) {
+                return;
+            }
+            try {
+                localStorage.setItem(logHeightKey, String(Math.round(logBody.offsetHeight)));
+            } catch (e) {}
+        }
+
+        function syncLogBodyHeight() {
+            if (!logBody || logBody.classList.contains('hidden')) {
+                return;
+            }
+            if (logBody.style.height) {
+                return;
+            }
+            logBody.style.height = 'auto';
+            var contentHeight = logBody.scrollHeight;
+            var min = 80;
+            var max = Math.min(window.innerHeight * 0.7, 672);
+            logBody.style.height = Math.max(min, Math.min(contentHeight, max)) + 'px';
+        }
+
+        applySavedLogHeight();
+        syncLogBodyHeight();
+        if (logBody && typeof ResizeObserver !== 'undefined') {
+            var resizeObserver = new ResizeObserver(function () {
+                saveLogHeight();
+            });
+            resizeObserver.observe(logBody);
+        }
 
         function setSpinner(visible) {
             if (!spinner) {
@@ -86,6 +134,9 @@
                     }
                     if (logRows && data.logHtml) {
                         logRows.innerHTML = data.logHtml;
+                        if (!logBody.style.height) {
+                            syncLogBodyHeight();
+                        }
                     }
                     if (zonesContent && data.zonesHtml) {
                         zonesContent.innerHTML = data.zonesHtml;

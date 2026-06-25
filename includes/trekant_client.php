@@ -172,9 +172,10 @@ class TrekantClient
         return $this->call('g_ma_alarmlog', $body);
     }
 
-    public function addLogComment(int $sIns, string $dealId, int $sInc, string $comm): array
+    public function addLogComment(string $userid, int $sIns, string $dealId, int $sInc, string $comm): array
     {
         return $this->call('c_ma_alarmlog_comment', [
+            'userid' => strtoupper($userid),
             's_ins' => $sIns,
             'deal_id' => $dealId,
             's_inc' => $sInc,
@@ -421,6 +422,37 @@ function abas_trekant_trim_comment(string $comment, int $maxLen = 80): string
     return function_exists('mb_substr')
         ? (string) mb_substr($text, 0, $maxLen)
         : substr($text, 0, $maxLen);
+}
+
+function abas_trekant_trim_service_comment(string $comment, int $maxLen = 80): string
+{
+    $comment = trim($comment);
+    if ($comment === '') {
+        return '';
+    }
+
+    $sep = ' — ';
+    $pos = function_exists('mb_strrpos') ? mb_strrpos($comment, $sep) : strrpos($comment, $sep);
+    if ($pos === false) {
+        return abas_trekant_trim_comment($comment, $maxLen);
+    }
+
+    $base = trim(function_exists('mb_substr') ? (string) mb_substr($comment, 0, $pos) : substr($comment, 0, $pos));
+    $suffix = trim(function_exists('mb_substr') ? (string) mb_substr($comment, $pos + (function_exists('mb_strlen') ? mb_strlen($sep) : strlen($sep))) : substr($comment, $pos + strlen($sep)));
+    if ($suffix === '') {
+        return abas_trekant_trim_comment($comment, $maxLen);
+    }
+
+    $suffixPart = $sep . $suffix;
+    $suffixLen = function_exists('mb_strlen') ? mb_strlen($suffixPart) : strlen($suffixPart);
+    if ($suffixLen >= $maxLen) {
+        return abas_trekant_trim_comment($suffix, $maxLen);
+    }
+
+    $room = $maxLen - $suffixLen;
+    $base = function_exists('mb_substr') ? (string) mb_substr($base, 0, $room) : substr($base, 0, $room);
+
+    return rtrim($base) . $suffixPart;
 }
 
 function abas_trekant_active_test_s_inc(TrekantClient $client, int $sIns, string $dealId): ?int

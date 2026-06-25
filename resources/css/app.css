@@ -266,7 +266,15 @@
   }
 
   .abas-log-body {
-    @apply max-h-96 overflow-y-auto overflow-x-auto;
+    height: fit-content;
+    min-height: 5rem;
+    max-height: min(70vh, 42rem);
+    overflow: auto;
+    resize: vertical;
+  }
+
+  .abas-log-body::-webkit-resizer {
+    @apply bg-gray-200 rounded-sm border border-gray-300;
   }
 
   .abas-log-table thead th {

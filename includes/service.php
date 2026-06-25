@@ -41,6 +41,20 @@ function abas_service_max_consecutive_hours(): float
     return 12.0;
 }
 
+function abas_format_service_hours_da(float $hours): string
+{
+    return rtrim(rtrim(number_format($hours, 1, ',', ''), '0'), ',') . ' t';
+}
+
+function abas_service_default_comment(bool $isExtend, float $hours): string
+{
+    if ($isExtend) {
+        return 'ABA service forlænget ' . abas_format_service_hours_da($hours);
+    }
+
+    return 'ABA service startet';
+}
+
 function abas_service_remaining_extend_hours(?array $session): float
 {
     if (!$session) {
@@ -150,7 +164,7 @@ function abas_start_service_session(
     $sIns = (int) $installation['s_ins'];
     $dealId = (string) $installation['deal_id'];
     $testTime = abas_format_test_time_hours($hours);
-    $defaultComm = $isExtend ? 'ABA Service forlængelse' : 'ABA Service start';
+    $defaultComm = abas_service_default_comment($isExtend, $hours);
     $commText = trim($comment) !== '' ? trim($comment) : $defaultComm;
     if (in_array($source, ['web', 'sms', 'api'], true)) {
         $actor = $user;
@@ -169,7 +183,7 @@ function abas_start_service_session(
             $commText = abas_enrich_service_actor_comment($conn, $actor, $commText);
         }
     }
-    $comm = abas_trekant_trim_comment($commText);
+    $comm = abas_trekant_trim_service_comment($commText);
     $knownSInc = null;
 
     if ($isExtend) {
@@ -270,7 +284,7 @@ function abas_start_service_session(
         $sIncStmt->close();
     }
     if ($isExtend && $knownSInc > 0 && $comm !== '') {
-        $addResp = $client->addLogComment($sIns, $dealId, $knownSInc, $comm);
+        $addResp = $client->addLogComment($userid, $sIns, $dealId, $knownSInc, $comm);
         $addCode = abas_trekant_return_code($addResp);
         if ($addCode !== 0) {
             error_log('ABA addLogComment after extend failed: code ' . $addCode . ' s_inc=' . $knownSInc);
@@ -307,11 +321,11 @@ function abas_stop_service_session(
     if ($sInc === null || $sInc <= 0) {
         $sInc = abas_trekant_active_test_s_inc($client, $sIns, $dealId);
     }
-    $baseComment = trim($comment) !== '' ? trim($comment) : 'ABA Service stop';
+    $baseComment = trim($comment) !== '' ? trim($comment) : 'ABA service stoppet';
     if (in_array($source, ['web', 'sms', 'api'], true)) {
         $baseComment = abas_enrich_service_actor_comment($conn, $user, $baseComment);
     }
-    $stopComment = abas_trekant_trim_comment($baseComment);
+    $stopComment = abas_trekant_trim_service_comment($baseComment);
     $resp = $client->stopService($sIns, $dealId, $sInc > 0 ? $sInc : null, $stopComment);
     $code = abas_trekant_return_code($resp);
     $userId = (int) $user['id'];
@@ -320,7 +334,7 @@ function abas_stop_service_session(
         return ['ok' => false, 'code' => $code, 'message' => $resp['message']['message'] ?? 'Stop fejlede'];
     }
     if ($stopComment !== '' && $sInc > 0) {
-        $addResp = $client->addLogComment($sIns, $dealId, $sInc, $stopComment);
+        $addResp = $client->addLogComment(abas_trekant_userid($user), $sIns, $dealId, $sInc, $stopComment);
         $addCode = abas_trekant_return_code($addResp);
         if ($addCode !== 0) {
             error_log('ABA addLogComment after stop failed: code ' . $addCode . ' s_inc=' . $sInc);
@@ -572,24 +586,26 @@ function abas_normalize_alarmlog_date_range(array $range): array
 
 function abas_alarmlog_row_timestamp(array $row): int
 {
+    $date = trim((string) ($row['tm_date'] ?? ''));
+    $time = trim((string) ($row['tm_time'] ?? ''));
+    if ($date !== '') {
+        if ($time === '') {
+            $time = '00:00:00';
+        }
+        $dt = DateTime::createFromFormat('d/m/y H:i:s', $date . ' ' . $time);
+        if ($dt instanceof DateTime) {
+            return $dt->getTimestamp();
+        }
+        $ts = strtotime($date . ' ' . $time);
+        if ($ts !== false) {
+            return $ts;
+        }
+    }
     if (isset($row['tm']) && is_numeric($row['tm']) && (int) $row['tm'] > 0) {
         return (int) $row['tm'];
     }
-    $date = trim((string) ($row['tm_date'] ?? ''));
-    $time = trim((string) ($row['tm_time'] ?? ''));
-    if ($date === '') {
-        return 0;
-    }
-    if ($time === '') {
-        $time = '00:00:00';
-    }
-    $dt = DateTime::createFromFormat('d/m/y H:i:s', $date . ' ' . $time);
-    if ($dt instanceof DateTime) {
-        return $dt->getTimestamp();
-    }
-    $ts = strtotime($date . ' ' . $time);
 
-    return $ts !== false ? $ts : 0;
+    return 0;
 }
 
 /**
@@ -649,25 +665,13 @@ function abas_fetch_installation_log(array $installation, string $mode, ?array $
         $maxIncidents = 20;
     } elseif ($mode === '24h') {
         $sinceTs = strtotime('-24 hours');
-        $range = abas_normalize_alarmlog_date_range([
-            'startdate' => abas_trekant_alarmlog_date($sinceTs),
-            'starttime' => date('H:i:s', $sinceTs),
-            'enddate' => abas_trekant_alarmlog_date(time()),
-            'endtime' => date('H:i:s'),
-        ]);
+        $lines = 1000;
     } elseif ($mode === 'custom' && $customRange) {
         $lines = 1000;
         $range = abas_normalize_alarmlog_date_range($customRange);
     }
 
-    try {
-        $resp = $client->getAlarmLog($userid, $sIns, $dealId, $lines, $range);
-    } catch (Throwable $e) {
-        if ($mode !== '24h' || $sinceTs === null) {
-            throw $e;
-        }
-        $resp = $client->getAlarmLog($userid, $sIns, $dealId, 1000, null);
-    }
+    $resp = $client->getAlarmLog($userid, $sIns, $dealId, $lines, $range);
 
     $rows = abas_trekant_rows($resp);
     if ($mode === '24h' && $sinceTs !== null) {
