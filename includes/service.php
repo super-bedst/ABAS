@@ -1129,7 +1129,7 @@ function abas_render_alarmlog_rows_html(array $rows): string
                             </td>
                             <td class="abas-log-lines-detail">
                                 <div class="abas-log-entry <?= htmlspecialchars($entryClass) ?>">
-                                    <div class="flex gap-2">
+                                    <div class="flex">
                                         <span class="abas-log-dot <?= htmlspecialchars($dotClass) ?>" aria-hidden="true"></span>
                                         <div class="<?= $line['is_head'] ? 'font-medium break-words abas-log-entry-head' : 'abas-log-subline-text break-words' ?> min-w-0 flex-1">
                                             <?= htmlspecialchars($line['summary']) ?>
