@@ -49,7 +49,7 @@ function abas_password_consume_token(mysqli $conn, string $rawToken): void
     $stmt->close();
 }
 
-function abas_password_send_flow_email(mysqli $conn, int $userId, string $kind): void
+function abas_password_send_flow_email(mysqli $conn, int $userId, string $kind): bool
 {
     $stmt = $conn->prepare('SELECT email FROM users WHERE id = ?');
     $stmt->bind_param('i', $userId);
@@ -57,10 +57,12 @@ function abas_password_send_flow_email(mysqli $conn, int $userId, string $kind):
     $user = $stmt->get_result()->fetch_assoc();
     $stmt->close();
     if (!$user) {
-        return;
+        return false;
     }
     $token = abas_password_issue_token($conn, $userId, $kind);
-    abas_mail_password_link($userId, $user['email'], $token, $kind === 'vc_invite' ? 'welcome' : $kind);
+    $mailKind = $kind === 'vc_invite' ? 'welcome' : $kind;
+
+    return abas_mail_password_link($userId, $user['email'], $token, $mailKind);
 }
 
 function abas_access_confirm_months(mysqli $conn): int

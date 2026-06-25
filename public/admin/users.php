@@ -87,6 +87,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $smsAllowed = !empty($_POST['sms_service_allowed']) ? 1 : 0;
+    $sendWelcome = !empty($_POST['send_welcome']);
 
     $chk = $conn->prepare('SELECT id FROM users WHERE email=? OR username=? LIMIT 1');
     $chk->bind_param('ss', $email, $username);
@@ -108,17 +109,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (abas_user_role_uses_sms_code($role)) {
             abas_set_user_sms_code($conn, $uid, $smsCode);
         }
-        abas_password_send_flow_email($conn, $uid, 'welcome');
+        $successMsg = 'Bruger oprettet.';
+        if ($sendWelcome) {
+            $sent = abas_password_send_flow_email($conn, $uid, 'welcome');
+            $successMsg = $sent
+                ? 'Bruger oprettet. Velkomst-e-mail sendt.'
+                : 'Bruger oprettet, men velkomst-e-mail kunne ikke sendes — tjek mail-konfiguration.';
+        }
         if (($role === 'anlaegsejer' || $role === 'anlaegsafprover') && $miscno2 !== '') {
             $linkError = abas_link_user_installation_by_miscno2($conn, $uid, $miscno2);
             if ($linkError !== null) {
                 abas_flash_set('error', 'Bruger oprettet, men anlæg: ' . $linkError);
                 abas_redirect('admin/user-edit.php?id=' . $uid);
             }
-            abas_flash_set('success', 'Bruger oprettet og anlæg tilknyttet.');
-        } else {
-            abas_flash_set('success', 'Bruger oprettet.');
+            if ($sendWelcome) {
+                $successMsg = str_replace('Bruger oprettet', 'Bruger oprettet og anlæg tilknyttet', $successMsg);
+            } else {
+                $successMsg = 'Bruger oprettet og anlæg tilknyttet.';
+            }
         }
+        abas_flash_set($sendWelcome && str_contains($successMsg, 'kunne ikke') ? 'error' : 'success', $successMsg);
     }
     $chk->close();
     abas_redirect($redirectUrl);
@@ -212,6 +222,10 @@ require __DIR__ . '/../partials/header.php';
         <label class="flex items-center gap-2 text-sm mb-4">
             <input type="checkbox" name="sms_service_allowed" value="1" class="abas-checkbox">
             Må betjene anlæg via SMS
+        </label>
+        <label class="flex items-center gap-2 text-sm mb-4">
+            <input type="checkbox" name="send_welcome" value="1" class="abas-checkbox" checked>
+            Send velkomst-e-mail med link til valg af adgangskode
         </label>
         <button class="abas-btn-primary">Opret bruger</button>
     </form>

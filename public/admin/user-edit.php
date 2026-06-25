@@ -75,6 +75,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         abas_redirect('admin/user-edit.php?id=' . $id);
     }
 
+    if ($action === 'send_welcome') {
+        $sent = abas_password_send_flow_email($conn, $id, 'welcome');
+        abas_flash_set($sent ? 'success' : 'error', $sent
+            ? 'Velkomst-e-mail sendt til ' . ($editUser['email'] ?? '') . '.'
+            : 'Kunne ikke sende velkomst-e-mail — tjek mail-konfiguration.');
+        abas_redirect('admin/user-edit.php?id=' . $id . ($listFilter !== '' ? '&filter=' . rawurlencode($listFilter) : ''));
+    }
+
+    if ($action === 'send_reset') {
+        $sent = abas_password_send_flow_email($conn, $id, 'reset');
+        abas_flash_set($sent ? 'success' : 'error', $sent
+            ? 'Nulstillings-e-mail sendt til ' . ($editUser['email'] ?? '') . '.'
+            : 'Kunne ikke sende nulstillings-e-mail — tjek mail-konfiguration.');
+        abas_redirect('admin/user-edit.php?id=' . $id . ($listFilter !== '' ? '&filter=' . rawurlencode($listFilter) : ''));
+    }
+
+    if ($action !== 'save') {
+        abas_redirect('admin/user-edit.php?id=' . $id);
+    }
+
     $email = strtolower(trim($_POST['email'] ?? ''));
     $username = trim($_POST['username'] ?? '');
     $phone = abas_normalize_phone(trim($_POST['phone'] ?? ''));
@@ -82,7 +102,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $active = !empty($_POST['active']) ? 1 : 0;
     $trekantUserid = trim($_POST['trekant_userid'] ?? '');
     $trekantUserid = $trekantUserid !== '' ? strtoupper($trekantUserid) : null;
-    $sendWelcome = !empty($_POST['send_welcome']);
     $smsServiceAllowed = !empty($_POST['sms_service_allowed']) ? 1 : 0;
     $mfaMethod = $_POST['mfa_method'] ?? 'passkey';
     if (!in_array($mfaMethod, ['passkey', 'sms_otp'], true)) {
@@ -120,15 +139,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    $dup = $conn->prepare('SELECT id FROM users WHERE (email = ? OR username = ?) AND id <> ? LIMIT 1');
-    $dup->bind_param('ssi', $email, $username, $id);
-    $dup->execute();
-    if ($dup->get_result()->fetch_row()) {
-        $dup->close();
-        abas_flash_set('error', 'E-mail eller brugernavn findes allerede.');
+    $dupEmail = $conn->prepare('SELECT id, username FROM users WHERE email = ? AND id <> ? LIMIT 1');
+    $dupEmail->bind_param('si', $email, $id);
+    $dupEmail->execute();
+    $emailConflict = $dupEmail->get_result()->fetch_assoc();
+    $dupEmail->close();
+    if ($emailConflict) {
+        abas_flash_set('error', 'E-mail findes allerede (bruger: ' . ($emailConflict['username'] ?? '?') . ').');
         abas_redirect('admin/user-edit.php?id=' . $id);
     }
-    $dup->close();
+
+    $dupUser = $conn->prepare('SELECT id, email FROM users WHERE username = ? AND id <> ? LIMIT 1');
+    $dupUser->bind_param('si', $username, $id);
+    $dupUser->execute();
+    $userConflict = $dupUser->get_result()->fetch_assoc();
+    $dupUser->close();
+    if ($userConflict) {
+        abas_flash_set('error', 'Brugernavn findes allerede (e-mail: ' . ($userConflict['email'] ?? '?') . ').');
+        abas_redirect('admin/user-edit.php?id=' . $id);
+    }
 
     if ($installerId !== null) {
         $upd = $conn->prepare(
@@ -148,10 +177,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($smsCode !== '') {
         abas_set_user_sms_code($conn, $id, $smsCode);
-    }
-
-    if ($sendWelcome) {
-        abas_password_send_flow_email($conn, $id, 'welcome');
     }
 
     abas_flash_set('success', 'Bruger opdateret.');
@@ -236,15 +261,28 @@ require __DIR__ . '/../partials/header.php';
             <option value="sms_otp" <?= abas_user_mfa_method($conn, $id) === 'sms_otp' ? 'selected' : '' ?>>SMS engangskode</option>
         </select>
     </div>
-    <label class="flex items-center gap-2 text-sm">
-        <input type="checkbox" name="send_welcome" value="1" class="abas-checkbox">
-        Send velkomst/e-mail til valg af adgangskode
-    </label>
     <div class="flex flex-wrap gap-2 pt-2">
         <button class="abas-btn-primary">Gem</button>
         <a href="<?= abas_url($listUrl) ?>" class="abas-btn-secondary">Annuller</a>
     </div>
 </form>
+
+<div class="abas-card max-w-lg mb-6">
+    <h2 class="abas-card-title">Adgangskode-e-mail</h2>
+    <p class="text-sm text-gray-600 mb-3">Send link uden at gemme øvrige ændringer i formularen ovenfor.</p>
+    <div class="flex flex-wrap gap-2">
+        <form method="post" class="inline">
+            <input type="hidden" name="id" value="<?= (int) $editUser['id'] ?>">
+            <input type="hidden" name="action" value="send_welcome">
+            <button type="submit" class="abas-btn-secondary text-sm">Send velkomst-e-mail</button>
+        </form>
+        <form method="post" class="inline">
+            <input type="hidden" name="id" value="<?= (int) $editUser['id'] ?>">
+            <input type="hidden" name="action" value="send_reset">
+            <button type="submit" class="abas-btn-secondary text-sm">Send nulstil adgangskode</button>
+        </form>
+    </div>
+</div>
 
 <form method="post" class="mb-6">
     <input type="hidden" name="id" value="<?= (int) $editUser['id'] ?>">
