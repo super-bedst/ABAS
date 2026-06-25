@@ -1107,37 +1107,34 @@ function abas_render_alarmlog_rows_html(array $rows): string
         if ($lines === []) {
             continue;
         }
-        ?>
-        <tr>
+
+        foreach ($lines as $index => $line) {
+            $entryClass = abas_alarmlog_tone_class($line['tone'], 'abas-log-entry');
+            $dotClass = abas_alarmlog_tone_class($line['tone'], 'abas-log-dot');
+            $rowClass = 'abas-log-group-row';
+            if ($index > 0) {
+                $rowClass .= ' abas-log-group-row--follow';
+            }
+            ?>
+        <tr class="<?= htmlspecialchars($rowClass) ?>">
             <td class="align-top whitespace-nowrap">
-                <div class="abas-log-times">
-                    <?php foreach ($lines as $line): ?>
-                        <div class="<?= $line['is_head'] ? 'font-medium text-gray-900 abas-log-time-row' : 'abas-log-subline-time text-xs text-gray-500' ?>">
-                            <?= htmlspecialchars(abas_format_alarmlog_timestamp($line['row'])) ?>
-                        </div>
-                    <?php endforeach; ?>
+                <div class="<?= $line['is_head'] ? 'font-medium text-gray-900 abas-log-time-row' : 'abas-log-subline-time text-xs text-gray-500' ?>">
+                    <?= htmlspecialchars(abas_format_alarmlog_timestamp($line['row'])) ?>
                 </div>
             </td>
             <td class="align-top">
-                <div class="abas-log-group">
-                    <?php foreach ($lines as $line): ?>
-                        <?php
-                        $entryClass = abas_alarmlog_tone_class($line['tone'], 'abas-log-entry');
-                        $dotClass = abas_alarmlog_tone_class($line['tone'], 'abas-log-dot');
-                        ?>
-                        <div class="abas-log-entry <?= htmlspecialchars($entryClass) ?>">
-                            <div class="flex gap-2">
-                                <span class="abas-log-dot <?= htmlspecialchars($dotClass) ?>" aria-hidden="true"></span>
-                                <div class="<?= $line['is_head'] ? 'font-medium break-words abas-log-entry-head' : 'abas-log-subline-text break-words' ?> min-w-0 flex-1">
-                                    <?= htmlspecialchars($line['summary']) ?>
-                                </div>
-                            </div>
+                <div class="abas-log-entry <?= htmlspecialchars($entryClass) ?>">
+                    <div class="flex gap-2">
+                        <span class="abas-log-dot <?= htmlspecialchars($dotClass) ?>" aria-hidden="true"></span>
+                        <div class="<?= $line['is_head'] ? 'font-medium break-words abas-log-entry-head' : 'abas-log-subline-text break-words' ?> min-w-0 flex-1">
+                            <?= htmlspecialchars($line['summary']) ?>
                         </div>
-                    <?php endforeach; ?>
+                    </div>
                 </div>
             </td>
         </tr>
-        <?php
+            <?php
+        }
     }
 
     return (string) ob_get_clean();

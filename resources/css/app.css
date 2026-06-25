@@ -332,16 +332,13 @@
     @apply sticky top-0 z-10 bg-tablehead shadow-[0_1px_0_0_rgba(0,0,0,0.06)];
   }
 
+  .abas-log-group-row--follow td {
+    border-top-width: 0;
+    padding-top: 0.125rem;
+  }
+
   .abas-log-entry {
     @apply border-l-4 pl-2 py-0.5;
-  }
-
-  .abas-log-group {
-    @apply space-y-0.5;
-  }
-
-  .abas-log-times {
-    @apply space-y-0.5;
   }
 
   .abas-log-entry--alarm {
