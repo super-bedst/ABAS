@@ -185,7 +185,8 @@ require __DIR__ . '/../partials/header.php';
 <h1 class="abas-page-title !text-xl">Brugere</h1>
 <p class="abas-page-lead mb-4">Samlet oversigt over alle brugertyper — opret, rediger og slet fra ét sted.</p>
 
-<nav class="flex flex-wrap gap-2 mb-6" aria-label="Filtrer efter rolle">
+<div class="flex flex-wrap items-center gap-2 mb-6">
+    <nav class="flex flex-wrap gap-2 flex-1" aria-label="Filtrer efter rolle">
     <?php foreach ($filterLabels as $key => $label): ?>
         <?php
         $isActive = $filter === $key;
@@ -196,37 +197,17 @@ require __DIR__ . '/../partials/header.php';
             class="px-3 py-1.5 rounded-full text-sm border transition-colors <?= $isActive ? 'bg-brand text-white border-brand' : 'bg-white text-gray-700 border-gray-200 hover:border-brand/40' ?>"
         ><?= htmlspecialchars($label) ?> <span class="<?= $isActive ? 'text-white/80' : 'text-gray-400' ?>">(<?= $filterCount($key) ?>)</span></a>
     <?php endforeach; ?>
-</nav>
+    </nav>
+    <button
+        type="button"
+        id="open-create-user"
+        class="px-3 py-1.5 rounded-full text-sm font-semibold border border-brand bg-brand text-white hover:bg-brand-dark transition-colors shrink-0"
+        aria-controls="create-user-panel"
+        aria-expanded="false"
+    >Opret bruger</button>
+</div>
 
-<form method="get" class="mb-6 flex flex-wrap gap-2 items-end max-w-2xl" role="search">
-    <?php if ($filter !== 'alle'): ?>
-        <input type="hidden" name="filter" value="<?= htmlspecialchars($filter) ?>">
-    <?php endif; ?>
-    <?php if ($sort !== ''): ?>
-        <input type="hidden" name="sort" value="<?= htmlspecialchars($sort) ?>">
-        <input type="hidden" name="dir" value="<?= htmlspecialchars($sortDir) ?>">
-    <?php endif; ?>
-    <div class="abas-field flex-1 min-w-[14rem] !mb-0">
-        <label class="abas-label" for="user-search">Søg</label>
-        <input
-            id="user-search"
-            type="search"
-            name="q"
-            value="<?= htmlspecialchars($search) ?>"
-            placeholder="Navn, e-mail, telefon, firma, anlæg, rolle …"
-            class="abas-input"
-        >
-    </div>
-    <button type="submit" class="abas-btn-secondary">Søg</button>
-    <?php if ($search !== ''): ?>
-        <a href="<?= htmlspecialchars(abas_admin_users_list_url($filter, $sort !== '' ? $sort : null, $sort !== '' ? $sortDir : null)) ?>" class="abas-btn-secondary">Ryd</a>
-    <?php endif; ?>
-</form>
-<?php if ($search !== ''): ?>
-<p class="text-sm text-gray-600 mb-4"><?= count($rows) ?> resultat<?= count($rows) === 1 ? '' : 'er' ?> for «<?= htmlspecialchars($search) ?>»</p>
-<?php endif; ?>
-
-<details class="abas-card mb-6 max-w-lg abas-form group">
+<details id="create-user-panel" class="abas-card mb-6 max-w-lg abas-form group">
     <summary class="abas-card-title cursor-pointer list-none flex items-center justify-between gap-2">
         <span>Opret ny bruger</span>
         <span class="text-gray-400 text-sm group-open:rotate-180 transition-transform">▼</span>
@@ -266,6 +247,34 @@ require __DIR__ . '/../partials/header.php';
         <button class="abas-btn-primary">Opret bruger</button>
     </form>
 </details>
+
+<form method="get" class="mb-4 flex flex-wrap gap-2 items-end max-w-2xl" role="search">
+    <?php if ($filter !== 'alle'): ?>
+        <input type="hidden" name="filter" value="<?= htmlspecialchars($filter) ?>">
+    <?php endif; ?>
+    <?php if ($sort !== ''): ?>
+        <input type="hidden" name="sort" value="<?= htmlspecialchars($sort) ?>">
+        <input type="hidden" name="dir" value="<?= htmlspecialchars($sortDir) ?>">
+    <?php endif; ?>
+    <div class="abas-field flex-1 min-w-[14rem] !mb-0">
+        <label class="abas-label" for="user-search">Søg</label>
+        <input
+            id="user-search"
+            type="search"
+            name="q"
+            value="<?= htmlspecialchars($search) ?>"
+            placeholder="Navn, e-mail, telefon, firma, anlæg, rolle …"
+            class="abas-input"
+        >
+    </div>
+    <button type="submit" class="abas-btn-secondary">Søg</button>
+    <?php if ($search !== ''): ?>
+        <a href="<?= htmlspecialchars(abas_admin_users_list_url($filter, $sort !== '' ? $sort : null, $sort !== '' ? $sortDir : null)) ?>" class="abas-btn-secondary">Ryd</a>
+    <?php endif; ?>
+</form>
+<?php if ($search !== ''): ?>
+<p class="text-sm text-gray-600 mb-4"><?= count($rows) ?> resultat<?= count($rows) === 1 ? '' : 'er' ?> for «<?= htmlspecialchars($search) ?>»</p>
+<?php endif; ?>
 
 <div class="abas-table-wrap">
 <table class="abas-table">
@@ -347,4 +356,27 @@ require __DIR__ . '/../partials/header.php';
     </tbody>
 </table>
 </div>
+<script>
+(function () {
+    var panel = document.getElementById('create-user-panel');
+    var openBtn = document.getElementById('open-create-user');
+    if (!panel || !openBtn) {
+        return;
+    }
+    function syncExpanded() {
+        openBtn.setAttribute('aria-expanded', panel.open ? 'true' : 'false');
+    }
+    openBtn.addEventListener('click', function () {
+        panel.open = true;
+        syncExpanded();
+        panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        var email = panel.querySelector('input[name="email"]');
+        if (email) {
+            email.focus();
+        }
+    });
+    panel.addEventListener('toggle', syncExpanded);
+    syncExpanded();
+})();
+</script>
 <?php require __DIR__ . '/../partials/footer.php';
