@@ -1110,17 +1110,24 @@ function abas_render_alarmlog_rows_html(array $rows): string
         ?>
         <tr class="abas-log-group-row">
             <td colspan="2" class="abas-log-group-cell">
-                <div class="abas-log-group">
+                <table class="abas-log-lines" role="presentation">
+                    <colgroup>
+                        <col class="abas-log-col-time">
+                        <col class="abas-log-col-detail">
+                    </colgroup>
+                    <tbody>
                     <?php foreach ($lines as $line): ?>
                         <?php
                         $entryClass = abas_alarmlog_tone_class($line['tone'], 'abas-log-entry');
                         $dotClass = abas_alarmlog_tone_class($line['tone'], 'abas-log-dot');
                         ?>
-                        <div class="abas-log-line">
-                            <div class="<?= $line['is_head'] ? 'font-medium text-gray-900 abas-log-time-row' : 'abas-log-subline-time text-xs text-gray-500' ?>">
-                                <?= htmlspecialchars(abas_format_alarmlog_timestamp($line['row'])) ?>
-                            </div>
-                            <div class="abas-log-line-detail">
+                        <tr>
+                            <td class="abas-log-lines-time">
+                                <div class="<?= $line['is_head'] ? 'font-medium text-gray-900 abas-log-time-row' : 'abas-log-subline-time text-xs text-gray-500' ?>">
+                                    <?= htmlspecialchars(abas_format_alarmlog_timestamp($line['row'])) ?>
+                                </div>
+                            </td>
+                            <td class="abas-log-lines-detail">
                                 <div class="abas-log-entry <?= htmlspecialchars($entryClass) ?>">
                                     <div class="flex gap-2">
                                         <span class="abas-log-dot <?= htmlspecialchars($dotClass) ?>" aria-hidden="true"></span>
@@ -1129,10 +1136,11 @@ function abas_render_alarmlog_rows_html(array $rows): string
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-                        </div>
+                            </td>
+                        </tr>
                     <?php endforeach; ?>
-                </div>
+                    </tbody>
+                </table>
             </td>
         </tr>
         <?php
