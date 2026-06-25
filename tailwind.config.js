@@ -24,4 +24,15 @@ module.exports = {
     },
   },
   plugins: [],
+  safelist: [
+    'abas-log-row--alarm',
+    'abas-log-row--restore',
+    'abas-log-row--neutral',
+    'abas-log-entry--alarm',
+    'abas-log-entry--restore',
+    'abas-log-entry--neutral',
+    'abas-log-dot--alarm',
+    'abas-log-dot--restore',
+    'abas-log-dot--neutral',
+  ],
 };

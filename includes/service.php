@@ -796,6 +796,17 @@ function abas_parse_alarmlog_zone_text(string $raw): array
     return ['raw' => $raw];
 }
 
+function abas_alarmlog_tone_class(string $tone, string $prefix): string
+{
+    return match ($tone) {
+        'alarm' => $prefix . '--alarm',
+        'restore' => $prefix . '--restore',
+        'warn' => $prefix . '--warn',
+        'ok' => $prefix . '--ok',
+        default => $prefix . '--neutral',
+    };
+}
+
 function abas_alarmlog_row_tone(array $row): string
 {
     $color = strtoupper(trim((string) ($row['row_color'] ?? '')));
@@ -1093,8 +1104,11 @@ function abas_render_alarmlog_rows_html(array $rows): string
         }
 
         $tone = abas_alarmlog_group_tone($group);
+        $rowClass = abas_alarmlog_tone_class($tone, 'abas-log-row');
+        $entryClass = abas_alarmlog_tone_class($tone, 'abas-log-entry');
+        $dotClass = abas_alarmlog_tone_class($tone, 'abas-log-dot');
         ?>
-        <tr>
+        <tr class="<?= htmlspecialchars($rowClass) ?>">
             <td class="align-top whitespace-nowrap">
                 <div class="abas-log-times space-y-1">
                     <?php foreach ($lines as $line): ?>
@@ -1105,9 +1119,9 @@ function abas_render_alarmlog_rows_html(array $rows): string
                 </div>
             </td>
             <td class="align-top">
-                <div class="abas-log-entry abas-log-entry--<?= htmlspecialchars($tone) ?>">
+                <div class="abas-log-entry <?= htmlspecialchars($entryClass) ?>">
                     <div class="flex gap-2">
-                        <span class="abas-log-dot abas-log-dot--<?= htmlspecialchars($tone) ?>" aria-hidden="true"></span>
+                        <span class="abas-log-dot <?= htmlspecialchars($dotClass) ?>" aria-hidden="true"></span>
                         <div class="flex-1 space-y-1 min-w-0">
                             <?php foreach ($lines as $line): ?>
                                 <?php if ($line['is_head']): ?>

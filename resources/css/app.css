@@ -302,48 +302,51 @@
     @apply space-y-1 border-l-4 pl-3;
   }
 
-  .abas-log-entry--ok {
-    @apply border-green-500;
+  .abas-log-entry--alarm {
+    border-color: #dc2626;
+    background-color: rgb(254 242 242 / 0.7);
   }
 
   .abas-log-entry--restore {
-    @apply border-green-600 bg-green-50/70;
-  }
-
-  .abas-log-entry--warn {
-    @apply border-amber-400;
-  }
-
-  .abas-log-entry--alarm {
-    @apply border-red-600 bg-red-50/70;
+    border-color: #16a34a;
+    background-color: rgb(240 253 244 / 0.7);
   }
 
   .abas-log-entry--neutral {
-    @apply border-gray-300 bg-gray-50/40;
+    border-color: #d1d5db;
+    background-color: rgb(249 250 251 / 0.4);
+  }
+
+  .abas-log-entry--ok {
+    border-color: #22c55e;
+  }
+
+  .abas-log-entry--warn {
+    border-color: #fbbf24;
   }
 
   .abas-log-dot {
     @apply mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full;
   }
 
-  .abas-log-dot--ok {
-    @apply bg-green-500;
+  .abas-log-dot--alarm {
+    background-color: #dc2626;
   }
 
   .abas-log-dot--restore {
-    @apply bg-green-600;
-  }
-
-  .abas-log-dot--warn {
-    @apply bg-amber-400;
-  }
-
-  .abas-log-dot--alarm {
-    @apply bg-red-600;
+    background-color: #16a34a;
   }
 
   .abas-log-dot--neutral {
-    @apply bg-gray-300;
+    background-color: #d1d5db;
+  }
+
+  .abas-log-dot--ok {
+    background-color: #22c55e;
+  }
+
+  .abas-log-dot--warn {
+    background-color: #fbbf24;
   }
 
   .abas-log-entry-head {
@@ -351,11 +354,19 @@
   }
 
   .abas-log-entry--alarm .abas-log-entry-head {
-    @apply text-red-950;
+    color: #450a0a;
   }
 
   .abas-log-entry--restore .abas-log-entry-head {
-    @apply text-green-950;
+    color: #052e16;
+  }
+
+  .abas-log-row--alarm > td {
+    background-color: rgb(254 242 242 / 0.45);
+  }
+
+  .abas-log-row--restore > td {
+    background-color: rgb(240 253 244 / 0.45);
   }
 
   .abas-log-subline {
