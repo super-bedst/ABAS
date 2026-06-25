@@ -228,7 +228,11 @@ function abas_stop_service_session(
     if ($sInc === null || $sInc <= 0) {
         $sInc = abas_trekant_active_test_s_inc($client, $sIns, $dealId);
     }
-    $stopComment = abas_trekant_trim_comment($comment !== '' ? $comment : 'ABA Service stop');
+    $baseComment = $comment !== '' ? $comment : 'ABA Service stop';
+    if (in_array($source, ['web', 'sms', 'api'], true)) {
+        $baseComment = abas_enrich_service_stop_comment($conn, $user, $baseComment);
+    }
+    $stopComment = abas_trekant_trim_comment($baseComment);
     $resp = $client->stopService($sIns, $dealId, $sInc > 0 ? $sInc : null, $stopComment);
     $code = abas_trekant_return_code($resp);
     $userId = (int) $user['id'];
@@ -416,6 +420,16 @@ function abas_flag_installations_in_service(mysqli $conn, array $installations):
         $installation['in_external_service'] = !isset($active[$installationId]) && isset($external[$installationId]);
     }
     unset($installation);
+
+    usort($installations, static function (array $a, array $b): int {
+        $aIn = !empty($a['in_service']) ? 0 : 1;
+        $bIn = !empty($b['in_service']) ? 0 : 1;
+        if ($aIn !== $bIn) {
+            return $aIn <=> $bIn;
+        }
+
+        return strcmp((string) ($a['miscno2'] ?? ''), (string) ($b['miscno2'] ?? ''));
+    });
 
     return $installations;
 }

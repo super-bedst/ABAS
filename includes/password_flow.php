@@ -5,7 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/mailer.php';
 
-function abas_password_issue_token(mysqli $conn, int $userId, string $kind): string
+function abas_password_issue_token(mysqli $conn, int $userId, string $kind): array
 {
     if (!in_array($kind, ['welcome', 'reset', 'vc_invite'], true)) {
         throw new InvalidArgumentException('Invalid token kind');
@@ -21,7 +21,7 @@ function abas_password_issue_token(mysqli $conn, int $userId, string $kind): str
     $stmt->execute();
     $stmt->close();
 
-    return $raw;
+    return ['token' => $raw, 'expires_at' => $expires];
 }
 
 function abas_password_validate_token(mysqli $conn, string $rawToken): ?array
@@ -51,7 +51,7 @@ function abas_password_consume_token(mysqli $conn, string $rawToken): void
 
 function abas_password_send_flow_email(mysqli $conn, int $userId, string $kind): bool
 {
-    $stmt = $conn->prepare('SELECT email FROM users WHERE id = ?');
+    $stmt = $conn->prepare('SELECT email, username, registration_display_name FROM users WHERE id = ?');
     $stmt->bind_param('i', $userId);
     $stmt->execute();
     $user = $stmt->get_result()->fetch_assoc();
@@ -59,10 +59,21 @@ function abas_password_send_flow_email(mysqli $conn, int $userId, string $kind):
     if (!$user) {
         return false;
     }
-    $token = abas_password_issue_token($conn, $userId, $kind);
+    $issued = abas_password_issue_token($conn, $userId, $kind);
     $mailKind = $kind === 'vc_invite' ? 'welcome' : $kind;
+    $displayName = trim((string) ($user['registration_display_name'] ?? ''));
+    if ($displayName === '') {
+        $displayName = (string) $user['username'];
+    }
 
-    return abas_mail_password_link($userId, $user['email'], $token, $mailKind);
+    return abas_mail_password_link(
+        (string) $user['email'],
+        (string) $user['username'],
+        $displayName,
+        $issued['token'],
+        $mailKind,
+        $issued['expires_at']
+    );
 }
 
 function abas_access_confirm_months(mysqli $conn): int

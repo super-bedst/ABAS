@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/app_log.php';
+require_once __DIR__ . '/mail_templates.php';
 
 /** @var string|null */
 $GLOBALS['_abas_smtp_last_response'] = null;
@@ -258,13 +259,19 @@ function abas_smtp_cmd($fp, string $command, array $expectCodes, ?string $logLab
     return true;
 }
 
-function abas_mail_password_link(int $userId, string $email, string $token, string $kind): bool
-{
+function abas_mail_password_link(
+    string $email,
+    string $username,
+    string $displayName,
+    string $token,
+    string $kind,
+    string $expiresAt
+): bool {
     $url = abas_full_url('set-password.php') . '?token=' . urlencode($token);
-    $subject = $kind === 'welcome' ? 'Velkommen til ABA Service — vælg adgangskode' : 'Nulstil adgangskode — ABA Service';
-    $body = '<p>Hej,</p><p>Klik på linket for at ' . ($kind === 'welcome' ? 'oprette' : 'nulstille') . ' din adgangskode:</p>'
-        . '<p><a href="' . htmlspecialchars($url) . '">' . htmlspecialchars($url) . '</a></p>'
-        . '<p>Linket udløber snart.</p>';
+    $subject = $kind === 'welcome'
+        ? 'Velkommen til ABA Service — vælg adgangskode'
+        : 'Nulstil adgangskode — ABA Service';
+    $body = abas_mail_password_flow_html($displayName, $username, $url, $kind, $expiresAt);
 
     return abas_mail_send($email, $subject, $body);
 }

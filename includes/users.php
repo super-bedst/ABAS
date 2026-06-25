@@ -278,6 +278,20 @@ function abas_enrich_service_start_comment(mysqli $conn, array $user, string $co
         return $comment;
     }
 
+    return abas_enrich_service_user_comment($conn, $user, $comment);
+}
+
+function abas_enrich_service_stop_comment(mysqli $conn, array $user, string $comment): string
+{
+    return abas_enrich_service_user_comment($conn, $user, $comment);
+}
+
+function abas_enrich_service_user_comment(mysqli $conn, array $user, string $comment): string
+{
+    if ($comment === '') {
+        return $comment;
+    }
+
     $meta = [
         (string) ($user['username'] ?? ''),
         trim((string) ($user['phone'] ?? '')),
