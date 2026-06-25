@@ -20,7 +20,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $manualName = trim($_POST['manual_montor_name'] ?? '');
     $manualPhone = abas_normalize_phone(trim($_POST['manual_montor_phone'] ?? ''));
     $hours = (float) ($_POST['hours'] ?? 2);
-    $comment = trim($_POST['comment'] ?? 'VC service');
+    $comment = trim($_POST['comment'] ?? '');
+    if ($comment === 'VC service') {
+        $comment = '';
+    }
 
     if ($misc === '') {
         abas_flash_set('error', 'Vælg et anlæg fra listen.');
@@ -68,11 +71,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($montorRow) {
             $onBehalf = (int) $montorRow['id'];
         }
-    } elseif ($manualName !== '' || $manualPhone !== '') {
-        $comment = abas_vc_append_person_comment($comment, $manualName, $manualPhone);
     }
 
-    $r = abas_start_service_session($conn, $user, $installation, $hours, $onBehalf, $comment);
+    $manualActor = null;
+    if (!$onBehalf && ($manualName !== '' || $manualPhone !== '')) {
+        $manualActor = [
+            'username' => $manualName !== '' ? $manualName : 'Montør',
+            'phone' => $manualPhone,
+            'role' => 'montor',
+        ];
+    }
+
+    $r = abas_start_service_session($conn, $user, $installation, $hours, $onBehalf, $comment, 'web', false, $manualActor);
     abas_flash_set($r['ok'] ? 'success' : 'error', $r['ok'] ? 'Service startet på vegne af montør.' : ($r['message'] ?? 'Fejl'));
     if ($r['ok']) {
         abas_redirect('installation.php?id=' . (int) $installation['id']);
@@ -146,7 +156,7 @@ require __DIR__ . '/partials/header.php';
     </div>
     <div class="abas-field">
         <label class="abas-label" for="comment">Kommentar</label>
-        <textarea id="comment" name="comment" rows="2" class="abas-textarea" placeholder="Kommentar">VC service</textarea>
+        <textarea id="comment" name="comment" rows="2" class="abas-textarea" placeholder="Valgfri kommentar"></textarea>
     </div>
     <button type="submit" class="abas-btn-primary">Start service</button>
 </form>

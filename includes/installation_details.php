@@ -150,6 +150,72 @@ function abas_contact_phones(array $row): array
     return $unique;
 }
 
+/**
+ * @return list<string>
+ */
+function abas_zone_alarm_codes(): array
+{
+    return [
+        'UA', 'UO', 'UT', 'LT', '_%',
+        'BA', 'BC', 'BV', 'CA', 'FA', 'GA', 'HA', 'JA', 'KA', 'MA', 'PA', 'QA', 'TA', 'VA', 'YA', 'ZA',
+        'AT', 'XT',
+    ];
+}
+
+/**
+ * @return list<string>
+ */
+function abas_zone_restore_codes(): array
+{
+    return [
+        'UR', 'UJ', 'LR',
+        'BR', 'CR', 'FR', 'GR', 'HR', 'JR', 'KR', 'MR', 'PR', 'QR', 'RR', 'TR', 'VR', 'YR', 'ZR',
+        'RT', 'RJ',
+    ];
+}
+
+function abas_zone_is_alarm_code(string $code): bool
+{
+    $code = strtoupper(trim($code));
+
+    return $code !== '' && in_array($code, abas_zone_alarm_codes(), true);
+}
+
+function abas_zone_is_restore_code(string $code): bool
+{
+    $code = strtoupper(trim($code));
+
+    return $code !== '' && in_array($code, abas_zone_restore_codes(), true);
+}
+
+function abas_extract_zone_ecode(array $row): string
+{
+    foreach (['ecode', 'c_ecode', 'event'] as $field) {
+        $code = strtoupper(trim((string) ($row[$field] ?? '')));
+        if ($code !== '') {
+            return $code;
+        }
+    }
+
+    return '';
+}
+
+function abas_zone_status_priority(string $code): int
+{
+    $code = strtoupper(trim($code));
+    if ($code === '') {
+        return 1;
+    }
+    if (abas_zone_is_alarm_code($code)) {
+        return 3;
+    }
+    if (abas_zone_is_restore_code($code)) {
+        return 0;
+    }
+
+    return 2;
+}
+
 function abas_zone_status_label(string $code): string
 {
     $code = strtoupper(trim($code));
@@ -157,14 +223,22 @@ function abas_zone_status_label(string $code): string
         return 'Normal';
     }
 
+    if (abas_zone_is_alarm_code($code)) {
+        return match ($code) {
+            'UA', 'UO' => 'I alarm',
+            'UT', 'LT', '_%' => 'Fejl aktiv',
+            default => 'I alarm',
+        };
+    }
+    if (abas_zone_is_restore_code($code)) {
+        return match ($code) {
+            'UR', 'UJ', 'LR' => 'Tilbagestillet',
+            default => 'Tilbagestillet',
+        };
+    }
+
     return match ($code) {
-        'UA' => 'Udkald aktivt',
-        'UO' => 'Udkald opstået',
-        'UR' => 'Tilbagestillet',
-        'UT', 'LT' => 'Fejl aktiv',
-        'UJ', 'LR' => 'Fejl tilbagestillet',
         'UX' => 'Systemstatus',
-        '_%' => 'Delvis fejl',
         default => $code,
     };
 }
@@ -172,12 +246,31 @@ function abas_zone_status_label(string $code): string
 function abas_zone_status_tone(string $code): string
 {
     $code = strtoupper(trim($code));
+    if ($code === '') {
+        return 'ok';
+    }
+    if (abas_zone_is_alarm_code($code)) {
+        return 'warn';
+    }
+    if (abas_zone_is_restore_code($code)) {
+        return 'ok';
+    }
 
     return match ($code) {
-        'UA', 'UO', 'UT', 'LT', '_%' => 'warn',
-        'UR', 'UJ', 'LR', '' => 'ok',
+        'UX' => 'neutral',
         default => 'neutral',
     };
+}
+
+function abas_zone_status_display(string $code): string
+{
+    $code = strtoupper(trim($code));
+    $label = abas_zone_status_label($code);
+    if ($code === '' || $label === $code) {
+        return $label;
+    }
+
+    return $label . ' (' . $code . ')';
 }
 
 /**
@@ -219,13 +312,13 @@ function abas_prepare_installation_zones(array $rows): array
             continue;
         }
 
-        $ecode = strtoupper(trim((string) ($row['ecode'] ?? '')));
+        $ecode = abas_extract_zone_ecode($row);
         $entry = [
             'zix' => $zix,
             'label' => $label,
             'area' => trim((string) ($row['area'] ?? '')),
             'ecode' => $ecode,
-            'status_label' => abas_zone_status_label($ecode),
+            'status_label' => abas_zone_status_display($ecode),
             'tone' => abas_zone_status_tone($ecode),
             'in_test' => trim((string) ($row['in_test_flg'] ?? '')) !== '',
             'kind' => $kind,
@@ -235,7 +328,13 @@ function abas_prepare_installation_zones(array $rows): array
             $byZix[$zix] = $entry;
             continue;
         }
-        if ($ecode !== '' && $byZix[$zix]['ecode'] === '') {
+        $existingPriority = abas_zone_status_priority($byZix[$zix]['ecode']);
+        $newPriority = abas_zone_status_priority($ecode);
+        if ($newPriority > $existingPriority) {
+            $byZix[$zix] = $entry;
+            continue;
+        }
+        if ($newPriority === $existingPriority && $ecode !== '' && $byZix[$zix]['ecode'] === '') {
             $byZix[$zix] = $entry;
             continue;
         }

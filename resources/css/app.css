@@ -314,7 +314,15 @@
   }
 
   .abas-log-subline {
-    @apply text-xs text-gray-700 pl-4 border-l border-gray-200 ml-1;
+    @apply text-xs text-gray-700 pl-4 border-l border-gray-200 ml-1 min-h-[1.125rem];
+  }
+
+  .abas-log-subline-time {
+    @apply min-h-[1.125rem] leading-5;
+  }
+
+  .abas-log-times .font-medium {
+    @apply min-h-[1.25rem] leading-5;
   }
 
   .abas-log-entry-detail {

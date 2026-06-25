@@ -272,46 +272,59 @@ function abas_vc_append_manual_montor_comment(string $comment, string $name, str
     return abas_vc_append_person_comment($comment, $name, $phone);
 }
 
+function abas_service_event_label(string $action): string
+{
+    return match ($action) {
+        'start' => 'Service start',
+        'extend' => 'Service forlængelse',
+        'stop' => 'Service stop',
+        default => 'Service',
+    };
+}
+
+/**
+ * Trekant KOMMENTAR: Hændelse, evt. brugerkommentar, navn, telefon, rolle.
+ */
+function abas_build_service_log_comment(mysqli $conn, array $user, string $action, string $userComment = ''): string
+{
+    unset($conn);
+
+    $parts = [abas_service_event_label($action)];
+
+    $userComment = trim($userComment);
+    if ($userComment !== '') {
+        $parts[] = $userComment;
+    }
+
+    foreach ([
+        trim((string) ($user['username'] ?? '')),
+        trim((string) ($user['phone'] ?? '')),
+        abas_role_label((string) ($user['role'] ?? '')),
+    ] as $part) {
+        if ($part !== '') {
+            $parts[] = $part;
+        }
+    }
+
+    require_once __DIR__ . '/trekant_client.php';
+
+    return abas_trekant_trim_log_parts($parts, 80);
+}
+
 function abas_enrich_service_start_comment(mysqli $conn, array $user, string $comment): string
 {
-    return abas_enrich_service_actor_comment($conn, $user, $comment);
+    return abas_build_service_log_comment($conn, $user, 'start', $comment);
 }
 
 function abas_enrich_service_stop_comment(mysqli $conn, array $user, string $comment): string
 {
-    return abas_enrich_service_actor_comment($conn, $user, $comment);
+    return abas_build_service_log_comment($conn, $user, 'stop', $comment);
 }
 
+/** @deprecated use abas_build_service_log_comment */
 function abas_enrich_service_actor_comment(mysqli $conn, array $user, string $comment): string
 {
-    $meta = [
-        (string) ($user['username'] ?? ''),
-        abas_role_label((string) ($user['role'] ?? '')),
-        trim((string) ($user['phone'] ?? '')),
-    ];
-    if (($user['role'] ?? '') === 'montor') {
-        $company = abas_user_company_name($conn, $user);
-        if ($company !== '') {
-            $meta[] = $company;
-        }
-    }
-    $meta = array_values(array_filter($meta, static fn (string $part): bool => $part !== ''));
-    if ($meta === []) {
-        return $comment;
-    }
-
-    $suffix = implode(', ', $meta);
-    if ($suffix !== '' && (str_ends_with($comment, $suffix) || str_contains($comment, ' — ' . $suffix))) {
-        return function_exists('mb_substr')
-            ? (string) mb_substr($comment, 0, 255)
-            : substr($comment, 0, 255);
-    }
-
-    $enriched = $comment . ' — ' . $suffix;
-
-    return function_exists('mb_substr')
-        ? (string) mb_substr($enriched, 0, 255)
-        : substr($enriched, 0, 255);
+    return abas_build_service_log_comment($conn, $user, 'start', $comment);
 }
 
 /**

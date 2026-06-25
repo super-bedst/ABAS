@@ -250,9 +250,7 @@ function abas_stop_external_testqueue(
     }
 
     $client = abas_trekant();
-    $comm = trim($comment) !== '' ? trim($comment) : 'ABA service stoppet (ekstern test)';
-    $comm = abas_enrich_service_actor_comment($conn, $user, $comm);
-    $comm = abas_trekant_trim_service_comment($comm);
+    $comm = abas_build_service_log_comment($conn, $user, 'stop', trim($comment));
     $resp = $client->stopService((int) $installation['s_ins'], (string) $installation['deal_id'], $sInc > 0 ? $sInc : null, $comm);
     $code = abas_trekant_return_code($resp);
     abas_log_service_action(

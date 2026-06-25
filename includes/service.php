@@ -46,15 +46,6 @@ function abas_format_service_hours_da(float $hours): string
     return rtrim(rtrim(number_format($hours, 1, ',', ''), '0'), ',') . ' t';
 }
 
-function abas_service_default_comment(bool $isExtend, float $hours): string
-{
-    if ($isExtend) {
-        return 'ABA service forlænget ' . abas_format_service_hours_da($hours);
-    }
-
-    return 'ABA service startet';
-}
-
 function abas_service_remaining_extend_hours(?array $session): float
 {
     if (!$session) {
@@ -143,7 +134,8 @@ function abas_start_service_session(
     ?int $onBehalfUserId,
     string $comment,
     string $source = 'web',
-    bool $responsibilityAck = false
+    bool $responsibilityAck = false,
+    ?array $actorOverride = null
 ): array {
     if (!abas_installation_allows_service((string) ($installation['mon_stat'] ?? ''))) {
         $label = abas_mon_stat_label((string) ($installation['mon_stat'] ?? ''));
@@ -164,11 +156,13 @@ function abas_start_service_session(
     $sIns = (int) $installation['s_ins'];
     $dealId = (string) $installation['deal_id'];
     $testTime = abas_format_test_time_hours($hours);
-    $defaultComm = abas_service_default_comment($isExtend, $hours);
-    $commText = trim($comment) !== '' ? trim($comment) : $defaultComm;
+    $actionKey = $isExtend ? 'extend' : 'start';
+    $comm = '';
     if (in_array($source, ['web', 'sms', 'api'], true)) {
         $actor = $user;
-        if ($onBehalfUserId) {
+        if ($actorOverride !== null) {
+            $actor = $actorOverride;
+        } elseif ($onBehalfUserId) {
             $actorStmt = $conn->prepare('SELECT * FROM users WHERE id = ? LIMIT 1');
             $actorStmt->bind_param('i', $onBehalfUserId);
             $actorStmt->execute();
@@ -178,12 +172,10 @@ function abas_start_service_session(
                 $actor = $behalfUser;
             }
         }
-        $skipVcSelf = ($user['role'] ?? '') === 'vagtcentral' && !$onBehalfUserId;
-        if (!$skipVcSelf) {
-            $commText = abas_enrich_service_actor_comment($conn, $actor, $commText);
-        }
+        $comm = abas_build_service_log_comment($conn, $actor, $actionKey, trim($comment));
+    } else {
+        $comm = abas_build_service_log_comment($conn, $user, $actionKey, trim($comment));
     }
-    $comm = abas_trekant_trim_service_comment($commText);
     $knownSInc = null;
 
     if ($isExtend) {
@@ -321,11 +313,20 @@ function abas_stop_service_session(
     if ($sInc === null || $sInc <= 0) {
         $sInc = abas_trekant_active_test_s_inc($client, $sIns, $dealId);
     }
-    $baseComment = trim($comment) !== '' ? trim($comment) : 'ABA service stoppet';
-    if (in_array($source, ['web', 'sms', 'api'], true)) {
-        $baseComment = abas_enrich_service_actor_comment($conn, $user, $baseComment);
+    $actor = $user;
+    if ($onBehalfUserId) {
+        $actorStmt = $conn->prepare('SELECT * FROM users WHERE id = ? LIMIT 1');
+        $actorStmt->bind_param('i', $onBehalfUserId);
+        $actorStmt->execute();
+        $behalfUser = $actorStmt->get_result()->fetch_assoc();
+        $actorStmt->close();
+        if ($behalfUser) {
+            $actor = $behalfUser;
+        }
     }
-    $stopComment = abas_trekant_trim_service_comment($baseComment);
+    $stopComment = in_array($source, ['web', 'sms', 'api'], true)
+        ? abas_build_service_log_comment($conn, $actor, 'stop', trim($comment))
+        : abas_build_service_log_comment($conn, $user, 'stop', trim($comment));
     $resp = $client->stopService($sIns, $dealId, $sInc > 0 ? $sInc : null, $stopComment);
     $code = abas_trekant_return_code($resp);
     $userId = (int) $user['id'];
@@ -726,12 +727,9 @@ function abas_alarmlog_field_value(array $row, string $key): string
 
 function abas_alarmlog_status_label(string $code): string
 {
-    return match (strtoupper($code)) {
-        'UA' => 'Udkald aktivt',
-        'UR' => 'Tilbagestillet',
-        'UO' => 'Udkald opstået',
-        default => strtoupper($code),
-    };
+    require_once __DIR__ . '/installation_details.php';
+
+    return abas_zone_status_display($code);
 }
 
 /**
@@ -921,12 +919,17 @@ function abas_group_alarmlog_rows(array $rows): array
     foreach ($order as $key) {
         $group = $groups[$key];
         usort($group, static function (array $a, array $b): int {
+            $ta = abas_alarmlog_row_timestamp($a);
+            $tb = abas_alarmlog_row_timestamp($b);
+            if ($ta !== $tb) {
+                return $tb <=> $ta;
+            }
             $tmod = ((int) ($a['tmod'] ?? 0)) <=> ((int) ($b['tmod'] ?? 0));
             if ($tmod !== 0) {
                 return $tmod;
             }
 
-            return ((int) ($a['seq'] ?? 0)) <=> ((int) ($b['seq'] ?? 0));
+            return ((int) ($b['seq'] ?? 0)) <=> ((int) ($a['seq'] ?? 0));
         });
         $result[] = $group;
     }
@@ -1019,27 +1022,44 @@ function abas_render_alarmlog_rows_html(array $rows): string
 
     ob_start();
     foreach (abas_group_alarmlog_rows($rows) as $group) {
-        $head = $group[0];
+        $lines = [];
+        foreach ($group as $row) {
+            $summary = abas_format_alarmlog_compact($row, $lines !== []);
+            if ($summary === '') {
+                continue;
+            }
+            $lines[] = [
+                'row' => $row,
+                'summary' => $summary,
+                'is_head' => $lines === [],
+            ];
+        }
+        if ($lines === []) {
+            continue;
+        }
+
         $tone = abas_alarmlog_group_tone($group);
         ?>
         <tr>
-            <td class="whitespace-nowrap align-top"><?= htmlspecialchars(abas_format_alarmlog_timestamp($head)) ?></td>
+            <td class="align-top whitespace-nowrap">
+                <div class="abas-log-times space-y-1">
+                    <?php foreach ($lines as $line): ?>
+                        <div class="<?= $line['is_head'] ? 'font-medium text-gray-900' : 'abas-log-subline-time text-xs text-gray-500' ?>">
+                            <?= htmlspecialchars(abas_format_alarmlog_timestamp($line['row'])) ?>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </td>
             <td class="align-top">
                 <div class="abas-log-entry abas-log-entry--<?= htmlspecialchars($tone) ?>">
                     <div class="flex gap-2">
                         <span class="abas-log-dot abas-log-dot--<?= htmlspecialchars($tone) ?>" aria-hidden="true"></span>
                         <div class="flex-1 space-y-1 min-w-0">
-                            <?php foreach ($group as $index => $row): ?>
-                                <?php
-                                $summary = abas_format_alarmlog_compact($row, $index > 0);
-                                if ($summary === '') {
-                                    continue;
-                                }
-                                ?>
-                                <?php if ($index === 0): ?>
-                                    <div class="font-medium text-gray-900 break-words"><?= htmlspecialchars($summary) ?></div>
+                            <?php foreach ($lines as $line): ?>
+                                <?php if ($line['is_head']): ?>
+                                    <div class="font-medium text-gray-900 break-words"><?= htmlspecialchars($line['summary']) ?></div>
                                 <?php else: ?>
-                                    <div class="abas-log-subline break-words"><?= htmlspecialchars($summary) ?></div>
+                                    <div class="abas-log-subline break-words"><?= htmlspecialchars($line['summary']) ?></div>
                                 <?php endif; ?>
                             <?php endforeach; ?>
                         </div>

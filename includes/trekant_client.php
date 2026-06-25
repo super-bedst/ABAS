@@ -424,6 +424,54 @@ function abas_trekant_trim_comment(string $comment, int $maxLen = 80): string
         : substr($text, 0, $maxLen);
 }
 
+function abas_trekant_trim_log_parts(array $parts, int $maxLen = 80): string
+{
+    $parts = array_values(array_filter($parts, static fn (string $part): bool => trim($part) !== ''));
+    if ($parts === []) {
+        return '';
+    }
+
+    $strlen = static function (string $text): int {
+        return function_exists('mb_strlen') ? mb_strlen($text) : strlen($text);
+    };
+    $substr = static function (string $text, int $start, int $length): string {
+        return function_exists('mb_substr')
+            ? (string) mb_substr($text, $start, $length)
+            : substr($text, $start, $length);
+    };
+    $join = static function (array $items) use ($strlen): string {
+        return implode(', ', $items);
+    };
+
+    $full = $join($parts);
+    if ($strlen($full) <= $maxLen) {
+        return $full;
+    }
+
+    $event = $parts[0];
+    $tailCount = min(3, count($parts) - 1);
+    $tailParts = array_slice($parts, -$tailCount);
+    $tail = $join($tailParts);
+    $middle = count($parts) > 1 + $tailCount
+        ? array_slice($parts, 1, count($parts) - 1 - $tailCount)
+        : [];
+
+    $minimal = $event . ($tail !== '' ? ', ' . $tail : '');
+    if ($strlen($minimal) <= $maxLen) {
+        $room = $maxLen - $strlen($minimal) - 2;
+        if ($room > 0 && $middle !== []) {
+            $comment = rtrim($substr($middle[0], 0, $room));
+            if ($comment !== '') {
+                return $event . ', ' . $comment . ', ' . $tail;
+            }
+        }
+
+        return $minimal;
+    }
+
+    return abas_trekant_trim_comment($full, $maxLen);
+}
+
 function abas_trekant_trim_service_comment(string $comment, int $maxLen = 80): string
 {
     $comment = trim($comment);
