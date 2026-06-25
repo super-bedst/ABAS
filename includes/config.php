@@ -78,6 +78,11 @@ function abas_config(): array
         'mail' => [
             'from' => abas_env('MAIL_FROM', 'noreply@trekantbrand.dk'),
             'from_name' => abas_env('MAIL_FROM_NAME', 'ABA Service'),
+            'smtp_host' => abas_env('SMTP_HOST'),
+            'smtp_port' => (int) abas_env('SMTP_PORT', '587'),
+            'smtp_user' => abas_env('SMTP_USER'),
+            'smtp_pass' => abas_env('SMTP_PASS'),
+            'smtp_secure' => strtolower((string) abas_env('SMTP_SECURE', '')),
         ],
         'sms' => [
             'enabled' => abas_env('SMS_ENABLED', '1') !== '0',
