@@ -34,6 +34,10 @@ if ($path === 'cron/reconcile-service' && in_array($method, ['GET', 'POST'], tru
     abas_handle_reconcile_service_webhook($conn);
 }
 
+if ($path === 'cron/sms-expiry-warnings' && in_array($method, ['GET', 'POST'], true)) {
+    abas_handle_sms_expiry_cron_webhook($conn);
+}
+
 $token = abas_api_authenticate($conn);
 $apiUser = abas_api_user_from_token($conn, $token);
 

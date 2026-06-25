@@ -121,30 +121,23 @@ Hvis `npm install` fejler (fx exit `-4048` pga. fil-lås/antivirus), brug **Skip
 
 Scriptet kører `git pull`, `npm install` og `npm run build`. Kræver [Node.js](https://nodejs.org) på serveren.
 
-## Cron
+## Cron (Node-RED / planlagt HTTP)
 
-```cron
-*/5 * * * * php /path/to/ABAS/cron/sms_expiry.php
-*/5 * * * * php /path/to/ABAS/cron/sms_outbound.php
-0 2 * * * php /path/to/ABAS/cron/sync_installations.php
-*/15 * * * * php /path/to/ABAS/cron/expire_sessions.php
-```
+Sæt `SYNC_CRON_SECRET` i `env.local`. Alle cron-kald bruger `?key=<secret>` eller `Authorization: Bearer <secret>`.
 
-**Anlægssynk via HTTP (Node-RED):** Sæt `SYNC_CRON_SECRET` i `env.local`, kald derefter:
+| Interval | Endpoint |
+|----------|----------|
+| 1× dagligt | `GET .../api/v1/cron/sync-installations?key=<secret>` |
+| Hvert 5–15 min | `GET .../api/v1/cron/reconcile-service?key=<secret>` |
+| Hvert 5 min | `GET .../api/v1/cron/sms-expiry-warnings?key=<secret>` |
 
-```
-GET https://tkb.teamscreen.dk/Sandbox/ABAS/public/api/v1/cron/sync-installations?key=<secret>
-```
+**Anlægssynk** — lang timeout i Node-RED (typisk 1–2 min). Svar: JSON med `total_upserted`, `duration_ms`.
 
-Alternativt `Authorization: Bearer <secret>`. Svar er JSON med `total_upserted` og `duration_ms`. Sæt lang timeout i Node-RED (typisk 1–2 min for 100 batch-kald pr. prefix).
+**Service-reconcile** — lukker ABA-sessions når Trekant testkø er tom (fx ved tidsudløb eller VC-stop). Svar: `closed_abas`, `external_found`, osv.
 
-**Service-reconcile (ekstern testkø):** Samme nøgle (`SYNC_CRON_SECRET`):
+**SMS-udløbsadvarsler** — sender 15-min SMS for aktive sessions (`warnings_sent` i svar). SMS sendes med det samme via `abas_sms_queue`.
 
-```
-GET https://tkb.teamscreen.dk/Sandbox/ABAS/public/api/v1/cron/reconcile-service?key=<secret>
-```
-
-Legacy-URL'er (`/cron/sync_installations.php` og `/cron/reconcile_service.php`) kræver nu også `?key=` ved HTTP-kald. CLI-cron uden nøgle virker som før.
+Legacy-URL'er (`/cron/sync_installations.php`, `/cron/reconcile_service.php`, `/cron/sms_expiry.php`) virker også med `?key=` ved HTTP. CLI uden nøgle virker stadig for synk og reconcile.
 
 ## API
 

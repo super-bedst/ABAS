@@ -322,3 +322,44 @@ function abas_sms_send_expiry_warnings(mysqli $conn): int
 
     return $count;
 }
+
+function abas_sms_expiry_cron_verify_request(): bool
+{
+    require_once __DIR__ . '/cron_auth.php';
+
+    return abas_cron_verify_request(['SERVICE_RECONCILE_CRON_SECRET', 'SYNC_CRON_SECRET']);
+}
+
+function abas_sms_expiry_cron_auth_error(): string
+{
+    require_once __DIR__ . '/cron_auth.php';
+
+    return abas_cron_auth_error(['SERVICE_RECONCILE_CRON_SECRET', 'SYNC_CRON_SECRET'], 'sms-expiry');
+}
+
+/**
+ * @return array{ok:bool, warnings_sent:int, duration_ms:int}
+ */
+function abas_sms_run_expiry_warnings(mysqli $conn): array
+{
+    $startedAt = microtime(true);
+    $count = abas_sms_send_expiry_warnings($conn);
+
+    return [
+        'ok' => true,
+        'warnings_sent' => $count,
+        'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+    ];
+}
+
+function abas_handle_sms_expiry_cron_webhook(mysqli $conn): never
+{
+    require_once __DIR__ . '/api_auth.php';
+
+    if (!abas_sms_expiry_cron_verify_request()) {
+        abas_api_json(403, ['ok' => false, 'error' => abas_sms_expiry_cron_auth_error()]);
+    }
+
+    $result = abas_sms_run_expiry_warnings($conn);
+    abas_api_json(200, $result);
+}
