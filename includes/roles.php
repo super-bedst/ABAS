@@ -46,7 +46,7 @@ function abas_virksomhedsadmin_may_manage_user(array $actor, array $target): boo
     if (!abas_user_same_installer($actor, $target)) {
         return false;
     }
-    if (in_array($target['role'] ?? '', ['admin', 'vagtcentral', 'virksomhedsadmin'], true)) {
+    if (in_array($target['role'] ?? '', ['admin', 'vagtcentral'], true)) {
         return false;
     }
 

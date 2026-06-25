@@ -477,7 +477,97 @@ function abas_admin_users_order_sql(string $sort, string $dir): string
     return "$col $dir, u.username ASC";
 }
 
-function abas_admin_users_list_url(string $filter = 'alle', ?string $sort = null, ?string $dir = null): string
+/** @return list<string> */
+function abas_admin_users_matching_roles(string $search): array
+{
+    $search = mb_strtolower(trim($search));
+    if ($search === '') {
+        return [];
+    }
+
+    $matched = [];
+    foreach (abas_roles() as $role) {
+        $label = mb_strtolower(abas_role_label($role));
+        if (str_contains($label, $search) || str_contains($role, $search)) {
+            $matched[] = $role;
+        }
+    }
+
+    return $matched;
+}
+
+/**
+ * @param list<string> $rolesInFilter
+ * @return list<array<string, mixed>>
+ */
+function abas_admin_users_list_rows(
+    mysqli $conn,
+    array $rolesInFilter,
+    string $sort,
+    string $sortDir,
+    string $search = ''
+): array {
+    if ($rolesInFilter === []) {
+        return [];
+    }
+
+    $placeholders = implode(',', array_fill(0, count($rolesInFilter), '?'));
+    $orderSql = abas_admin_users_order_sql($sort, $sortDir);
+    $search = trim($search);
+    $searchSql = '';
+    $searchParams = [];
+    $searchTypes = '';
+
+    if ($search !== '') {
+        $like = '%' . $search . '%';
+        $roleMatches = abas_admin_users_matching_roles($search);
+        $roleInSql = '';
+        if ($roleMatches !== []) {
+            $rolePlaceholders = implode(',', array_fill(0, count($roleMatches), '?'));
+            $roleInSql = ' OR u.role IN (' . $rolePlaceholders . ')';
+            $searchTypes .= str_repeat('s', count($roleMatches));
+            $searchParams = array_merge($searchParams, $roleMatches);
+        }
+
+        $searchSql = ' AND (
+            u.username LIKE ?
+            OR u.email LIKE ?
+            OR u.phone LIKE ?
+            OR u.registration_display_name LIKE ?
+            OR u.trekant_userid LIKE ?
+            OR ai.company_name LIKE ?
+            OR u.role LIKE ?
+            OR u.registration_status LIKE ?
+            OR EXISTS (
+                SELECT 1 FROM user_installations ui
+                INNER JOIN installations i ON i.id = ui.installation_id
+                WHERE ui.user_id = u.id AND (i.miscno2 LIKE ? OR i.name LIKE ?)
+            )' . $roleInSql . '
+        )';
+        $searchTypes = str_repeat('s', 10) . $searchTypes;
+        $searchParams = array_merge(array_fill(0, 10, $like), $searchParams);
+    }
+
+    $sql = "SELECT u.id, u.email, u.username, u.role, u.active, u.phone, u.sms_secret_hash, u.sms_service_allowed,
+            u.registration_status, u.registration_display_name, u.last_login_at, ai.company_name
+     FROM users u
+     LEFT JOIN approved_installers ai ON ai.id = u.installer_id
+     WHERE u.role IN ($placeholders) $searchSql
+     ORDER BY $orderSql";
+
+    $types = str_repeat('s', count($rolesInFilter)) . $searchTypes;
+    $params = array_merge($rolesInFilter, $searchParams);
+
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param($types, ...$params);
+    $stmt->execute();
+    $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+
+    return $rows;
+}
+
+function abas_admin_users_list_url(string $filter = 'alle', ?string $sort = null, ?string $dir = null, ?string $search = null): string
 {
     $params = [];
     if ($filter !== 'alle') {
@@ -487,13 +577,16 @@ function abas_admin_users_list_url(string $filter = 'alle', ?string $sort = null
         $params['sort'] = $sort;
         $params['dir'] = strtolower((string) $dir) === 'desc' ? 'desc' : 'asc';
     }
+    if ($search !== null && trim($search) !== '') {
+        $params['q'] = trim($search);
+    }
 
     $path = 'admin/users.php';
 
     return $params === [] ? abas_url($path) : abas_url($path . '?' . http_build_query($params));
 }
 
-function abas_admin_user_edit_url(int $userId, string $filter = 'alle', ?string $sort = null, ?string $dir = null): string
+function abas_admin_user_edit_url(int $userId, string $filter = 'alle', ?string $sort = null, ?string $dir = null, ?string $search = null): string
 {
     $params = ['id' => $userId];
     if ($filter !== 'alle') {
@@ -503,6 +596,9 @@ function abas_admin_user_edit_url(int $userId, string $filter = 'alle', ?string 
         $params['sort'] = $sort;
         $params['dir'] = strtolower((string) $dir) === 'desc' ? 'desc' : 'asc';
     }
+    if ($search !== null && trim($search) !== '') {
+        $params['q'] = trim($search);
+    }
 
     return abas_url('admin/user-edit.php?' . http_build_query($params));
 }
@@ -510,7 +606,7 @@ function abas_admin_user_edit_url(int $userId, string $filter = 'alle', ?string 
 /**
  * @return array{href: string, active: bool, indicator: string}
  */
-function abas_admin_users_sort_link(string $column, string $currentSort, string $currentDir, string $filter): array
+function abas_admin_users_sort_link(string $column, string $currentSort, string $currentDir, string $filter, string $search = ''): array
 {
     if (!in_array($column, abas_admin_users_sort_columns(), true)) {
         throw new InvalidArgumentException('Unknown sort column: ' . $column);
@@ -519,7 +615,7 @@ function abas_admin_users_sort_link(string $column, string $currentSort, string 
     $nextDir = $currentSort === $column && $currentDir === 'asc' ? 'desc' : 'asc';
 
     return [
-        'href' => abas_admin_users_list_url($filter, $column, $nextDir),
+        'href' => abas_admin_users_list_url($filter, $column, $nextDir, $search !== '' ? $search : null),
         'active' => $currentSort === $column,
         'indicator' => $currentSort === $column ? ($currentDir === 'asc' ? '↑' : '↓') : '',
     ];

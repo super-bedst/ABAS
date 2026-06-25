@@ -47,7 +47,9 @@ if (!in_array($sort, abas_admin_users_sort_columns(), true)) {
 }
 $sortDir = strtolower((string) ($_GET['dir'] ?? 'asc')) === 'desc' ? 'desc' : 'asc';
 
-$redirectUrl = abas_admin_users_list_url($filter, $sort !== '' ? $sort : null, $sort !== '' ? $sortDir : null);
+$search = trim((string) ($_GET['q'] ?? ''));
+
+$redirectUrl = abas_admin_users_list_url($filter, $sort !== '' ? $sort : null, $sort !== '' ? $sortDir : null, $search !== '' ? $search : null);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? 'create';
@@ -157,27 +159,13 @@ $filterCount = static function (string $key) use ($filterGroups, $roleCounts): i
     return $total;
 };
 
-$placeholders = implode(',', array_fill(0, count($rolesInFilter), '?'));
-$types = str_repeat('s', count($rolesInFilter));
-$orderSql = abas_admin_users_order_sql($sort, $sortDir);
-$stmt = $conn->prepare(
-    "SELECT u.id, u.email, u.username, u.role, u.active, u.phone, u.sms_secret_hash, u.sms_service_allowed,
-            u.registration_status, u.registration_display_name, u.last_login_at, ai.company_name
-     FROM users u
-     LEFT JOIN approved_installers ai ON ai.id = u.installer_id
-     WHERE u.role IN ($placeholders)
-     ORDER BY $orderSql"
-);
-$stmt->bind_param($types, ...$rolesInFilter);
-$stmt->execute();
-$rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-$stmt->close();
+$rows = abas_admin_users_list_rows($conn, $rolesInFilter, $sort, $sortDir, $search);
 
 $ownerInstallations = abas_user_installations_with_service_status($conn);
 
 /** @param array{href: string, active: bool, indicator: string} $link */
-$renderSortTh = static function (string $label, string $column) use ($sort, $sortDir, $filter): void {
-    $link = abas_admin_users_sort_link($column, $sort, $sortDir, $filter);
+$renderSortTh = static function (string $label, string $column) use ($sort, $sortDir, $filter, $search): void {
+    $link = abas_admin_users_sort_link($column, $sort, $sortDir, $filter, $search);
     $class = 'abas-table-sort' . ($link['active'] ? ' abas-table-sort--active' : '');
     echo '<th scope="col"><a href="' . htmlspecialchars($link['href']) . '" class="' . $class . '">';
     echo htmlspecialchars($label);
@@ -201,7 +189,7 @@ require __DIR__ . '/../partials/header.php';
     <?php foreach ($filterLabels as $key => $label): ?>
         <?php
         $isActive = $filter === $key;
-        $href = abas_admin_users_list_url($key, $sort !== '' ? $sort : null, $sort !== '' ? $sortDir : null);
+        $href = abas_admin_users_list_url($key, $sort !== '' ? $sort : null, $sort !== '' ? $sortDir : null, $search !== '' ? $search : null);
         ?>
         <a
             href="<?= $href ?>"
@@ -209,6 +197,34 @@ require __DIR__ . '/../partials/header.php';
         ><?= htmlspecialchars($label) ?> <span class="<?= $isActive ? 'text-white/80' : 'text-gray-400' ?>">(<?= $filterCount($key) ?>)</span></a>
     <?php endforeach; ?>
 </nav>
+
+<form method="get" class="mb-6 flex flex-wrap gap-2 items-end max-w-2xl" role="search">
+    <?php if ($filter !== 'alle'): ?>
+        <input type="hidden" name="filter" value="<?= htmlspecialchars($filter) ?>">
+    <?php endif; ?>
+    <?php if ($sort !== ''): ?>
+        <input type="hidden" name="sort" value="<?= htmlspecialchars($sort) ?>">
+        <input type="hidden" name="dir" value="<?= htmlspecialchars($sortDir) ?>">
+    <?php endif; ?>
+    <div class="abas-field flex-1 min-w-[14rem] !mb-0">
+        <label class="abas-label" for="user-search">Søg</label>
+        <input
+            id="user-search"
+            type="search"
+            name="q"
+            value="<?= htmlspecialchars($search) ?>"
+            placeholder="Navn, e-mail, telefon, firma, anlæg, rolle …"
+            class="abas-input"
+        >
+    </div>
+    <button type="submit" class="abas-btn-secondary">Søg</button>
+    <?php if ($search !== ''): ?>
+        <a href="<?= htmlspecialchars(abas_admin_users_list_url($filter, $sort !== '' ? $sort : null, $sort !== '' ? $sortDir : null)) ?>" class="abas-btn-secondary">Ryd</a>
+    <?php endif; ?>
+</form>
+<?php if ($search !== ''): ?>
+<p class="text-sm text-gray-600 mb-4"><?= count($rows) ?> resultat<?= count($rows) === 1 ? '' : 'er' ?> for «<?= htmlspecialchars($search) ?>»</p>
+<?php endif; ?>
 
 <details class="abas-card mb-6 max-w-lg abas-form group">
     <summary class="abas-card-title cursor-pointer list-none flex items-center justify-between gap-2">
@@ -267,7 +283,7 @@ require __DIR__ . '/../partials/header.php';
     </thead>
     <tbody>
     <?php if ($rows === []): ?>
-        <tr><td colspan="8" class="text-gray-500 text-sm">Ingen brugere i dette filter.</td></tr>
+        <tr><td colspan="8" class="text-gray-500 text-sm"><?= $search !== '' ? 'Ingen brugere matcher søgningen.' : 'Ingen brugere i dette filter.' ?></td></tr>
     <?php endif; ?>
     <?php foreach ($rows as $r): ?>
         <tr class="<?= empty($r['active']) ? 'opacity-60' : '' ?>">
@@ -317,7 +333,7 @@ require __DIR__ . '/../partials/header.php';
                 ?>
             </td>
             <td class="text-right whitespace-nowrap space-x-2">
-                <a href="<?= htmlspecialchars(abas_admin_user_edit_url((int) $r['id'], $filter, $sort !== '' ? $sort : null, $sort !== '' ? $sortDir : null)) ?>" class="abas-link text-sm">Rediger</a>
+                <a href="<?= htmlspecialchars(abas_admin_user_edit_url((int) $r['id'], $filter, $sort !== '' ? $sort : null, $sort !== '' ? $sortDir : null, $search !== '' ? $search : null)) ?>" class="abas-link text-sm">Rediger</a>
                 <?php if ((int) $r['id'] !== (int) $user['id']): ?>
                 <form method="post" class="inline" onsubmit="return confirm('Slet eller deaktiver <?= htmlspecialchars($r['username'], ENT_QUOTES) ?>?')">
                     <input type="hidden" name="action" value="delete">

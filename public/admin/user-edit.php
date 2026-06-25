@@ -42,8 +42,9 @@ if (!in_array($listSort, abas_admin_users_sort_columns(), true)) {
     $listSort = '';
 }
 $listDir = strtolower((string) ($_GET['dir'] ?? $_POST['dir'] ?? 'asc')) === 'desc' ? 'desc' : 'asc';
-$listUrl = abas_admin_users_list_url($listFilter, $listSort !== '' ? $listSort : null, $listSort !== '' ? $listDir : null);
-$selfUrl = abas_admin_user_edit_url($id, $listFilter, $listSort !== '' ? $listSort : null, $listSort !== '' ? $listDir : null);
+$listSearch = trim((string) ($_GET['q'] ?? $_POST['q'] ?? ''));
+$listUrl = abas_admin_users_list_url($listFilter, $listSort !== '' ? $listSort : null, $listSort !== '' ? $listDir : null, $listSearch !== '' ? $listSearch : null);
+$selfUrl = abas_admin_user_edit_url($id, $listFilter, $listSort !== '' ? $listSort : null, $listSort !== '' ? $listDir : null, $listSearch !== '' ? $listSearch : null);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? 'save';
@@ -220,6 +221,9 @@ require __DIR__ . '/../partials/header.php';
     <?php if ($listSort !== ''): ?>
     <input type="hidden" name="sort" value="<?= htmlspecialchars($listSort) ?>">
     <input type="hidden" name="dir" value="<?= htmlspecialchars($listDir) ?>">
+    <?php endif; ?>
+    <?php if ($listSearch !== ''): ?>
+    <input type="hidden" name="q" value="<?= htmlspecialchars($listSearch) ?>">
     <?php endif; ?>
     <div class="abas-field">
         <label class="abas-label" for="registration_display_name">Visningsnavn</label>
