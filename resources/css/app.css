@@ -299,7 +299,7 @@
   }
 
   .abas-log-entry {
-    @apply space-y-1 border-l-4 pl-3;
+    @apply border-l-4 pl-3 py-1.5 rounded-r-md;
   }
 
   .abas-log-entry--alarm {
@@ -369,16 +369,12 @@
     background-color: rgb(240 253 244 / 0.45);
   }
 
-  .abas-log-subline {
-    @apply text-xs text-gray-700 pl-4 border-l border-gray-200 ml-1 min-h-[1.125rem];
+  .abas-log-row--neutral > td {
+    background-color: transparent;
   }
 
-  .abas-log-subline-time {
-    @apply min-h-[1.125rem] leading-5;
-  }
-
-  .abas-log-times .font-medium {
-    @apply min-h-[1.25rem] leading-5;
+  .abas-log-time {
+    @apply min-h-[1.25rem] leading-5 py-1.5;
   }
 
   .abas-log-entry-detail {
