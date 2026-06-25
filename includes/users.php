@@ -274,28 +274,20 @@ function abas_vc_append_manual_montor_comment(string $comment, string $name, str
 
 function abas_enrich_service_start_comment(mysqli $conn, array $user, string $comment): string
 {
-    if ($comment === '' || ($user['role'] ?? '') === 'vagtcentral') {
-        return $comment;
-    }
-
-    return abas_enrich_service_user_comment($conn, $user, $comment);
+    return abas_enrich_service_actor_comment($conn, $user, $comment);
 }
 
 function abas_enrich_service_stop_comment(mysqli $conn, array $user, string $comment): string
 {
-    return abas_enrich_service_user_comment($conn, $user, $comment);
+    return abas_enrich_service_actor_comment($conn, $user, $comment);
 }
 
-function abas_enrich_service_user_comment(mysqli $conn, array $user, string $comment): string
+function abas_enrich_service_actor_comment(mysqli $conn, array $user, string $comment): string
 {
-    if ($comment === '') {
-        return $comment;
-    }
-
     $meta = [
         (string) ($user['username'] ?? ''),
-        trim((string) ($user['phone'] ?? '')),
         abas_role_label((string) ($user['role'] ?? '')),
+        trim((string) ($user['phone'] ?? '')),
     ];
     if (($user['role'] ?? '') === 'montor') {
         $company = abas_user_company_name($conn, $user);
@@ -308,9 +300,24 @@ function abas_enrich_service_user_comment(mysqli $conn, array $user, string $com
         return $comment;
     }
 
-    $enriched = $comment . ' — ' . implode(', ', $meta);
+    $suffix = implode(', ', $meta);
+    if ($suffix !== '' && (str_ends_with($comment, $suffix) || str_contains($comment, ' — ' . $suffix))) {
+        return function_exists('mb_substr')
+            ? (string) mb_substr($comment, 0, 255)
+            : substr($comment, 0, 255);
+    }
+
+    $enriched = $comment . ' — ' . $suffix;
 
     return function_exists('mb_substr')
         ? (string) mb_substr($enriched, 0, 255)
         : substr($enriched, 0, 255);
+}
+
+/**
+ * @deprecated use abas_enrich_service_actor_comment
+ */
+function abas_enrich_service_user_comment(mysqli $conn, array $user, string $comment): string
+{
+    return abas_enrich_service_actor_comment($conn, $user, $comment);
 }

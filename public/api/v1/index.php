@@ -73,7 +73,7 @@ if (preg_match('#^installations/([^/]+)/log$#', $path, $m) && $method === 'GET')
         abas_api_json(404, ['error' => 'Anlæg ikke fundet']);
     }
     $mode = $_GET['mode'] ?? 'last20';
-    $log = abas_fetch_installation_log($installation, $mode);
+    $log = abas_fetch_installation_log($installation, $mode, null, $apiUser);
     abas_api_json(200, ['code' => $log['code'], 'items' => $log['rows']]);
 }
 

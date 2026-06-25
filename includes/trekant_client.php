@@ -93,15 +93,22 @@ class TrekantClient
         ]);
     }
 
-    public function startService(int $sIns, string $dealId, string $testTime, string $comm = '', int $zoneix = -1): array
+    public function startService(string $userid, int $sIns, string $dealId, string $testTime, string $comm = '', int $zoneix = -1, ?int $sInc = null): array
     {
-        return $this->call('c_ma_testqueue', [
+        $body = [
+            'userid' => strtoupper($userid),
             's_ins' => $sIns,
             'deal_id' => $dealId,
             'test_time' => $testTime,
             'comm' => $comm,
             'zoneix' => $zoneix,
-        ]);
+            'term' => $this->term,
+        ];
+        if ($sInc !== null && $sInc > 0) {
+            $body['s_inc'] = $sInc;
+        }
+
+        return $this->call('c_ma_testqueue', $body);
     }
 
     public function stopService(int $sIns, string $dealId, ?int $sInc = null, string $comment = ''): array
@@ -119,17 +126,41 @@ class TrekantClient
         return $this->call('d_ma_testqueue', $body);
     }
 
-    public function extendService(int $sIns, int $sInc): array
+    public function getTestQueueRemaining(string $userid, int $sIns, string $dealId, int $sInc): array
     {
         return $this->call('c_ma_testqueue_remaining', [
+            'userid' => strtoupper($userid),
             's_ins' => $sIns,
+            'deal_id' => $dealId,
             's_inc' => $sInc,
+            'test_time' => '0000:00:00:00',
         ]);
     }
 
-    public function getAlarmLog(int $sIns, string $dealId, int $lines = 20, ?array $dateRange = null): array
+    public function setTestQueueRemaining(string $userid, int $sIns, string $dealId, int $sInc, string $testTime, string $comm = ''): array
     {
-        $body = ['s_ins' => $sIns, 'deal_id' => $dealId, 'lines' => $lines];
+        $body = [
+            'userid' => strtoupper($userid),
+            's_ins' => $sIns,
+            'deal_id' => $dealId,
+            's_inc' => $sInc,
+            'test_time' => $testTime,
+        ];
+        if ($comm !== '') {
+            $body['comm'] = $comm;
+        }
+
+        return $this->call('c_ma_testqueue_remaining', $body);
+    }
+
+    public function getAlarmLog(string $userid, int $sIns, string $dealId, int $lines = 20, ?array $dateRange = null): array
+    {
+        $body = [
+            'userid' => strtoupper($userid),
+            's_ins' => $sIns,
+            'deal_id' => $dealId,
+            'lines' => $lines,
+        ];
         if ($dateRange) {
             foreach (['startdate', 'starttime', 'enddate', 'endtime'] as $k) {
                 if (!empty($dateRange[$k])) {
@@ -154,6 +185,15 @@ class TrekantClient
     public function getInstallationDetails(int $sIns, string $dealId): array
     {
         return $this->call('g_ma_installations', [
+            's_ins' => $sIns,
+            'deal_id' => $dealId,
+        ]);
+    }
+
+    public function getInstallationZones(string $userid, int $sIns, string $dealId): array
+    {
+        return $this->call('g_ma_zone', [
+            'userid' => strtoupper($userid),
             's_ins' => $sIns,
             'deal_id' => $dealId,
         ]);
@@ -232,14 +272,39 @@ function abas_trekant_userid(?array $user): string
 
 function abas_format_test_time_hours(float $hours): string
 {
-    $h = (int) floor($hours);
-    $mins = (int) round(($hours - $h) * 60);
-    if ($mins >= 60) {
-        $h++;
-        $mins = 0;
-    }
+    return abas_format_test_time_seconds((int) round($hours * 3600));
+}
 
-    return sprintf('0000:%02d:%02d:00', $h, $mins);
+function abas_format_test_time_seconds(int $totalSeconds): string
+{
+    $totalSeconds = max(0, $totalSeconds);
+    $h = intdiv($totalSeconds, 3600);
+    $rem = $totalSeconds % 3600;
+    $m = intdiv($rem, 60);
+    $s = $rem % 60;
+
+    return sprintf('0000:%02d:%02d:%02d', $h, $m, $s);
+}
+
+/** @deprecated Use abas_format_test_time_seconds() */
+function abas_format_test_time_minutes(int $totalMinutes): string
+{
+    return abas_format_test_time_seconds($totalMinutes * 60);
+}
+
+function abas_trekant_extract_tim_rem(array $response): ?int
+{
+    $rows = abas_trekant_rows($response);
+    if ($rows === []) {
+        return null;
+    }
+    $first = $rows[0];
+    if (!is_array($first) || !array_key_exists('tim_rem', $first)) {
+        return null;
+    }
+    $n = (int) $first['tim_rem'];
+
+    return $n >= 0 ? $n : null;
 }
 
 function abas_unlimited_test_time(): string

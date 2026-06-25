@@ -69,7 +69,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $log = ['rows' => [], 'code' => -1];
 try {
-    $log = abas_fetch_installation_log($installation, $logMode, $customRange);
+    $log = abas_fetch_installation_log($installation, $logMode, $customRange, $user);
 } catch (Throwable $e) {
     abas_flash_set('error', 'Log: ' . $e->getMessage());
 }
@@ -78,6 +78,8 @@ $instDetails = abas_fetch_installation_details($installation, $user);
 $mapLat = $instDetails['lat'];
 $mapLon = $instDetails['lon'];
 $contacts = $instDetails['contacts'];
+$zones = $instDetails['zones'];
+$zonesError = $instDetails['zones_error'];
 $canStartService = abas_installation_allows_service((string) ($installation['mon_stat'] ?? ''));
 $inAbasService = $session !== null;
 $externalService = $externalTest !== null && !$inAbasService;
@@ -89,6 +91,7 @@ $currentUser = $user;
 $extraHead = ($mapLat !== null && $mapLon !== null)
     ? '<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">'
     : '';
+$extraHead .= '<script src="' . htmlspecialchars(abas_asset_url('assets/js/installation-auto-refresh.js')) . '" defer></script>';
 require __DIR__ . '/partials/header.php';
 ?>
 <div class="mb-2">
@@ -222,6 +225,13 @@ require __DIR__ . '/partials/header.php';
             </ul>
         <?php endif; ?>
 
+        <div class="mt-4 pt-3 border-t" id="inst-zones-wrap">
+            <h3 class="text-sm font-semibold text-gray-900 mb-2">Zonestatus</h3>
+            <div id="inst-zones-content">
+                <?= abas_render_installation_zones_html($zones, $zonesError) ?>
+            </div>
+        </div>
+
         <dl class="grid grid-cols-2 gap-1 mt-4 pt-3 border-t text-xs">
             <dt class="text-gray-500">s_ins</dt><dd><?= (int) $installation['s_ins'] ?></dd>
             <dt class="text-gray-500">deal_id</dt><dd><?= htmlspecialchars((string) $installation['deal_id']) ?></dd>
@@ -272,76 +282,48 @@ require __DIR__ . '/partials/header.php';
     </form>
     <?php if ($log['code'] !== 0): ?>
         <p class="p-4 text-amber-800" id="inst-log-error">Log kunne ikke hentes (kode <?= (int) $log['code'] ?>).</p>
+        <p class="p-4 text-gray-500 hidden" id="inst-log-empty">Ingen loglinjer.</p>
+        <div class="abas-log-body hidden" id="inst-log-body">
+            <table class="abas-table abas-log-table text-xs">
+                <thead><tr><th>Tidspunkt</th><th>Detaljer</th></tr></thead>
+                <tbody id="inst-log-rows"></tbody>
+            </table>
+        </div>
     <?php elseif ($log['rows'] === []): ?>
+        <p class="p-4 text-amber-800 hidden" id="inst-log-error"></p>
         <p class="p-4 text-gray-500" id="inst-log-empty">Ingen loglinjer.</p>
+        <div class="abas-log-body hidden" id="inst-log-body">
+            <table class="abas-table abas-log-table text-xs">
+                <thead><tr><th>Tidspunkt</th><th>Detaljer</th></tr></thead>
+                <tbody id="inst-log-rows"></tbody>
+            </table>
+        </div>
     <?php else: ?>
-    <div class="abas-log-body" id="inst-log-body">
-        <table class="abas-table abas-log-table text-xs">
-            <thead><tr><th>Tidspunkt</th><th>Detaljer</th></tr></thead>
-            <tbody id="inst-log-rows">
-            <?= abas_render_alarmlog_rows_html($log['rows']) ?>
-            </tbody>
-        </table>
-    </div>
+        <p class="p-4 text-amber-800 hidden" id="inst-log-error"></p>
+        <p class="p-4 text-gray-500 hidden" id="inst-log-empty">Ingen loglinjer.</p>
+        <div class="abas-log-body" id="inst-log-body">
+            <table class="abas-table abas-log-table text-xs">
+                <thead><tr><th>Tidspunkt</th><th>Detaljer</th></tr></thead>
+                <tbody id="inst-log-rows">
+                <?= abas_render_alarmlog_rows_html($log['rows']) ?>
+                </tbody>
+            </table>
+        </div>
     <?php endif; ?>
 </div>
 <script>
-(function () {
-    var refreshUrl = <?= json_encode(abas_url('installation-refresh.php?id=' . $id . '&log=' . rawurlencode($logMode)
-        . ($logMode === 'custom' && !empty($_GET['from']) && !empty($_GET['to'])
-            ? '&from=' . rawurlencode((string) $_GET['from']) . '&to=' . rawurlencode((string) $_GET['to'])
-            : ''))) ?>;
-    var initialSessionActive = <?= $session ? 'true' : 'false' ?>;
-    var initialExternalActive = <?= $externalService ? 'true' : 'false' ?>;
-    var logRows = document.getElementById('inst-log-rows');
-    var logBody = document.getElementById('inst-log-body');
-    var logEmpty = document.getElementById('inst-log-empty');
-    var logError = document.getElementById('inst-log-error');
-    var serviceStatus = document.getElementById('inst-service-status');
-
-    function refreshInstallationView() {
-        fetch(refreshUrl, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
-            .then(function (response) { return response.json(); })
-            .then(function (data) {
-                if (data.error) {
-                    return;
-                }
-                if (data.sessionActive !== initialSessionActive || data.externalActive !== initialExternalActive) {
-                    window.location.reload();
-                    return;
-                }
-                if (serviceStatus && data.sessionLabel) {
-                    serviceStatus.textContent = data.sessionLabel;
-                }
-                if (data.logCode !== 0) {
-                    return;
-                }
-                if (logError) {
-                    logError.style.display = 'none';
-                }
-                if (data.logEmpty) {
-                    if (logBody) {
-                        logBody.style.display = 'none';
-                    }
-                    if (logEmpty) {
-                        logEmpty.style.display = '';
-                    }
-                    return;
-                }
-                if (logEmpty) {
-                    logEmpty.style.display = 'none';
-                }
-                if (logBody) {
-                    logBody.style.display = '';
-                }
-                if (logRows && data.logHtml) {
-                    logRows.innerHTML = data.logHtml;
-                }
-            })
-            .catch(function () {});
+document.addEventListener('DOMContentLoaded', function () {
+    if (typeof window.abasInitInstallationAutoRefresh === 'function') {
+        window.abasInitInstallationAutoRefresh({
+            url: <?= json_encode(abas_url('installation-refresh.php?id=' . $id . '&log=' . rawurlencode($logMode)
+                . ($logMode === 'custom' && !empty($_GET['from']) && !empty($_GET['to'])
+                    ? '&from=' . rawurlencode((string) $_GET['from']) . '&to=' . rawurlencode((string) $_GET['to'])
+                    : ''))) ?>,
+            sessionActive: <?= $session ? 'true' : 'false' ?>,
+            externalActive: <?= $externalService ? 'true' : 'false' ?>,
+            intervalMs: 5000,
+        });
     }
-
-    setInterval(refreshInstallationView, 5000);
-})();
+});
 </script>
 <?php require __DIR__ . '/partials/footer.php';

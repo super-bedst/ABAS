@@ -67,7 +67,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $m->close();
         if ($montorRow) {
             $onBehalf = (int) $montorRow['id'];
-            $comment = abas_enrich_service_start_comment($conn, $montorRow, $comment);
         }
     } elseif ($manualName !== '' || $manualPhone !== '') {
         $comment = abas_vc_append_person_comment($comment, $manualName, $manualPhone);

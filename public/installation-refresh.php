@@ -9,6 +9,7 @@ require_once __DIR__ . '/../includes/roles.php';
 require_once __DIR__ . '/../includes/service.php';
 require_once __DIR__ . '/../includes/trekant_client.php';
 require_once __DIR__ . '/../includes/service_reconcile.php';
+require_once __DIR__ . '/../includes/installation_details.php';
 require_once __DIR__ . '/../includes/installation_status.php';
 
 header('Content-Type: application/json; charset=utf-8');
@@ -48,10 +49,11 @@ try {
     exit;
 }
 $externalTest = abas_external_testqueue_for_installation($conn, $id);
+$instDetails = abas_fetch_installation_details($installation, $user);
 $log = ['rows' => [], 'code' => -1];
 
 try {
-    $log = abas_fetch_installation_log($installation, $logMode, $customRange);
+    $log = abas_fetch_installation_log($installation, $logMode, $customRange, $user);
 } catch (Throwable $e) {
     echo json_encode(['error' => 'Log: ' . $e->getMessage()]);
     exit;
@@ -82,4 +84,6 @@ echo json_encode([
     'logCode' => (int) $log['code'],
     'logHtml' => $log['code'] === 0 ? abas_render_alarmlog_rows_html($log['rows']) : '',
     'logEmpty' => $log['code'] === 0 && $log['rows'] === [],
+    'zonesHtml' => abas_render_installation_zones_html($instDetails['zones'], $instDetails['zones_error']),
+    'updatedAt' => date('c'),
 ], JSON_UNESCAPED_UNICODE);
