@@ -207,75 +207,36 @@ function abas_save_virksomhed_managed_user(
     mysqli $conn,
     array $actor,
     array $target,
-    string $email,
-    string $phone,
-    string $username,
     string $displayName,
-    bool $active,
-    bool $smsServiceAllowed,
-    string $smsCode
+    string $phone,
+    bool $active
 ): array {
     if (!abas_virksomhedsadmin_may_manage_user($actor, $target)) {
         return ['ok' => false, 'message' => 'Ingen adgang til brugeren.'];
     }
 
-    $email = strtolower(trim($email));
-    $phone = abas_normalize_phone(trim($phone));
-    $username = trim($username);
     $displayName = trim($displayName);
-    if ($email === '' || $username === '') {
-        return ['ok' => false, 'message' => 'E-mail og brugernavn er påkrævet.'];
-    }
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        return ['ok' => false, 'message' => 'Ugyldig e-mail.'];
+    $phone = abas_normalize_phone(trim($phone));
+    if ($displayName === '' || strlen($displayName) < 2) {
+        return ['ok' => false, 'message' => 'Angiv et gyldigt navn.'];
     }
     if (!abas_validate_phone($phone)) {
         return ['ok' => false, 'message' => 'Angiv et gyldigt telefonnummer.'];
     }
 
     $targetId = (int) $target['id'];
-    $dupEmail = $conn->prepare('SELECT id FROM users WHERE email = ? AND id <> ? LIMIT 1');
-    $dupEmail->bind_param('si', $email, $targetId);
-    $dupEmail->execute();
-    if ($dupEmail->get_result()->fetch_row()) {
-        $dupEmail->close();
-
-        return ['ok' => false, 'message' => 'E-mail findes allerede.'];
-    }
-    $dupEmail->close();
-
-    $dupUser = $conn->prepare('SELECT id FROM users WHERE username = ? AND id <> ? LIMIT 1');
-    $dupUser->bind_param('si', $username, $targetId);
-    $dupUser->execute();
-    if ($dupUser->get_result()->fetch_row()) {
-        $dupUser->close();
-
-        return ['ok' => false, 'message' => 'Brugernavn findes allerede.'];
-    }
-    $dupUser->close();
-
-    $role = (string) $target['role'];
-    $smsAllowed = $smsServiceAllowed ? 1 : 0;
-    if ($smsCode !== '' && !abas_validate_sms_code($smsCode)) {
-        return ['ok' => false, 'message' => 'SMS-kode skal være mindst 6 tegn.'];
-    }
-    if (abas_user_sms_service_code_required_on_edit($role, $smsAllowed === 1, $target, $smsCode)) {
-        return ['ok' => false, 'message' => 'Angiv SMS-kode når SMS-betjening er aktiveret.'];
-    }
-
-    $displayNameDb = $displayName !== '' ? $displayName : null;
     $activeInt = $active ? 1 : 0;
+    if ((int) $actor['id'] === $targetId && $activeInt === 0) {
+        return ['ok' => false, 'message' => 'Du kan ikke deaktivere din egen konto.'];
+    }
+
+    $displayNameDb = $displayName;
     $stmt = $conn->prepare(
-        'UPDATE users SET email = ?, phone = ?, username = ?, registration_display_name = ?,
-                active = ?, sms_service_allowed = ? WHERE id = ?'
+        'UPDATE users SET phone = ?, registration_display_name = ?, active = ? WHERE id = ?'
     );
-    $stmt->bind_param('ssssiii', $email, $phone, $username, $displayNameDb, $activeInt, $smsAllowed, $targetId);
+    $stmt->bind_param('ssii', $phone, $displayNameDb, $activeInt, $targetId);
     $stmt->execute();
     $stmt->close();
-
-    if ($smsCode !== '') {
-        abas_set_user_sms_code($conn, $targetId, $smsCode);
-    }
 
     return ['ok' => true];
 }
