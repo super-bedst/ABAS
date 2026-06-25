@@ -13,6 +13,7 @@ require_once __DIR__ . '/../includes/installation_sync.php';
 require_once __DIR__ . '/../includes/installation_details.php';
 require_once __DIR__ . '/../includes/installation_status.php';
 require_once __DIR__ . '/../includes/users.php';
+require_once __DIR__ . '/../includes/table_list.php';
 
 $conn = abas_db();
 $user = abas_require_login();
@@ -287,8 +288,8 @@ require __DIR__ . '/partials/header.php';
         <p class="p-4 text-amber-800" id="inst-log-error">Log kunne ikke hentes (kode <?= (int) $log['code'] ?>).</p>
         <p class="p-4 text-gray-500 hidden" id="inst-log-empty">Ingen loglinjer.</p>
         <div class="abas-log-body hidden" id="inst-log-body">
-            <table class="abas-table abas-log-table text-xs">
-                <thead><tr><th>Tidspunkt</th><th>Detaljer</th></tr></thead>
+            <table class="abas-table abas-log-table text-xs" data-abas-client-sort>
+                <thead><tr><?php abas_render_client_table_sort_th('Tidspunkt', 0); ?><?php abas_render_client_table_sort_th('Detaljer', 1); ?></tr></thead>
                 <tbody id="inst-log-rows"></tbody>
             </table>
         </div>
@@ -296,8 +297,8 @@ require __DIR__ . '/partials/header.php';
         <p class="p-4 text-amber-800 hidden" id="inst-log-error"></p>
         <p class="p-4 text-gray-500" id="inst-log-empty">Ingen loglinjer.</p>
         <div class="abas-log-body hidden" id="inst-log-body">
-            <table class="abas-table abas-log-table text-xs">
-                <thead><tr><th>Tidspunkt</th><th>Detaljer</th></tr></thead>
+            <table class="abas-table abas-log-table text-xs" data-abas-client-sort>
+                <thead><tr><?php abas_render_client_table_sort_th('Tidspunkt', 0); ?><?php abas_render_client_table_sort_th('Detaljer', 1); ?></tr></thead>
                 <tbody id="inst-log-rows"></tbody>
             </table>
         </div>
@@ -305,8 +306,8 @@ require __DIR__ . '/partials/header.php';
         <p class="p-4 text-amber-800 hidden" id="inst-log-error"></p>
         <p class="p-4 text-gray-500 hidden" id="inst-log-empty">Ingen loglinjer.</p>
         <div class="abas-log-body" id="inst-log-body">
-            <table class="abas-table abas-log-table text-xs">
-                <thead><tr><th>Tidspunkt</th><th>Detaljer</th></tr></thead>
+            <table class="abas-table abas-log-table text-xs" data-abas-client-sort>
+                <thead><tr><?php abas_render_client_table_sort_th('Tidspunkt', 0); ?><?php abas_render_client_table_sort_th('Detaljer', 1); ?></tr></thead>
                 <tbody id="inst-log-rows">
                 <?= abas_render_alarmlog_rows_html($log['rows']) ?>
                 </tbody>

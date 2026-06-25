@@ -202,51 +202,59 @@ require __DIR__ . '/../partials/header.php';
         type="button"
         id="open-create-user"
         class="px-3 py-1.5 rounded-full text-sm font-semibold border border-brand bg-brand text-white hover:bg-brand-dark transition-colors shrink-0"
-        aria-controls="create-user-panel"
+        aria-controls="create-user-modal"
         aria-expanded="false"
     >Opret bruger</button>
 </div>
 
-<details id="create-user-panel" class="abas-card mb-6 max-w-lg abas-form group">
-    <summary class="abas-card-title cursor-pointer list-none flex items-center justify-between gap-2">
-        <span>Opret ny bruger</span>
-        <span class="text-gray-400 text-sm group-open:rotate-180 transition-transform">▼</span>
-    </summary>
-    <form method="post" class="mt-4 space-y-0">
-        <input type="hidden" name="action" value="create">
-        <div class="abas-field"><label class="abas-label">E-mail</label><input name="email" type="email" required class="abas-input"></div>
-        <div class="abas-field"><label class="abas-label">Brugernavn</label><input name="username" maxlength="255" class="abas-input" placeholder="Samme som e-mail hvis tom"></div>
-        <div class="abas-field"><label class="abas-label">Telefon</label><input name="phone" required placeholder="+45..." class="abas-input"></div>
-        <div class="abas-field">
-            <label class="abas-label" for="sms_code">SMS-kode (anlægsbetjening)</label>
-            <input id="sms_code" name="sms_code" minlength="6" autocomplete="off" class="abas-input font-mono" placeholder="Min. 6 tegn">
-            <p class="abas-hint">Påkrævet når «Må betjene anlæg via SMS» er valgt — ikke til 2FA-login.</p>
+<div id="create-user-modal" class="abas-modal hidden" role="dialog" aria-modal="true" aria-labelledby="create-user-modal-title">
+    <div class="abas-modal-backdrop" data-abas-modal-close tabindex="-1"></div>
+    <div class="abas-modal-panel">
+        <div class="abas-modal-header">
+            <h2 id="create-user-modal-title" class="abas-card-title !mb-0">Opret ny bruger</h2>
+            <button type="button" class="abas-modal-close" data-abas-modal-close aria-label="Luk">
+                <span aria-hidden="true">&times;</span>
+            </button>
         </div>
-        <div class="abas-field">
-            <label class="abas-label">Rolle</label>
-            <select name="role" id="role" class="abas-select">
-            <?php foreach (abas_roles() as $r): ?>
-                <option value="<?= $r ?>" <?= in_array($r, $rolesInFilter, true) && count($rolesInFilter) === 1 ? 'selected' : '' ?>><?= abas_role_label($r) ?></option>
-            <?php endforeach; ?>
-            </select>
-            <p class="abas-hint">Montører og virksomhedsadmin får firma ud fra e-mail-domænet.</p>
-        </div>
-        <div class="abas-field" id="owner-misc-field">
-            <label class="abas-label" for="miscno2">Anlægsnr.</label>
-            <input id="miscno2" name="miscno2" placeholder="fab0100" class="abas-input font-mono">
-            <p class="abas-hint">Valgfrit ved oprettelse af anlægsejer/anlægsafprøver.</p>
-        </div>
-        <label class="flex items-center gap-2 text-sm mb-4">
-            <input type="checkbox" name="sms_service_allowed" value="1" class="abas-checkbox">
-            Må betjene anlæg via SMS
-        </label>
-        <label class="flex items-center gap-2 text-sm mb-4">
-            <input type="checkbox" name="send_welcome" value="1" class="abas-checkbox" checked>
-            Send velkomst-e-mail med link til valg af adgangskode
-        </label>
-        <button class="abas-btn-primary">Opret bruger</button>
-    </form>
-</details>
+        <form method="post" class="space-y-0" data-abas-loading="Opretter bruger…">
+            <input type="hidden" name="action" value="create">
+            <div class="abas-field"><label class="abas-label" for="create-email">E-mail</label><input id="create-email" name="email" type="email" required class="abas-input" autocomplete="off"></div>
+            <div class="abas-field"><label class="abas-label" for="create-username">Brugernavn</label><input id="create-username" name="username" maxlength="255" class="abas-input" placeholder="Samme som e-mail hvis tom"></div>
+            <div class="abas-field"><label class="abas-label" for="create-phone">Telefon</label><input id="create-phone" name="phone" required placeholder="+45..." class="abas-input"></div>
+            <div class="abas-field">
+                <label class="abas-label" for="create-sms-code">SMS-kode (anlægsbetjening)</label>
+                <input id="create-sms-code" name="sms_code" minlength="6" autocomplete="off" class="abas-input font-mono" placeholder="Min. 6 tegn">
+                <p class="abas-hint">Påkrævet når «Må betjene anlæg via SMS» er valgt — ikke til 2FA-login.</p>
+            </div>
+            <div class="abas-field">
+                <label class="abas-label" for="role">Rolle</label>
+                <select name="role" id="role" class="abas-select">
+                <?php foreach (abas_roles() as $r): ?>
+                    <option value="<?= $r ?>" <?= in_array($r, $rolesInFilter, true) && count($rolesInFilter) === 1 ? 'selected' : '' ?>><?= abas_role_label($r) ?></option>
+                <?php endforeach; ?>
+                </select>
+                <p class="abas-hint">Montører og virksomhedsadmin får firma ud fra e-mail-domænet.</p>
+            </div>
+            <div class="abas-field" id="owner-misc-field">
+                <label class="abas-label" for="miscno2">Anlægsnr.</label>
+                <input id="miscno2" name="miscno2" placeholder="fab0100" class="abas-input font-mono">
+                <p class="abas-hint">Valgfrit ved oprettelse af anlægsejer/anlægsafprøver.</p>
+            </div>
+            <label class="flex items-center gap-2 text-sm mb-4">
+                <input type="checkbox" name="sms_service_allowed" value="1" class="abas-checkbox">
+                Må betjene anlæg via SMS
+            </label>
+            <label class="flex items-center gap-2 text-sm mb-4">
+                <input type="checkbox" name="send_welcome" value="1" class="abas-checkbox" checked>
+                Send velkomst-e-mail med link til valg af adgangskode
+            </label>
+            <div class="flex flex-wrap gap-2 pt-2">
+                <button type="submit" class="abas-btn-primary">Opret bruger</button>
+                <button type="button" class="abas-btn-secondary" data-abas-modal-close>Annuller</button>
+            </div>
+        </form>
+    </div>
+</div>
 
 <form method="get" class="mb-4 flex flex-wrap gap-2 items-end max-w-2xl" role="search">
     <?php if ($filter !== 'alle'): ?>
@@ -357,26 +365,10 @@ require __DIR__ . '/../partials/header.php';
 </table>
 </div>
 <script>
-(function () {
-    var panel = document.getElementById('create-user-panel');
-    var openBtn = document.getElementById('open-create-user');
-    if (!panel || !openBtn) {
-        return;
+document.addEventListener('DOMContentLoaded', function () {
+    if (typeof window.abasInitModal === 'function') {
+        window.abasInitModal('open-create-user', 'create-user-modal');
     }
-    function syncExpanded() {
-        openBtn.setAttribute('aria-expanded', panel.open ? 'true' : 'false');
-    }
-    openBtn.addEventListener('click', function () {
-        panel.open = true;
-        syncExpanded();
-        panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        var email = panel.querySelector('input[name="email"]');
-        if (email) {
-            email.focus();
-        }
-    });
-    panel.addEventListener('toggle', syncExpanded);
-    syncExpanded();
-})();
+});
 </script>
 <?php require __DIR__ . '/../partials/footer.php';

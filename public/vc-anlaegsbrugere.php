@@ -9,6 +9,7 @@ require_once __DIR__ . '/../includes/roles.php';
 require_once __DIR__ . '/../includes/password_flow.php';
 require_once __DIR__ . '/../includes/installation_sync.php';
 require_once __DIR__ . '/../includes/users.php';
+require_once __DIR__ . '/../includes/user_management.php';
 require_once __DIR__ . '/../includes/service.php';
 
 $conn = abas_db();
@@ -70,19 +71,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     abas_redirect('vc-anlaegsbrugere.php');
 }
 
-$owners = $conn->query(
-    "SELECT id, email, username, phone, role, active FROM users
-     WHERE role IN ('anlaegsejer', 'anlaegsafprover')
-     ORDER BY username"
-)->fetch_all(MYSQLI_ASSOC);
+$sort = abas_table_resolve_sort((string) ($_GET['sort'] ?? ''), abas_vc_anlaegsbrugere_sort_columns(), 'name');
+$sortDir = abas_table_normalize_sort_dir((string) ($_GET['dir'] ?? 'asc'));
+$search = trim((string) ($_GET['q'] ?? ''));
+$listQuery = array_filter(['q' => $search !== '' ? $search : null, 'sort' => $sort !== 'name' ? $sort : null, 'dir' => $sortDir !== 'asc' ? $sortDir : null]);
+
+$owners = abas_list_vc_anlaegsbrugere($conn, $sort, $sortDir, $search);
 $ownerInstallations = abas_user_installations_with_service_status($conn);
 $installations = $conn->query('SELECT id, miscno2, name FROM installations ORDER BY miscno2 LIMIT 200')->fetch_all(MYSQLI_ASSOC);
+abas_session_release();
 
 $pageTitle = 'Anlægsbrugere';
 $currentUser = $user;
 require __DIR__ . '/partials/header.php';
 ?>
-<h1 class="abas-page-title">Anlægsbrugere</h1>
+<div class="flex flex-wrap items-start justify-between gap-3 mb-1">
+    <div>
+        <h1 class="abas-page-title !mb-0">Anlægsbrugere</h1>
+    </div>
+    <div class="flex flex-wrap gap-2 shrink-0">
+        <button type="button" id="open-link-user-modal" class="abas-btn-secondary">Tilknyt anlæg</button>
+        <button type="button" id="open-create-user-modal" class="abas-btn-primary" aria-controls="create-user-modal" aria-expanded="false">Opret bruger</button>
+    </div>
+</div>
 <p class="abas-page-lead">Opret og tilknyt anlægsejere og anlægsafprøvere til deres anlæg.</p>
 <?php if ($user['role'] === 'admin'): ?>
 <p class="text-sm text-gray-600 mb-4">
@@ -91,63 +102,47 @@ require __DIR__ . '/partials/header.php';
 </p>
 <?php endif; ?>
 
-<div class="grid lg:grid-cols-2 gap-6">
-    <form method="post" class="abas-card abas-form">
-        <h2 class="abas-card-title">Opret anlægsbruger</h2>
-        <input type="hidden" name="action" value="create_user">
-        <div class="abas-field"><label class="abas-label">E-mail</label><input name="email" type="email" required class="abas-input"></div>
-        <div class="abas-field"><label class="abas-label">Brugernavn</label><input name="username" maxlength="255" class="abas-input" placeholder="Samme som e-mail hvis tom"></div>
-        <div class="abas-field"><label class="abas-label">Telefon</label><input name="phone" required placeholder="+45..." class="abas-input"></div>
-        <div class="abas-field">
-            <label class="abas-label" for="sms_code">SMS-kode</label>
-            <input id="sms_code" name="sms_code" required minlength="6" autocomplete="off" class="abas-input font-mono" placeholder="Min. 6 tegn">
-            <p class="abas-hint">Bruges sammen med telefonnummer ved SMS-kommandoer til anlæg.</p>
-        </div>
-        <div class="abas-field"><label class="abas-label">Anlægsnr. (valgfri)</label><input name="miscno2" placeholder="fab0100" class="abas-input font-mono"></div>
-        <button class="abas-btn-primary">Opret</button>
-    </form>
+<form method="get" class="mb-4 flex flex-wrap gap-2 items-end max-w-2xl" role="search">
+    <div class="abas-field flex-1 min-w-[14rem] !mb-0">
+        <label class="abas-label" for="user-search">Søg</label>
+        <input id="user-search" type="search" name="q" value="<?= htmlspecialchars($search) ?>" placeholder="Navn, e-mail, telefon, rolle, anlæg …" class="abas-input">
+    </div>
+    <?php if ($sort !== 'name'): ?><input type="hidden" name="sort" value="<?= htmlspecialchars($sort) ?>"><?php endif; ?>
+    <?php if ($sortDir !== 'asc'): ?><input type="hidden" name="dir" value="<?= htmlspecialchars($sortDir) ?>"><?php endif; ?>
+    <button type="submit" class="abas-btn-secondary">Søg</button>
+    <?php if ($search !== ''): ?>
+        <a href="<?= htmlspecialchars(abas_vc_anlaegsbrugere_page_url(['sort' => $sort !== 'name' ? $sort : null, 'dir' => $sortDir !== 'asc' ? $sortDir : null])) ?>" class="abas-btn-secondary">Ryd</a>
+    <?php endif; ?>
+</form>
+<?php if ($search !== ''): ?>
+<p class="text-sm text-gray-600 mb-4"><?= count($owners) ?> resultat<?= count($owners) === 1 ? '' : 'er' ?> for «<?= htmlspecialchars($search) ?>»</p>
+<?php endif; ?>
 
-    <form method="post" class="abas-card abas-form">
-        <h2 class="abas-card-title">Tilknyt eksisterende bruger til anlæg</h2>
-        <input type="hidden" name="action" value="link">
-        <div class="abas-field"><label class="abas-label">Bruger</label>
-        <select name="user_id" class="abas-select">
-            <?php foreach ($owners as $o): ?>
-                <option value="<?= (int) $o['id'] ?>"><?= htmlspecialchars($o['username']) ?></option>
-            <?php endforeach; ?>
-        </select></div>
-        <div class="abas-field"><label class="abas-label">Anlæg</label>
-        <select name="installation_id" class="abas-select">
-            <?php foreach ($installations as $i): ?>
-                <option value="<?= (int) $i['id'] ?>"><?= htmlspecialchars((string) $i['miscno2']) ?> — <?= htmlspecialchars((string) $i['name']) ?></option>
-            <?php endforeach; ?>
-        </select></div>
-        <button class="abas-btn-secondary">Tilknyt</button>
-    </form>
-</div>
-
-<div class="mt-6 abas-table-wrap">
+<div class="abas-table-wrap">
     <table class="abas-table">
         <thead>
             <tr>
-                <th>Bruger</th>
-                <th>E-mail</th>
-                <th>Telefon</th>
-                <th>Rolle</th>
-                <th>Anlæg</th>
+                <?php abas_render_table_sort_th('Bruger', abas_table_sort_link('vc-anlaegsbrugere.php', $listQuery, 'name', $sort, $sortDir, abas_vc_anlaegsbrugere_sort_columns())); ?>
+                <?php abas_render_table_sort_th('E-mail', abas_table_sort_link('vc-anlaegsbrugere.php', $listQuery, 'email', $sort, $sortDir, abas_vc_anlaegsbrugere_sort_columns())); ?>
+                <?php abas_render_table_sort_th('Telefon', abas_table_sort_link('vc-anlaegsbrugere.php', $listQuery, 'phone', $sort, $sortDir, abas_vc_anlaegsbrugere_sort_columns())); ?>
+                <?php abas_render_table_sort_th('Rolle', abas_table_sort_link('vc-anlaegsbrugere.php', $listQuery, 'role', $sort, $sortDir, abas_vc_anlaegsbrugere_sort_columns())); ?>
+                <?php abas_render_table_sort_th('Anlæg', abas_table_sort_link('vc-anlaegsbrugere.php', $listQuery, 'installations', $sort, $sortDir, abas_vc_anlaegsbrugere_sort_columns())); ?>
             </tr>
         </thead>
         <tbody>
+        <?php if ($owners === []): ?>
+            <tr><td colspan="5" class="text-gray-500 text-sm p-4"><?= $search !== '' ? 'Ingen brugere matcher søgningen.' : 'Ingen anlægsbrugere endnu.' ?></td></tr>
+        <?php endif; ?>
         <?php foreach ($owners as $o): ?>
             <?php $linked = $ownerInstallations[(int) $o['id']] ?? []; ?>
             <tr class="<?= empty($o['active']) ? 'opacity-60' : '' ?>">
                 <td>
-                    <?= htmlspecialchars($o['username']) ?>
+                    <?= htmlspecialchars(abas_user_display_name($o)) ?>
                     <?php if (empty($o['active'])): ?>
                         <span class="text-xs text-amber-700">(inaktiv)</span>
                     <?php endif; ?>
                 </td>
-                <td><?= htmlspecialchars($o['email']) ?></td>
+                <td><?= htmlspecialchars((string) $o['email']) ?></td>
                 <td><?= htmlspecialchars((string) ($o['phone'] ?? '—')) ?></td>
                 <td><?= htmlspecialchars(abas_role_label((string) $o['role'])) ?></td>
                 <td>
@@ -174,4 +169,67 @@ require __DIR__ . '/partials/header.php';
     <span class="abas-badge-in-service">fab0100</span> = i service &nbsp;
     <span class="abas-badge-ok">fab0100</span> = normal drift
 </p>
+
+<div id="create-user-modal" class="abas-modal hidden" role="dialog" aria-modal="true" aria-labelledby="create-user-modal-title">
+    <div class="abas-modal-backdrop" data-abas-modal-close tabindex="-1"></div>
+    <div class="abas-modal-panel">
+        <div class="abas-modal-header">
+            <h2 id="create-user-modal-title" class="abas-card-title !mb-0">Opret anlægsbruger</h2>
+            <button type="button" class="abas-modal-close" data-abas-modal-close aria-label="Luk"><span aria-hidden="true">&times;</span></button>
+        </div>
+        <form method="post" class="space-y-0" data-abas-loading="Opretter bruger…">
+            <input type="hidden" name="action" value="create_user">
+            <div class="abas-field"><label class="abas-label">E-mail</label><input name="email" type="email" required class="abas-input"></div>
+            <div class="abas-field"><label class="abas-label">Brugernavn</label><input name="username" maxlength="255" class="abas-input" placeholder="Samme som e-mail hvis tom"></div>
+            <div class="abas-field"><label class="abas-label">Telefon</label><input name="phone" required placeholder="+45..." class="abas-input"></div>
+            <div class="abas-field">
+                <label class="abas-label" for="vc-sms-code">SMS-kode</label>
+                <input id="vc-sms-code" name="sms_code" required minlength="6" autocomplete="off" class="abas-input font-mono" placeholder="Min. 6 tegn">
+                <p class="abas-hint">Bruges sammen med telefonnummer ved SMS-kommandoer til anlæg.</p>
+            </div>
+            <div class="abas-field"><label class="abas-label">Anlægsnr. (valgfri)</label><input name="miscno2" placeholder="fab0100" class="abas-input font-mono"></div>
+            <div class="flex flex-wrap gap-2 pt-2">
+                <button type="submit" class="abas-btn-primary">Opret</button>
+                <button type="button" class="abas-btn-secondary" data-abas-modal-close>Annuller</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="link-user-modal" class="abas-modal hidden" role="dialog" aria-modal="true" aria-labelledby="link-user-modal-title">
+    <div class="abas-modal-backdrop" data-abas-modal-close tabindex="-1"></div>
+    <div class="abas-modal-panel">
+        <div class="abas-modal-header">
+            <h2 id="link-user-modal-title" class="abas-card-title !mb-0">Tilknyt bruger til anlæg</h2>
+            <button type="button" class="abas-modal-close" data-abas-modal-close aria-label="Luk"><span aria-hidden="true">&times;</span></button>
+        </div>
+        <form method="post" class="space-y-0" data-abas-loading="Gemmer tilknytning…">
+            <input type="hidden" name="action" value="link">
+            <div class="abas-field"><label class="abas-label">Bruger</label>
+            <select name="user_id" class="abas-select" required>
+                <?php foreach ($owners as $o): ?>
+                    <option value="<?= (int) $o['id'] ?>"><?= htmlspecialchars(abas_user_display_name($o)) ?></option>
+                <?php endforeach; ?>
+            </select></div>
+            <div class="abas-field"><label class="abas-label">Anlæg</label>
+            <select name="installation_id" class="abas-select" required>
+                <?php foreach ($installations as $i): ?>
+                    <option value="<?= (int) $i['id'] ?>"><?= htmlspecialchars((string) $i['miscno2']) ?> — <?= htmlspecialchars((string) $i['name']) ?></option>
+                <?php endforeach; ?>
+            </select></div>
+            <div class="flex flex-wrap gap-2 pt-2">
+                <button type="submit" class="abas-btn-secondary">Tilknyt</button>
+                <button type="button" class="abas-btn-secondary" data-abas-modal-close>Annuller</button>
+            </div>
+        </form>
+    </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    if (typeof window.abasInitModal === 'function') {
+        window.abasInitModal('open-create-user-modal', 'create-user-modal');
+        window.abasInitModal('open-link-user-modal', 'link-user-modal');
+    }
+});
+</script>
 <?php require __DIR__ . '/partials/footer.php';

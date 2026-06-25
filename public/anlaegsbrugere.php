@@ -58,7 +58,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
     abas_redirect('anlaegsbrugere.php');
 }
 
-$managedUsers = abas_list_anlaegsejer_managed_users($conn, $actorId);
+$sort = abas_table_resolve_sort((string) ($_GET['sort'] ?? ''), abas_anlaegsejer_users_sort_columns(), 'name');
+$sortDir = abas_table_normalize_sort_dir((string) ($_GET['dir'] ?? 'asc'));
+$search = trim((string) ($_GET['q'] ?? ''));
+$listQuery = array_filter(['sort' => $sort !== 'name' ? $sort : null, 'dir' => $sortDir !== 'asc' ? $sortDir : null, 'q' => $search !== '' ? $search : null]);
+
+$managedUsers = abas_list_anlaegsejer_managed_users($conn, $actorId, $sort, $sortDir, $search);
 abas_session_release();
 
 $pageTitle = 'Anlægsbrugere';
@@ -92,23 +97,48 @@ require __DIR__ . '/partials/header.php';
     </div>
 <?php endif; ?>
 
-<?php if ($managedUsers === []): ?>
+<form method="get" class="mb-4 flex flex-wrap gap-2 items-end max-w-2xl mt-4" role="search">
+    <div class="abas-field flex-1 min-w-[14rem] !mb-0">
+        <label class="abas-label" for="user-search">Søg</label>
+        <input
+            id="user-search"
+            type="search"
+            name="q"
+            value="<?= htmlspecialchars($search) ?>"
+            placeholder="Navn, e-mail, telefon, rolle, anlæg …"
+            class="abas-input"
+        >
+    </div>
+    <?php if ($sort !== 'name'): ?><input type="hidden" name="sort" value="<?= htmlspecialchars($sort) ?>"><?php endif; ?>
+    <?php if ($sortDir !== 'asc'): ?><input type="hidden" name="dir" value="<?= htmlspecialchars($sortDir) ?>"><?php endif; ?>
+    <button type="submit" class="abas-btn-secondary">Søg</button>
+    <?php if ($search !== ''): ?>
+        <a href="<?= htmlspecialchars(abas_anlaegsbrugere_page_url(['sort' => $sort !== 'name' ? $sort : null, 'dir' => $sortDir !== 'asc' ? $sortDir : null])) ?>" class="abas-btn-secondary">Ryd</a>
+    <?php endif; ?>
+</form>
+<?php if ($search !== ''): ?>
+<p class="text-sm text-gray-600 mb-4"><?= count($managedUsers) ?> resultat<?= count($managedUsers) === 1 ? '' : 'er' ?> for «<?= htmlspecialchars($search) ?>»</p>
+<?php endif; ?>
+
+<?php if ($managedUsers === [] && $search === ''): ?>
     <div class="abas-panel mt-4">
         Ingen andre anlægsejere eller afprøvere er tilknyttet de samme anlæg som dig.
         <?php if ($canAddUsers): ?>
             Brug «Tilføj bruger» for at oprette en ny bruger og tilknytte dine anlæg.
         <?php endif; ?>
     </div>
+<?php elseif ($managedUsers === []): ?>
+    <div class="abas-panel mt-4">Ingen brugere matcher søgningen.</div>
 <?php else: ?>
     <div class="abas-table-wrap mt-6">
         <table class="abas-table">
             <thead>
                 <tr>
-                    <th>Navn</th>
-                    <th>E-mail</th>
-                    <th>Telefon</th>
-                    <th>Rolle</th>
-                    <th></th>
+                    <?php abas_render_table_sort_th('Navn', abas_table_sort_link('anlaegsbrugere.php', $listQuery, 'name', $sort, $sortDir, abas_anlaegsejer_users_sort_columns())); ?>
+                    <?php abas_render_table_sort_th('E-mail', abas_table_sort_link('anlaegsbrugere.php', $listQuery, 'email', $sort, $sortDir, abas_anlaegsejer_users_sort_columns())); ?>
+                    <?php abas_render_table_sort_th('Telefon', abas_table_sort_link('anlaegsbrugere.php', $listQuery, 'phone', $sort, $sortDir, abas_anlaegsejer_users_sort_columns())); ?>
+                    <?php abas_render_table_sort_th('Rolle', abas_table_sort_link('anlaegsbrugere.php', $listQuery, 'role', $sort, $sortDir, abas_anlaegsejer_users_sort_columns())); ?>
+                    <th scope="col"></th>
                 </tr>
             </thead>
             <tbody>

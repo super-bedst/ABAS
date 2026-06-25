@@ -7,6 +7,7 @@ require_once __DIR__ . '/../../includes/db.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/roles.php';
 require_once __DIR__ . '/../../includes/users.php';
+require_once __DIR__ . '/../../includes/user_management.php';
 
 $conn = abas_db();
 $actor = abas_require_login();
@@ -45,16 +46,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     abas_redirect('virksomhed/users.php');
 }
 
-$stmt = $conn->prepare(
-    "SELECT id, email, username, phone, role, active, registration_display_name, sms_service_allowed
-     FROM users
-     WHERE installer_id = ? AND role NOT IN ('admin','vagtcentral')
-     ORDER BY role, username"
-);
-$stmt->bind_param('i', $installerId);
-$stmt->execute();
-$users = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-$stmt->close();
+$sort = abas_table_resolve_sort((string) ($_GET['sort'] ?? ''), abas_virksomhed_users_sort_columns(), 'name');
+$sortDir = abas_table_normalize_sort_dir((string) ($_GET['dir'] ?? 'asc'));
+$search = trim((string) ($_GET['q'] ?? ''));
+$listQuery = array_filter(['q' => $search !== '' ? $search : null, 'sort' => $sort !== 'name' ? $sort : null, 'dir' => $sortDir !== 'asc' ? $sortDir : null]);
+
+$users = abas_list_virksomhed_installer_users($conn, $installerId, $sort, $sortDir, $search);
 
 $actorId = (int) $actor['id'];
 $companyName = abas_user_company_name($conn, $actor);
@@ -67,23 +64,39 @@ require __DIR__ . '/../partials/header.php';
 <h1 class="abas-page-title">Virksomhedsbrugere</h1>
 <p class="abas-page-lead">Montører, virksomhedsadministratorer og øvrige brugere hos <?= htmlspecialchars($companyName) ?>.</p>
 
+<form method="get" class="mb-4 flex flex-wrap gap-2 items-end max-w-2xl" role="search">
+    <div class="abas-field flex-1 min-w-[14rem] !mb-0">
+        <label class="abas-label" for="user-search">Søg</label>
+        <input id="user-search" type="search" name="q" value="<?= htmlspecialchars($search) ?>" placeholder="Navn, e-mail, telefon, rolle, status …" class="abas-input">
+    </div>
+    <?php if ($sort !== 'name'): ?><input type="hidden" name="sort" value="<?= htmlspecialchars($sort) ?>"><?php endif; ?>
+    <?php if ($sortDir !== 'asc'): ?><input type="hidden" name="dir" value="<?= htmlspecialchars($sortDir) ?>"><?php endif; ?>
+    <button type="submit" class="abas-btn-secondary">Søg</button>
+    <?php if ($search !== ''): ?>
+        <a href="<?= htmlspecialchars(abas_virksomhed_users_page_url(['sort' => $sort !== 'name' ? $sort : null, 'dir' => $sortDir !== 'asc' ? $sortDir : null])) ?>" class="abas-btn-secondary">Ryd</a>
+    <?php endif; ?>
+</form>
+<?php if ($search !== ''): ?>
+<p class="text-sm text-gray-600 mb-4"><?= count($users) ?> resultat<?= count($users) === 1 ? '' : 'er' ?> for «<?= htmlspecialchars($search) ?>»</p>
+<?php endif; ?>
+
 <div class="abas-table-wrap mt-6">
     <table class="abas-table">
         <thead>
             <tr>
-                <th>Navn</th>
-                <th>E-mail</th>
-                <th>Telefon</th>
-                <th>Rolle</th>
-                <th>Status</th>
-                <th></th>
+                <?php abas_render_table_sort_th('Navn', abas_table_sort_link('virksomhed/users.php', $listQuery, 'name', $sort, $sortDir, abas_virksomhed_users_sort_columns())); ?>
+                <?php abas_render_table_sort_th('E-mail', abas_table_sort_link('virksomhed/users.php', $listQuery, 'email', $sort, $sortDir, abas_virksomhed_users_sort_columns())); ?>
+                <?php abas_render_table_sort_th('Telefon', abas_table_sort_link('virksomhed/users.php', $listQuery, 'phone', $sort, $sortDir, abas_virksomhed_users_sort_columns())); ?>
+                <?php abas_render_table_sort_th('Rolle', abas_table_sort_link('virksomhed/users.php', $listQuery, 'role', $sort, $sortDir, abas_virksomhed_users_sort_columns())); ?>
+                <?php abas_render_table_sort_th('Status', abas_table_sort_link('virksomhed/users.php', $listQuery, 'active', $sort, $sortDir, abas_virksomhed_users_sort_columns())); ?>
+                <th scope="col"></th>
             </tr>
         </thead>
         <tbody>
         <?php if ($users === []): ?>
             <tr>
                 <td colspan="6" class="text-gray-500 text-sm p-4">
-                    Ingen brugere tilknyttet virksomheden endnu.
+                    <?= $search !== '' ? 'Ingen brugere matcher søgningen.' : 'Ingen brugere tilknyttet virksomheden endnu.' ?>
                 </td>
             </tr>
         <?php endif; ?>

@@ -6,6 +6,7 @@ require_once __DIR__ . '/../../includes/bootstrap.php';
 require_once __DIR__ . '/../../includes/db.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/roles.php';
+require_once __DIR__ . '/../../includes/table_list.php';
 
 $conn = abas_db();
 $admin = abas_require_login();
@@ -30,7 +31,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     abas_redirect('admin/mfa-whitelist.php');
 }
 
-$rows = $conn->query('SELECT * FROM mfa_ip_whitelist ORDER BY ip_cidr')->fetch_all(MYSQLI_ASSOC);
+$sort = abas_table_resolve_sort((string) ($_GET['sort'] ?? ''), ['ip', 'label'], 'ip');
+$sortDir = abas_table_normalize_sort_dir((string) ($_GET['dir'] ?? 'asc'));
+$listQuery = array_filter(['sort' => $sort !== 'ip' ? $sort : null, 'dir' => $sortDir !== 'asc' ? $sortDir : null]);
+$orderCol = $sort === 'label' ? 'label' : 'ip_cidr';
+$dirSql = $sortDir === 'desc' ? 'DESC' : 'ASC';
+$rows = $conn->query("SELECT * FROM mfa_ip_whitelist ORDER BY $orderCol $dirSql, ip_cidr ASC")->fetch_all(MYSQLI_ASSOC);
 
 $pageTitle = 'MFA IP-whitelist';
 $currentUser = $admin;
@@ -48,7 +54,11 @@ require __DIR__ . '/../partials/header.php';
 
 <div class="abas-table-wrap">
     <table class="abas-table">
-        <thead><tr><th>IP</th><th>Label</th><th></th></tr></thead>
+        <thead><tr>
+            <?php abas_render_table_sort_th('IP', abas_table_sort_link('admin/mfa-whitelist.php', $listQuery, 'ip', $sort, $sortDir, ['ip', 'label'])); ?>
+            <?php abas_render_table_sort_th('Label', abas_table_sort_link('admin/mfa-whitelist.php', $listQuery, 'label', $sort, $sortDir, ['ip', 'label'])); ?>
+            <th scope="col"></th>
+        </tr></thead>
         <tbody>
         <?php foreach ($rows as $r): ?>
             <tr>

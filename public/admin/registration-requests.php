@@ -11,6 +11,7 @@ require_once __DIR__ . '/../../includes/users.php';
 require_once __DIR__ . '/../../includes/installation_sync.php';
 require_once __DIR__ . '/../../includes/installation_status.php';
 require_once __DIR__ . '/../../includes/installers.php';
+require_once __DIR__ . '/../../includes/table_list.php';
 
 $conn = abas_db();
 $admin = abas_require_login();
@@ -139,14 +140,14 @@ require __DIR__ . '/../partials/header.php';
                 <?php endif; ?>
             </div>
             <div class="abas-table-wrap">
-                <table class="abas-table text-sm">
+                <table class="abas-table text-sm" data-abas-client-sort>
                     <thead>
                         <tr>
-                            <th>ABA-nr.</th>
-                            <th>Navn</th>
-                            <th>By</th>
-                            <th>Status</th>
-                            <th>I cache</th>
+                            <?php abas_render_client_table_sort_th('ABA-nr.', 0); ?>
+                            <?php abas_render_client_table_sort_th('Navn', 1); ?>
+                            <?php abas_render_client_table_sort_th('By', 2); ?>
+                            <?php abas_render_client_table_sort_th('Status', 3); ?>
+                            <?php abas_render_client_table_sort_th('I cache', 4); ?>
                         </tr>
                     </thead>
                     <tbody>

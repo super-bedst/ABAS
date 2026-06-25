@@ -5,6 +5,54 @@ declare(strict_types=1);
 require_once __DIR__ . '/roles.php';
 require_once __DIR__ . '/users.php';
 require_once __DIR__ . '/password_policy.php';
+require_once __DIR__ . '/table_list.php';
+
+/** @return list<string> */
+function abas_anlaegsejer_users_sort_columns(): array
+{
+    return ['name', 'email', 'phone', 'role'];
+}
+
+function abas_anlaegsejer_users_order_sql(string $sort, string $dir): string
+{
+    /** @var array<string, string> */
+    $columns = [
+        'name' => 'COALESCE(NULLIF(u.registration_display_name, ""), u.username)',
+        'email' => 'u.email',
+        'phone' => 'u.phone',
+        'role' => 'u.role',
+    ];
+    $dir = abas_table_normalize_sort_dir($dir) === 'desc' ? 'DESC' : 'ASC';
+    if (!isset($columns[$sort])) {
+        return 'u.role ASC, u.username ASC';
+    }
+
+    return $columns[$sort] . ' ' . $dir . ', u.username ASC';
+}
+
+/** @return list<string> */
+function abas_virksomhed_users_sort_columns(): array
+{
+    return ['name', 'email', 'phone', 'role', 'active'];
+}
+
+function abas_virksomhed_users_order_sql(string $sort, string $dir): string
+{
+    /** @var array<string, string> */
+    $columns = [
+        'name' => 'COALESCE(NULLIF(registration_display_name, ""), username)',
+        'email' => 'email',
+        'phone' => 'phone',
+        'role' => 'role',
+        'active' => 'active',
+    ];
+    $dir = abas_table_normalize_sort_dir($dir) === 'desc' ? 'DESC' : 'ASC';
+    if (!isset($columns[$sort])) {
+        return 'role ASC, username ASC';
+    }
+
+    return $columns[$sort] . ' ' . $dir . ', username ASC';
+}
 
 /**
  * @return list<int>
@@ -70,10 +118,48 @@ function abas_actor_may_link_installation_to_user(mysqli $conn, array $actor, in
 /**
  * @return list<array<string, mixed>>
  */
-function abas_list_anlaegsejer_managed_users(mysqli $conn, int $actorId): array
-{
-    $stmt = $conn->prepare(
-        'SELECT DISTINCT u.id, u.email, u.username, u.phone, u.role, u.active,
+function abas_list_anlaegsejer_managed_users(
+    mysqli $conn,
+    int $actorId,
+    string $sort = '',
+    string $sortDir = 'asc',
+    string $search = ''
+): array {
+    $sort = abas_table_resolve_sort($sort, abas_anlaegsejer_users_sort_columns(), 'name');
+    $orderSql = abas_anlaegsejer_users_order_sql($sort, $sortDir);
+    $search = trim($search);
+    $searchSql = '';
+    $searchParams = [];
+    $searchTypes = '';
+
+    if ($search !== '') {
+        $like = '%' . $search . '%';
+        $roleMatches = abas_admin_users_matching_roles($search);
+        $roleInSql = '';
+        if ($roleMatches !== []) {
+            $rolePlaceholders = implode(',', array_fill(0, count($roleMatches), '?'));
+            $roleInSql = ' OR u.role IN (' . $rolePlaceholders . ')';
+            $searchTypes .= str_repeat('s', count($roleMatches));
+            $searchParams = array_merge($searchParams, $roleMatches);
+        }
+
+        $searchSql = ' AND (
+            u.username LIKE ?
+            OR u.email LIKE ?
+            OR u.phone LIKE ?
+            OR u.registration_display_name LIKE ?
+            OR u.role LIKE ?
+            OR EXISTS (
+                SELECT 1 FROM user_installations ui2
+                INNER JOIN installations i ON i.id = ui2.installation_id
+                WHERE ui2.user_id = u.id AND (i.miscno2 LIKE ? OR i.name LIKE ?)
+            )' . $roleInSql . '
+        )';
+        $searchTypes = str_repeat('s', 6) . $searchTypes;
+        $searchParams = array_merge(array_fill(0, 6, $like), $searchParams);
+    }
+
+    $sql = 'SELECT DISTINCT u.id, u.email, u.username, u.phone, u.role, u.active,
                 u.registration_display_name, u.sms_service_allowed, u.sms_secret_hash
          FROM users u
          INNER JOIN user_installations ui ON ui.user_id = u.id
@@ -81,15 +167,90 @@ function abas_list_anlaegsejer_managed_users(mysqli $conn, int $actorId): array
            AND u.id <> ?
            AND ui.installation_id IN (
                SELECT installation_id FROM user_installations WHERE user_id = ?
-           )
-         ORDER BY u.username'
-    );
-    $stmt->bind_param('ii', $actorId, $actorId);
+           )' . $searchSql . '
+         ORDER BY ' . $orderSql;
+
+    $types = 'ii' . $searchTypes;
+    $params = array_merge([$actorId, $actorId], $searchParams);
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param($types, ...$params);
     $stmt->execute();
     $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
     $stmt->close();
 
     return $rows;
+}
+
+/**
+ * @return list<array<string, mixed>>
+ */
+function abas_list_virksomhed_installer_users(
+    mysqli $conn,
+    int $installerId,
+    string $sort = '',
+    string $sortDir = 'asc',
+    string $search = ''
+): array {
+    $sort = abas_table_resolve_sort($sort, abas_virksomhed_users_sort_columns(), 'name');
+    $orderSql = abas_virksomhed_users_order_sql($sort, $sortDir);
+    $search = trim($search);
+    $searchSql = '';
+    $searchParams = [];
+    $searchTypes = '';
+
+    if ($search !== '') {
+        $like = '%' . $search . '%';
+        $roleMatches = abas_admin_users_matching_roles($search);
+        $roleInSql = '';
+        if ($roleMatches !== []) {
+            $rolePlaceholders = implode(',', array_fill(0, count($roleMatches), '?'));
+            $roleInSql = ' OR role IN (' . $rolePlaceholders . ')';
+            $searchTypes .= str_repeat('s', count($roleMatches));
+            $searchParams = array_merge($searchParams, $roleMatches);
+        }
+
+        $searchSql = ' AND (
+            username LIKE ?
+            OR email LIKE ?
+            OR phone LIKE ?
+            OR registration_display_name LIKE ?
+            OR role LIKE ?
+            OR (active = 1 AND LOCATE(?, "aktiv") > 0)
+            OR (active = 0 AND LOCATE(?, "inaktiv") > 0)
+        ' . $roleInSql . ')';
+        $searchTypes = str_repeat('s', 8) . $searchTypes;
+        $searchParams = array_merge(array_fill(0, 5, $like), [$search, $search], $searchParams);
+    }
+
+    $sql = 'SELECT id, email, username, phone, role, active, registration_display_name, sms_service_allowed
+         FROM users
+         WHERE installer_id = ? AND role NOT IN ("admin","vagtcentral")' . $searchSql . '
+         ORDER BY ' . $orderSql;
+
+    $types = 'i' . $searchTypes;
+    $params = array_merge([$installerId], $searchParams);
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param($types, ...$params);
+    $stmt->execute();
+    $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+
+    return $rows;
+}
+
+function abas_anlaegsbrugere_page_url(array $query = []): string
+{
+    return abas_table_page_url('anlaegsbrugere.php', $query);
+}
+
+function abas_virksomhed_users_page_url(array $query = []): string
+{
+    return abas_table_page_url('virksomhed/users.php', $query);
+}
+
+function abas_vc_anlaegsbrugere_page_url(array $query = []): string
+{
+    return abas_table_page_url('vc-anlaegsbrugere.php', $query);
 }
 
 function abas_update_user_phone(mysqli $conn, int $userId, string $phone): ?string

@@ -53,6 +53,10 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
+    document.querySelectorAll('.abas-table[data-abas-client-sort]').forEach(function (table) {
+        abasInitClientTableSort(table);
+    });
+
     var logSpinner = document.getElementById('inst-log-spinner');
     if (logSpinner && typeof window.instLogRefreshFetch === 'function') {
         var orig = window.instLogRefreshFetch;
@@ -120,3 +124,81 @@ function abasInitModal(openButtonId, modalId) {
 }
 
 window.abasInitModal = abasInitModal;
+
+function abasInitClientTableSort(table) {
+    if (!table) {
+        return;
+    }
+
+    var thead = table.querySelector('thead');
+    var tbody = table.querySelector('tbody');
+    if (!thead || !tbody) {
+        return;
+    }
+
+    var sortState = { column: -1, dir: 'asc' };
+
+    thead.querySelectorAll('th[data-sort-col]').forEach(function (th) {
+        var button = th.querySelector('.abas-table-sort');
+        if (!button) {
+            return;
+        }
+
+        button.addEventListener('click', function () {
+            var col = parseInt(th.getAttribute('data-sort-col') || '-1', 10);
+            if (col < 0) {
+                return;
+            }
+
+            if (sortState.column === col) {
+                sortState.dir = sortState.dir === 'asc' ? 'desc' : 'asc';
+            } else {
+                sortState.column = col;
+                sortState.dir = 'asc';
+            }
+
+            thead.querySelectorAll('th[data-sort-col]').forEach(function (header) {
+                var btn = header.querySelector('.abas-table-sort');
+                if (!btn) {
+                    return;
+                }
+                var headerCol = parseInt(header.getAttribute('data-sort-col') || '-1', 10);
+                var active = headerCol === sortState.column;
+                btn.classList.toggle('abas-table-sort--active', active);
+                var indicator = btn.querySelector('.abas-table-sort-indicator');
+                if (indicator) {
+                    indicator.textContent = active ? (sortState.dir === 'asc' ? '↑' : '↓') : '';
+                } else if (active) {
+                    var span = document.createElement('span');
+                    span.className = 'abas-table-sort-indicator';
+                    span.setAttribute('aria-hidden', 'true');
+                    span.textContent = sortState.dir === 'asc' ? '↑' : '↓';
+                    btn.appendChild(span);
+                }
+            });
+
+            var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr'));
+            var sortType = th.getAttribute('data-sort-type') || 'text';
+            var mult = sortState.dir === 'asc' ? 1 : -1;
+
+            rows.sort(function (a, b) {
+                var leftCell = a.children[col];
+                var rightCell = b.children[col];
+                var left = leftCell ? leftCell.textContent.trim().toLowerCase() : '';
+                var right = rightCell ? rightCell.textContent.trim().toLowerCase() : '';
+                if (sortType === 'number') {
+                    var leftNum = parseFloat(left.replace(/[^\d.-]/g, '')) || 0;
+                    var rightNum = parseFloat(right.replace(/[^\d.-]/g, '')) || 0;
+                    return mult * (leftNum - rightNum);
+                }
+                return mult * left.localeCompare(right, 'da');
+            });
+
+            rows.forEach(function (row) {
+                tbody.appendChild(row);
+            });
+        });
+    });
+}
+
+window.abasInitClientTableSort = abasInitClientTableSort;

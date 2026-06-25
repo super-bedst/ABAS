@@ -3,22 +3,29 @@
 declare(strict_types=1);
 
 require_once dirname(__DIR__, 2) . '/includes/installation_status.php';
+require_once dirname(__DIR__, 2) . '/includes/table_list.php';
 
 /** @var list<array<string, mixed>> $installations */
 /** @var bool $showServiceInfo */
 /** @var bool $showServiceScope */
+/** @var array<string, mixed> $state */
 
 if (!isset($installations) || $installations === []) {
     return;
 }
+
+$tableSort = (string) ($state['tableSort'] ?? 'miscno2');
+$tableSortDir = (string) ($state['tableSortDir'] ?? 'asc');
+$tableQuery = is_array($state['tableQuery'] ?? null) ? $state['tableQuery'] : [];
+$sortColumns = ['miscno2', 'name', 'city', 'service'];
 ?>
 <div class="hidden sm:block abas-table-wrap">
     <table class="abas-table">
         <thead>
             <tr>
-                <th>ABA-nr.</th>
-                <th>Navn</th>
-                <th class="hidden md:table-cell">By</th>
+                <?php abas_render_table_sort_th('ABA-nr.', abas_table_sort_link('dashboard.php', $tableQuery, 'miscno2', $tableSort, $tableSortDir, $sortColumns)); ?>
+                <?php abas_render_table_sort_th('Navn', abas_table_sort_link('dashboard.php', $tableQuery, 'name', $tableSort, $tableSortDir, $sortColumns)); ?>
+                <?php abas_render_table_sort_th('By', abas_table_sort_link('dashboard.php', $tableQuery, 'city', $tableSort, $tableSortDir, $sortColumns)); ?>
                 <th class="hidden lg:table-cell"><?= !empty($showServiceInfo) ? 'Service' : 'Status' ?></th>
             </tr>
         </thead>

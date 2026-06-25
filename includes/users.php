@@ -620,3 +620,101 @@ function abas_admin_users_sort_link(string $column, string $currentSort, string 
         'indicator' => $currentSort === $column ? ($currentDir === 'asc' ? '↑' : '↓') : '',
     ];
 }
+
+/** @return list<string> */
+function abas_vc_anlaegsbrugere_sort_columns(): array
+{
+    return ['name', 'email', 'phone', 'role', 'installations'];
+}
+
+function abas_vc_anlaegsbrugere_order_sql(string $sort, string $dir): string
+{
+    require_once __DIR__ . '/table_list.php';
+
+    /** @var array<string, string> */
+    $columns = [
+        'name' => 'COALESCE(NULLIF(u.registration_display_name, ""), u.username)',
+        'email' => 'u.email',
+        'phone' => 'u.phone',
+        'role' => 'u.role',
+        'installations' => 'COALESCE((
+            SELECT MIN(i.miscno2) FROM user_installations ui
+            INNER JOIN installations i ON i.id = ui.installation_id
+            WHERE ui.user_id = u.id
+        ), "")',
+    ];
+    $dir = abas_table_normalize_sort_dir($dir) === 'desc' ? 'DESC' : 'ASC';
+    if (!isset($columns[$sort])) {
+        return 'u.username ASC';
+    }
+
+    return $columns[$sort] . ' ' . $dir . ', u.username ASC';
+}
+
+/**
+ * @return list<array<string, mixed>>
+ */
+function abas_list_vc_anlaegsbrugere(
+    mysqli $conn,
+    string $sort = '',
+    string $sortDir = 'asc',
+    string $search = ''
+): array {
+    require_once __DIR__ . '/table_list.php';
+
+    $sort = abas_table_resolve_sort($sort, abas_vc_anlaegsbrugere_sort_columns(), 'name');
+    $orderSql = abas_vc_anlaegsbrugere_order_sql($sort, $sortDir);
+    $search = trim($search);
+    $searchSql = '';
+    $searchParams = [];
+    $searchTypes = '';
+
+    if ($search !== '') {
+        $like = '%' . $search . '%';
+        $roleMatches = abas_admin_users_matching_roles($search);
+        $roleInSql = '';
+        if ($roleMatches !== []) {
+            $rolePlaceholders = implode(',', array_fill(0, count($roleMatches), '?'));
+            $roleInSql = ' OR u.role IN (' . $rolePlaceholders . ')';
+            $searchTypes .= str_repeat('s', count($roleMatches));
+            $searchParams = array_merge($searchParams, $roleMatches);
+        }
+
+        $searchSql = ' AND (
+            u.username LIKE ?
+            OR u.email LIKE ?
+            OR u.phone LIKE ?
+            OR u.registration_display_name LIKE ?
+            OR u.role LIKE ?
+            OR (u.active = 1 AND LOCATE(?, "aktiv") > 0)
+            OR (u.active = 0 AND LOCATE(?, "inaktiv") > 0)
+            OR EXISTS (
+                SELECT 1 FROM user_installations ui
+                INNER JOIN installations i ON i.id = ui.installation_id
+                WHERE ui.user_id = u.id AND (i.miscno2 LIKE ? OR i.name LIKE ?)
+            )' . $roleInSql . '
+        )';
+        $searchTypes = str_repeat('s', 9) . $searchTypes;
+        $searchParams = array_merge([$like, $like, $like, $like, $like, $search, $search, $like, $like], $searchParams);
+    }
+
+    $sql = 'SELECT u.id, u.email, u.username, u.phone, u.role, u.active, u.registration_display_name
+         FROM users u
+         WHERE u.role IN ("anlaegsejer", "anlaegsafprover")' . $searchSql . '
+         ORDER BY ' . $orderSql;
+
+    $types = $searchTypes;
+    if ($types === '') {
+        $result = $conn->query($sql);
+
+        return $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+    }
+
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param($types, ...$searchParams);
+    $stmt->execute();
+    $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+
+    return $rows;
+}

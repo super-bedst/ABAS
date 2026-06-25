@@ -2,11 +2,18 @@
 
 declare(strict_types=1);
 
+require_once dirname(__DIR__, 2) . '/includes/table_list.php';
+
 /** @var array<string, mixed> $state */
 $externalInQueue = $state['externalInQueue'] ?? [];
 if ($externalInQueue === []) {
     return;
 }
+
+$tableSort = (string) ($state['tableSort'] ?? 'miscno2');
+$tableSortDir = (string) ($state['tableSortDir'] ?? 'asc');
+$tableQuery = is_array($state['tableQuery'] ?? null) ? $state['tableQuery'] : [];
+$sortColumns = ['miscno2', 'name', 'city', 'expires', 'comment'];
 ?>
 <div class="mb-8">
     <h2 class="abas-card-title mb-3">I testkø uden for ABA Service (<?= count($externalInQueue) ?>)</h2>
@@ -15,11 +22,11 @@ if ($externalInQueue === []) {
         <table class="abas-table">
             <thead>
                 <tr>
-                    <th>ABA-nr.</th>
-                    <th>Navn</th>
-                    <th>By</th>
-                    <th>Udløber</th>
-                    <th>Kommentar</th>
+                    <?php abas_render_table_sort_th('ABA-nr.', abas_table_sort_link('dashboard.php', $tableQuery, 'miscno2', $tableSort, $tableSortDir, $sortColumns)); ?>
+                    <?php abas_render_table_sort_th('Navn', abas_table_sort_link('dashboard.php', $tableQuery, 'name', $tableSort, $tableSortDir, $sortColumns)); ?>
+                    <?php abas_render_table_sort_th('By', abas_table_sort_link('dashboard.php', $tableQuery, 'city', $tableSort, $tableSortDir, $sortColumns)); ?>
+                    <?php abas_render_table_sort_th('Udløber', abas_table_sort_link('dashboard.php', $tableQuery, 'expires', $tableSort, $tableSortDir, $sortColumns)); ?>
+                    <?php abas_render_table_sort_th('Kommentar', abas_table_sort_link('dashboard.php', $tableQuery, 'comment', $tableSort, $tableSortDir, $sortColumns)); ?>
                 </tr>
             </thead>
             <tbody>

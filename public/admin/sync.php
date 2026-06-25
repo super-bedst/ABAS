@@ -7,6 +7,7 @@ require_once __DIR__ . '/../../includes/db.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/roles.php';
 require_once __DIR__ . '/../../includes/installation_sync.php';
+require_once __DIR__ . '/../../includes/table_list.php';
 
 $conn = abas_db();
 $user = abas_require_login();
@@ -52,7 +53,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     abas_redirect('admin/sync.php');
 }
 
-$rows = $conn->query('SELECT * FROM sync_prefixes ORDER BY prefix')->fetch_all(MYSQLI_ASSOC);
+$sort = abas_table_resolve_sort((string) ($_GET['sort'] ?? ''), ['prefix', 'min_suffix', 'max_suffix', 'last_sync_at', 'last_sync_count'], 'prefix');
+$sortDir = abas_table_normalize_sort_dir((string) ($_GET['dir'] ?? 'asc'));
+$listQuery = array_filter(['sort' => $sort !== 'prefix' ? $sort : null, 'dir' => $sortDir !== 'asc' ? $sortDir : null]);
+$rows = $conn->query('SELECT * FROM sync_prefixes')->fetch_all(MYSQLI_ASSOC);
+$rows = abas_table_sort_rows($rows, $sort, $sortDir, [
+    'prefix' => static fn (array $row): string => (string) ($row['prefix'] ?? ''),
+    'min_suffix' => static fn (array $row): string => (string) ($row['min_suffix'] ?? ''),
+    'max_suffix' => static fn (array $row): string => (string) ($row['max_suffix'] ?? ''),
+    'last_sync_at' => static fn (array $row): string => (string) ($row['last_sync_at'] ?? ''),
+    'last_sync_count' => static fn (array $row): string => (string) ($row['last_sync_count'] ?? ''),
+]);
 $pageTitle = 'Sync';
 $currentUser = $user;
 require __DIR__ . '/../partials/header.php';
@@ -66,8 +77,17 @@ require __DIR__ . '/../partials/header.php';
     <div><label class="text-xs block">Max suffix</label><input name="max_suffix" type="number" min="0" value="9999" class="border rounded px-2 py-1 w-24"></div>
     <button class="bg-brand text-white px-3 py-1 rounded">Tilføj</button>
 </form>
-<table class="w-full text-sm bg-white border rounded">
-    <thead class="table-head"><tr><th class="p-2">Prefix</th><th class="p-2">Start</th><th class="p-2">Max</th><th class="p-2">Batch-eksempel</th><th class="p-2">Sidst</th><th class="p-2">Antal</th><th class="p-2"></th></tr></thead>
+<div class="abas-table-wrap">
+<table class="abas-table">
+    <thead><tr>
+        <?php abas_render_table_sort_th('Prefix', abas_table_sort_link('admin/sync.php', $listQuery, 'prefix', $sort, $sortDir, ['prefix', 'min_suffix', 'max_suffix', 'last_sync_at', 'last_sync_count'])); ?>
+        <?php abas_render_table_sort_th('Start', abas_table_sort_link('admin/sync.php', $listQuery, 'min_suffix', $sort, $sortDir, ['prefix', 'min_suffix', 'max_suffix', 'last_sync_at', 'last_sync_count'])); ?>
+        <?php abas_render_table_sort_th('Max', abas_table_sort_link('admin/sync.php', $listQuery, 'max_suffix', $sort, $sortDir, ['prefix', 'min_suffix', 'max_suffix', 'last_sync_at', 'last_sync_count'])); ?>
+        <th scope="col">Batch-eksempel</th>
+        <?php abas_render_table_sort_th('Sidst', abas_table_sort_link('admin/sync.php', $listQuery, 'last_sync_at', $sort, $sortDir, ['prefix', 'min_suffix', 'max_suffix', 'last_sync_at', 'last_sync_count'])); ?>
+        <?php abas_render_table_sort_th('Antal', abas_table_sort_link('admin/sync.php', $listQuery, 'last_sync_count', $sort, $sortDir, ['prefix', 'min_suffix', 'max_suffix', 'last_sync_at', 'last_sync_count'])); ?>
+        <th scope="col"></th>
+    </tr></thead>
     <tbody>
     <?php foreach ($rows as $r):
         $min = (int) ($r['min_suffix'] ?? 0);
@@ -76,9 +96,9 @@ require __DIR__ . '/../partials/header.php';
         $batchHint = $keys !== [] ? ($keys[0] . (count($keys) > 1 ? ' … ' . $keys[count($keys) - 1] : '')) : '—';
         $batchCount = count($keys);
     ?>
-        <tr class="border-t">
-            <td class="p-2 font-mono"><?= htmlspecialchars($r['prefix']) ?></td>
-            <td class="p-2" colspan="3">
+        <tr>
+            <td class="font-mono"><?= htmlspecialchars($r['prefix']) ?></td>
+            <td colspan="3">
                 <form method="post" class="flex flex-wrap gap-2 items-center">
                     <input type="hidden" name="action" value="update">
                     <input type="hidden" name="id" value="<?= (int) $r['id'] ?>">
@@ -90,14 +110,15 @@ require __DIR__ . '/../partials/header.php';
                     <button class="text-brand underline text-xs">Gem</button>
                 </form>
             </td>
-            <td class="p-2"><?= htmlspecialchars((string) $r['last_sync_at']) ?></td>
-            <td class="p-2"><?= (int) $r['last_sync_count'] ?></td>
-            <td class="p-2">
+            <td><?= htmlspecialchars((string) $r['last_sync_at']) ?></td>
+            <td><?= (int) $r['last_sync_count'] ?></td>
+            <td>
                 <form method="post" class="inline"><input type="hidden" name="action" value="run"><input type="hidden" name="id" value="<?= (int) $r['id'] ?>"><button class="text-brand underline">Kør sync</button></form>
             </td>
         </tr>
     <?php endforeach; ?>
     </tbody>
 </table>
+</div>
 <p class="mt-4"><a href="<?= abas_url('admin/index.php') ?>" class="text-brand underline text-sm">Tilbage</a></p>
 <?php require __DIR__ . '/../partials/footer.php';

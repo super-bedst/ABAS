@@ -6,6 +6,7 @@ require_once __DIR__ . '/../../includes/bootstrap.php';
 require_once __DIR__ . '/../../includes/db.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/roles.php';
+require_once __DIR__ . '/../../includes/table_list.php';
 
 $conn = abas_db();
 $user = abas_require_login();
@@ -28,7 +29,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     abas_flash_set('success', 'Token oprettet — kopiér den nu (vises kun én gang).');
 }
 
-$rows = $conn->query('SELECT id, name, role, active, created_at FROM api_tokens ORDER BY id DESC')->fetch_all(MYSQLI_ASSOC);
+$sort = abas_table_resolve_sort((string) ($_GET['sort'] ?? ''), ['name', 'role', 'created', 'active'], 'created');
+$sortDir = abas_table_normalize_sort_dir((string) ($_GET['dir'] ?? 'desc'));
+$listQuery = array_filter(['sort' => $sort !== 'created' ? $sort : null, 'dir' => $sortDir !== 'desc' ? $sortDir : null]);
+$rows = $conn->query('SELECT id, name, role, active, created_at FROM api_tokens')->fetch_all(MYSQLI_ASSOC);
+$rows = abas_table_sort_rows($rows, $sort, $sortDir, [
+    'name' => static fn (array $row): string => (string) ($row['name'] ?? ''),
+    'role' => static fn (array $row): string => (string) ($row['role'] ?? ''),
+    'created' => static fn (array $row): string => (string) ($row['created_at'] ?? ''),
+    'active' => static fn (array $row): string => !empty($row['active']) ? '1' : '0',
+]);
 $pageTitle = 'API-tokens';
 $currentUser = $user;
 require __DIR__ . '/../partials/header.php';
@@ -46,13 +56,19 @@ require __DIR__ . '/../partials/header.php';
     </select>
     <button class="bg-brand text-white px-4 py-2 rounded">Opret token</button>
 </form>
-<table class="w-full text-sm bg-white border rounded">
-    <thead class="table-head"><tr><th class="p-2">Navn</th><th class="p-2">Rolle</th><th class="p-2">Oprettet</th></tr></thead>
+<div class="abas-table-wrap">
+<table class="abas-table">
+    <thead><tr>
+        <?php abas_render_table_sort_th('Navn', abas_table_sort_link('admin/api-tokens.php', $listQuery, 'name', $sort, $sortDir, ['name', 'role', 'created', 'active'])); ?>
+        <?php abas_render_table_sort_th('Rolle', abas_table_sort_link('admin/api-tokens.php', $listQuery, 'role', $sort, $sortDir, ['name', 'role', 'created', 'active'])); ?>
+        <?php abas_render_table_sort_th('Oprettet', abas_table_sort_link('admin/api-tokens.php', $listQuery, 'created', $sort, $sortDir, ['name', 'role', 'created', 'active'])); ?>
+    </tr></thead>
     <tbody>
     <?php foreach ($rows as $r): ?>
-        <tr class="border-t"><td class="p-2"><?= htmlspecialchars($r['name']) ?></td><td class="p-2"><?= abas_role_label($r['role']) ?></td><td class="p-2"><?= htmlspecialchars($r['created_at']) ?></td></tr>
+        <tr><td><?= htmlspecialchars($r['name']) ?></td><td><?= abas_role_label($r['role']) ?></td><td><?= htmlspecialchars($r['created_at']) ?></td></tr>
     <?php endforeach; ?>
     </tbody>
 </table>
+</div>
 <p class="mt-4"><a href="<?= abas_url('admin/index.php') ?>" class="text-brand underline text-sm">Tilbage</a></p>
 <?php require __DIR__ . '/../partials/footer.php';
