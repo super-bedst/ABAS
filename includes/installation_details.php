@@ -215,11 +215,16 @@ function abas_zone_is_restore_code(string $code): bool
 
 function abas_extract_zone_ecode(array $row): string
 {
-    foreach (['ecode', 'c_ecode', 'event'] as $field) {
+    foreach (['ecode', 'c_ecode', 'r_ecode', 'ref_ecode'] as $field) {
         $code = strtoupper(trim((string) ($row[$field] ?? '')));
         if ($code !== '') {
             return $code;
         }
+    }
+
+    $event = strtoupper(trim((string) ($row['event'] ?? '')));
+    if ($event === 'RESTORE' || $event === 'ALARM') {
+        return $event;
     }
 
     return '';
@@ -264,6 +269,8 @@ function abas_zone_status_label(string $code): string
 
     return match ($code) {
         'UX' => 'Systemstatus',
+        'RESTORE' => 'Tilbagestillet',
+        'ALARM' => 'I alarm',
         default => $code,
     };
 }
@@ -283,8 +290,91 @@ function abas_zone_status_tone(string $code): string
 
     return match ($code) {
         'UX' => 'neutral',
+        'RESTORE' => 'ok',
+        'ALARM' => 'warn',
         default => 'neutral',
     };
+}
+
+function abas_zone_is_restore_label(string $label): bool
+{
+    return str_ends_with(strtolower(trim($label)), ' restore');
+}
+
+/**
+ * @param list<array{zone_no:string, zix:int, label:string, area:string, ecode:string, status_label:string, tone:string, in_test:bool, kind:string}> $members
+ * @return array{zone_no:string, zix:int, label:string, area:string, ecode:string, status_label:string, tone:string, in_test:bool, kind:string}
+ */
+function abas_merge_zone_status_group(array $members): array
+{
+    $winner = $members[0];
+    $bestPriority = -1;
+
+    foreach ($members as $member) {
+        $priority = abas_zone_status_priority($member['ecode']);
+        if ($priority > $bestPriority) {
+            $bestPriority = $priority;
+            $winner = $member;
+        }
+    }
+
+    $primary = array_values(array_filter(
+        $members,
+        static fn (array $member): bool => !abas_zone_is_restore_label($member['label'])
+    ));
+    $label = $primary[0]['label'] ?? $winner['label'];
+    $inTest = false;
+    $kind = 'system';
+    foreach ($members as $member) {
+        if ($member['in_test']) {
+            $inTest = true;
+        }
+        if ($member['kind'] === 'zone') {
+            $kind = 'zone';
+        }
+    }
+
+    return [
+        'zone_no' => $winner['zone_no'],
+        'zix' => $winner['zix'],
+        'label' => $label,
+        'area' => $winner['area'],
+        'ecode' => $winner['ecode'],
+        'status_label' => abas_zone_status_display($winner['ecode']),
+        'tone' => abas_zone_status_tone($winner['ecode']),
+        'in_test' => $inTest,
+        'kind' => $kind,
+    ];
+}
+
+/**
+ * @param list<array{zone_no:string, zix:int, label:string, area:string, ecode:string, status_label:string, tone:string, in_test:bool, kind:string}> $zones
+ * @return list<array{zone_no:string, zix:int, label:string, area:string, ecode:string, status_label:string, tone:string, in_test:bool, kind:string}>
+ */
+function abas_aggregate_installation_zones(array $zones): array
+{
+    /** @var array<string, list<array{zone_no:string, zix:int, label:string, area:string, ecode:string, status_label:string, tone:string, in_test:bool, kind:string}>> $groups */
+    $groups = [];
+    foreach ($zones as $zone) {
+        $groups[$zone['zone_no']][] = $zone;
+    }
+
+    $merged = [];
+    foreach ($groups as $members) {
+        $merged[] = count($members) === 1 ? $members[0] : abas_merge_zone_status_group($members);
+    }
+
+    usort($merged, static function (array $a, array $b): int {
+        $kindOrder = ['zone' => 0, 'system' => 1];
+        $kindCmp = ($kindOrder[$a['kind']] ?? 2) <=> ($kindOrder[$b['kind']] ?? 2);
+        if ($kindCmp !== 0) {
+            return $kindCmp;
+        }
+
+        return abas_zone_number_sort_compare($a['zone_no'], $b['zone_no']);
+    });
+
+    return $merged;
 }
 
 function abas_zone_status_display(string $code): string
@@ -428,17 +518,7 @@ function abas_prepare_installation_zones(array $rows): array
         }
     }
 
-    $zones = array_values($byKey);
-    usort($zones, static function (array $a, array $b): int {
-        $kindOrder = ['zone' => 0, 'system' => 1];
-        $kindCmp = ($kindOrder[$a['kind']] ?? 2) <=> ($kindOrder[$b['kind']] ?? 2);
-        if ($kindCmp !== 0) {
-            return $kindCmp;
-        }
-
-        return abas_zone_number_sort_compare($a['zone_no'], $b['zone_no']);
-    });
-
+    $zones = abas_aggregate_installation_zones(array_values($byKey));
     return $zones;
 }
 
