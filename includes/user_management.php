@@ -51,19 +51,20 @@ function abas_anlaegsejer_may_manage_user(mysqli $conn, array $actor, array $tar
     return abas_users_share_installation($conn, (int) $actor['id'], (int) $target['id']);
 }
 
-function abas_actor_may_link_installation_to_user(mysqli $conn, array $actor, int $installationId, array $target): bool
+function abas_anlaegsejer_may_unlink_shared_installation(mysqli $conn, array $actor, int $installationId, array $target): bool
 {
-    $actorId = (int) $actor['id'];
-    $actorInstIds = abas_user_installation_ids($conn, $actorId);
+    $actorInstIds = abas_user_installation_ids($conn, (int) $actor['id']);
     if (!in_array($installationId, $actorInstIds, true)) {
         return false;
     }
 
-    if (($actor['role'] ?? '') === 'anlaegsejer') {
-        return abas_anlaegsejer_may_manage_user($conn, $actor, $target);
-    }
+    return abas_anlaegsejer_may_manage_user($conn, $actor, $target);
+}
 
-    return false;
+/** @deprecated use abas_anlaegsejer_may_unlink_shared_installation */
+function abas_actor_may_link_installation_to_user(mysqli $conn, array $actor, int $installationId, array $target): bool
+{
+    return abas_anlaegsejer_may_unlink_shared_installation($conn, $actor, $installationId, $target);
 }
 
 /**

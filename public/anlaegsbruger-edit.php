@@ -23,8 +23,10 @@ $editUser = $stmt->get_result()->fetch_assoc();
 $stmt->close();
 
 if (!$editUser || !abas_anlaegsejer_may_manage_user($conn, $actor, $editUser)) {
-    http_response_code(403);
-    exit('Ingen adgang til brugeren.');
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        abas_flash_set('error', 'Ingen adgang til brugeren.');
+    }
+    abas_redirect('anlaegsbrugere.php');
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -32,26 +34,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'unlink') {
         $installationId = (int) ($_POST['installation_id'] ?? 0);
-        if ($installationId > 0 && abas_actor_may_link_installation_to_user($conn, $actor, $installationId, $editUser)) {
+        if ($installationId > 0 && abas_anlaegsejer_may_unlink_shared_installation($conn, $actor, $installationId, $editUser)) {
             abas_unlink_user_installation($conn, $targetId, $installationId);
             abas_flash_set('success', 'Anlæg fjernet fra brugeren.');
+            if (!abas_users_share_installation($conn, (int) $actor['id'], $targetId)) {
+                abas_redirect('anlaegsbrugere.php');
+            }
         } else {
             abas_flash_set('error', 'Kunne ikke fjerne tilknytning.');
-        }
-        abas_redirect('anlaegsbruger-edit.php?id=' . $targetId);
-    }
-
-    if ($action === 'link') {
-        $misc = strtolower(trim($_POST['miscno2'] ?? ''));
-        $installation = abas_find_installation_by_miscno2($conn, $misc);
-        if (!$installation) {
-            abas_flash_set('error', 'Anlæg ikke fundet.');
-        } elseif (!abas_actor_may_link_installation_to_user($conn, $actor, (int) $installation['id'], $editUser)) {
-            abas_flash_set('error', 'Du har ikke adgang til det anlæg.');
-        } elseif (!abas_link_user_installation($conn, $targetId, (int) $installation['id'])) {
-            abas_flash_set('error', 'Anlæg er allerede tilknyttet.');
-        } else {
-            abas_flash_set('success', 'Anlæg tilknyttet.');
         }
         abas_redirect('anlaegsbruger-edit.php?id=' . $targetId);
     }
@@ -169,15 +159,6 @@ require __DIR__ . '/partials/header.php';
             <?php endforeach; ?>
         </ul>
     <?php endif; ?>
-    <form method="post" class="flex flex-wrap gap-2 items-end">
-        <input type="hidden" name="id" value="<?= $targetId ?>">
-        <input type="hidden" name="action" value="link">
-        <div class="abas-field flex-1 min-w-[10rem]">
-            <label class="abas-label" for="miscno2">Tilknyt anlæg (ABA-nr.)</label>
-            <input id="miscno2" name="miscno2" required placeholder="fab0100" class="abas-input font-mono">
-            <p class="abas-hint">Kun anlæg du selv har adgang til.</p>
-        </div>
-        <button class="abas-btn-secondary">Tilknyt</button>
-    </form>
+    <p class="abas-hint">Du kan fjerne tilknytning til fælles anlæg. Nye tilknytninger oprettes af vagtcentral eller administrator.</p>
 </div>
 <?php require __DIR__ . '/partials/footer.php';
