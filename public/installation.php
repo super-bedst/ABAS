@@ -80,6 +80,7 @@ $mapLon = $instDetails['lon'];
 $contacts = $instDetails['contacts'];
 $zones = $instDetails['zones'];
 $zonesError = $instDetails['zones_error'];
+$alid = trim((string) ($instDetails['alid'] ?? ''));
 $canStartService = abas_installation_allows_service((string) ($installation['mon_stat'] ?? ''));
 $inAbasService = $session !== null;
 $externalService = $externalTest !== null && !$inAbasService;
@@ -236,8 +237,9 @@ require __DIR__ . '/partials/header.php';
         </details>
 
         <dl class="grid grid-cols-2 gap-1 mt-4 pt-3 border-t text-xs">
-            <dt class="text-gray-500">s_ins</dt><dd><?= (int) $installation['s_ins'] ?></dd>
-            <dt class="text-gray-500">deal_id</dt><dd><?= htmlspecialchars((string) $installation['deal_id']) ?></dd>
+            <?php if ($alid !== ''): ?>
+            <dt class="text-gray-500">ALID</dt><dd class="font-mono"><?= htmlspecialchars($alid) ?></dd>
+            <?php endif; ?>
             <dt class="text-gray-500">ins_no</dt><dd><?= htmlspecialchars((string) $installation['ins_no']) ?></dd>
             <dt class="text-gray-500">Driftstatus</dt><dd><?= htmlspecialchars(abas_mon_stat_label((string) $installation['mon_stat'])) ?></dd>
         </dl>

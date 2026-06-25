@@ -10,6 +10,7 @@ function abas_fetch_installation_details(array $installation, ?array $user): arr
     $result = [
         'lat' => null,
         'lon' => null,
+        'alid' => '',
         'contacts' => [],
         'zones' => [],
         'zones_error' => null,
@@ -36,6 +37,7 @@ function abas_fetch_installation_details(array $installation, ?array $user): arr
                 $result['lat'] = (float) $lat;
                 $result['lon'] = (float) $lon;
             }
+            $result['alid'] = abas_installation_alid($detail);
         }
 
         $contactResp = $client->getInstallationContacts($sIns, $dealId, $userid);
@@ -51,6 +53,17 @@ function abas_fetch_installation_details(array $installation, ?array $user): arr
         $zoneCode = abas_trekant_return_code($zoneResp);
         if ($zoneCode === 0) {
             $result['zones'] = abas_prepare_installation_zones(abas_trekant_rows($zoneResp));
+            if ($result['alid'] === '') {
+                foreach (abas_trekant_rows($zoneResp) as $zoneRow) {
+                    if (!is_array($zoneRow)) {
+                        continue;
+                    }
+                    $result['alid'] = abas_installation_alid($zoneRow);
+                    if ($result['alid'] !== '') {
+                        break;
+                    }
+                }
+            }
         } else {
             $result['zones_error'] = abas_trekant_response_hint($zoneResp) ?: ('Zonestatus kunne ikke hentes (kode ' . $zoneCode . ').');
         }
@@ -59,6 +72,18 @@ function abas_fetch_installation_details(array $installation, ?array $user): arr
     }
 
     return $result;
+}
+
+function abas_installation_alid(array $row): string
+{
+    foreach (['alaid', 'primary_cid', 'alid'] as $field) {
+        $value = trim((string) ($row[$field] ?? ''));
+        if ($value !== '') {
+            return $value;
+        }
+    }
+
+    return '';
 }
 
 function abas_filter_installation_contacts(array $rows): array
@@ -273,9 +298,67 @@ function abas_zone_status_display(string $code): string
     return $label . ' (' . $code . ')';
 }
 
+function abas_zone_id_is_panel_number(string $id): bool
+{
+    if ($id === '%') {
+        return true;
+    }
+
+    return $id !== '' && preg_match('/^\d{1,2}$/', $id) === 1;
+}
+
+function abas_zone_display_number(array $row): string
+{
+    $zix = (int) ($row['zix'] ?? 0);
+    $id = trim((string) ($row['id'] ?? ''));
+    $template = trim((string) ($row['template'] ?? ''));
+
+    // Manually configured panel zones use id (matches vagtcentral zone list).
+    if ($template === '' && $id !== '') {
+        return $id;
+    }
+
+    // Dalko template status slots (IP, batteri, linje m.m.) are numbered by zix in drift.
+    if ($zix >= 9 && $zix <= 22) {
+        return (string) $zix;
+    }
+
+    if (abas_zone_id_is_panel_number($id)) {
+        return $id;
+    }
+
+    return $zix > 0 ? (string) $zix : '';
+}
+
+function abas_zone_row_key(array $row): string
+{
+    $zoneNo = abas_zone_display_number($row);
+    $label = strtolower(trim((string) ($row['atext'] ?? '')));
+
+    return $zoneNo . "\0" . $label;
+}
+
+function abas_zone_number_sort_compare(string $left, string $right): int
+{
+    if ($left === $right) {
+        return 0;
+    }
+    if ($left === '%') {
+        return 1;
+    }
+    if ($right === '%') {
+        return -1;
+    }
+    if (ctype_digit($left) && ctype_digit($right)) {
+        return (int) $left <=> (int) $right;
+    }
+
+    return strnatcasecmp($left, $right);
+}
+
 /**
  * @param list<array<string, mixed>> $rows
- * @return list<array{zix:int, label:string, area:string, ecode:string, status_label:string, tone:string, in_test:bool, kind:string}>
+ * @return list<array{zone_no:string, zix:int, label:string, area:string, ecode:string, status_label:string, tone:string, in_test:bool, kind:string}>
  */
 function abas_prepare_installation_zones(array $rows): array
 {
@@ -288,7 +371,7 @@ function abas_prepare_installation_zones(array $rows): array
         'fejl aba',
         'fejl aba restore',
     ];
-    $byZix = [];
+    $byKey = [];
 
     foreach ($rows as $row) {
         if (!is_array($row)) {
@@ -313,7 +396,9 @@ function abas_prepare_installation_zones(array $rows): array
         }
 
         $ecode = abas_extract_zone_ecode($row);
+        $rowKey = abas_zone_row_key($row);
         $entry = [
+            'zone_no' => abas_zone_display_number($row),
             'zix' => $zix,
             'label' => $label,
             'area' => trim((string) ($row['area'] ?? '')),
@@ -324,37 +409,41 @@ function abas_prepare_installation_zones(array $rows): array
             'kind' => $kind,
         ];
 
-        if (!isset($byZix[$zix])) {
-            $byZix[$zix] = $entry;
+        if (!isset($byKey[$rowKey])) {
+            $byKey[$rowKey] = $entry;
             continue;
         }
-        $existingPriority = abas_zone_status_priority($byZix[$zix]['ecode']);
+        $existingPriority = abas_zone_status_priority($byKey[$rowKey]['ecode']);
         $newPriority = abas_zone_status_priority($ecode);
         if ($newPriority > $existingPriority) {
-            $byZix[$zix] = $entry;
+            $byKey[$rowKey] = $entry;
             continue;
         }
-        if ($newPriority === $existingPriority && $ecode !== '' && $byZix[$zix]['ecode'] === '') {
-            $byZix[$zix] = $entry;
+        if ($newPriority === $existingPriority && $ecode !== '' && $byKey[$rowKey]['ecode'] === '') {
+            $byKey[$rowKey] = $entry;
             continue;
         }
-        if ($kind === 'zone' && strlen($label) > strlen($byZix[$zix]['label'])) {
-            $byZix[$zix] = $entry;
+        if ($kind === 'zone' && strlen($label) > strlen($byKey[$rowKey]['label'])) {
+            $byKey[$rowKey] = $entry;
         }
     }
 
-    $zones = array_values($byZix);
+    $zones = array_values($byKey);
     usort($zones, static function (array $a, array $b): int {
         $kindOrder = ['zone' => 0, 'system' => 1];
+        $kindCmp = ($kindOrder[$a['kind']] ?? 2) <=> ($kindOrder[$b['kind']] ?? 2);
+        if ($kindCmp !== 0) {
+            return $kindCmp;
+        }
 
-        return [$kindOrder[$a['kind']] ?? 2, $a['zix']] <=> [$kindOrder[$b['kind']] ?? 2, $b['zix']];
+        return abas_zone_number_sort_compare($a['zone_no'], $b['zone_no']);
     });
 
     return $zones;
 }
 
 /**
- * @param list<array{zix:int, label:string, area:string, ecode:string, status_label:string, tone:string, in_test:bool, kind:string}> $zones
+ * @param list<array{zone_no:string, zix:int, label:string, area:string, ecode:string, status_label:string, tone:string, in_test:bool, kind:string}> $zones
  */
 function abas_render_installation_zones_html(array $zones, ?string $error = null): string
 {
@@ -379,7 +468,7 @@ function abas_render_installation_zones_html(array $zones, ?string $error = null
             <tbody id="inst-zones-rows">
                 <?php foreach ($zones as $zone): ?>
                     <tr>
-                        <td class="whitespace-nowrap font-medium"><?= (int) $zone['zix'] ?></td>
+                        <td class="whitespace-nowrap font-medium"><?= htmlspecialchars($zone['zone_no']) ?></td>
                         <td>
                             <?= htmlspecialchars($zone['label']) ?>
                             <?php if ($zone['in_test']): ?>

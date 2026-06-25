@@ -42,6 +42,7 @@ $deal = [string]$row.deal_id
 $details = Invoke-RestMethod -Uri "$base/api/v1/g_ma_installations" -Method POST -Headers $headers -Body (@{ s_ins = $sIns; deal_id = $deal } | ConvertTo-Json -Compress)
 $testq = Invoke-RestMethod -Uri "$base/api/v1/g_ma_testqueue" -Method POST -Headers $headers -Body (@{ s_ins = $sIns; deal_id = $deal; lines = 3 } | ConvertTo-Json -Compress)
 $log = Invoke-RestMethod -Uri "$base/api/v1/g_ma_alarmlog" -Method POST -Headers $headers -Body (@{ userid = $user.ToUpper(); s_ins = $sIns; deal_id = $deal; lines = 5 } | ConvertTo-Json -Compress)
+$zones = Invoke-RestMethod -Uri "$base/api/v1/g_ma_zone" -Method POST -Headers $headers -Body (@{ userid = $user.ToUpper(); s_ins = $sIns; deal_id = $deal; lines = 200; maxrows = 200 } | ConvertTo-Json -Compress)
 
 $out = [ordered]@{
     queried_at          = (Get-Date).ToString('o')
@@ -53,6 +54,8 @@ $out = [ordered]@{
     testqueue           = $testq.ResultSet
     alarmlog_return_code  = $log.ReturnCode
     alarmlog            = @($log.ResultSet | Select-Object -First 5)
+    zones_return_code   = $zones.ReturnCode
+    zones               = $zones.ResultSet
 }
 
 $outFile = Join-Path $PSScriptRoot '.fab0100_api_summary.json'
