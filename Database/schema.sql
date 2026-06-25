@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS users (
     active TINYINT(1) NOT NULL DEFAULT 1,
     registration_status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'approved',
     registration_type ENUM('montor','anlaegsejer','anlaegsafprover') NULL,
+    registration_display_name VARCHAR(255) NULL,
     registration_requested_company_name VARCHAR(255) NULL,
     registration_requested_at DATETIME NULL,
     registration_reviewed_at DATETIME NULL,

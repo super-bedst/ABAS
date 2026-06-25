@@ -55,7 +55,7 @@ require __DIR__ . '/../partials/header.php';
     <div class="abas-card">
         <div class="flex flex-wrap justify-between gap-2 mb-3">
             <div>
-                <div class="font-semibold text-lg"><?= htmlspecialchars($p['username']) ?></div>
+                <div class="font-semibold text-lg"><?= htmlspecialchars((string) ($p['registration_display_name'] ?? $p['username'])) ?></div>
                 <div class="text-sm text-gray-600"><?= htmlspecialchars(abas_registration_type_label((string) $p['registration_type'])) ?></div>
             </div>
             <span class="text-xs text-gray-500"><?= htmlspecialchars((string) ($p['registration_requested_at'] ?? '')) ?></span>

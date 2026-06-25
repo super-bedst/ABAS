@@ -6,6 +6,7 @@ require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/users.php';
 require_once __DIR__ . '/password_flow.php';
 require_once __DIR__ . '/installation_sync.php';
+require_once __DIR__ . '/app_log.php';
 
 function abas_registration_types(): array
 {
@@ -108,47 +109,51 @@ function abas_submit_registration(
     }
     $chk->close();
 
-    $username = $displayName;
-    $base = $displayName;
-    $n = 1;
-    while (true) {
-        $chkU = $conn->prepare('SELECT id FROM users WHERE username = ? LIMIT 1');
-        $chkU->bind_param('s', $username);
-        $chkU->execute();
-        $exists = (bool) $chkU->get_result()->fetch_row();
-        $chkU->close();
-        if (!$exists) {
-            break;
-        }
-        $username = $base . ' ' . $n;
-        $n++;
-    }
+    $username = abas_generate_username_from_email($conn, $email);
 
     $role = $type;
     $storeRequestedCompany = ($type === 'montor' && $installerId === null && $requestedCompanyName !== '') ? $requestedCompanyName : null;
 
-    if ($installerId !== null) {
-        $stmt = $conn->prepare(
-            'INSERT INTO users (email, username, role, phone, installer_id, active, registration_status, registration_type, registration_requested_at)
-             VALUES (?, ?, ?, ?, ?, 0, "pending", ?, NOW())'
-        );
-        $stmt->bind_param('ssssis', $email, $displayName, $role, $phone, $installerId, $type);
-    } elseif ($storeRequestedCompany !== null) {
-        $stmt = $conn->prepare(
-            'INSERT INTO users (email, username, role, phone, active, registration_status, registration_type, registration_requested_company_name, registration_requested_at)
-             VALUES (?, ?, ?, ?, 0, "pending", ?, ?, NOW())'
-        );
-        $stmt->bind_param('ssssss', $email, $displayName, $role, $phone, $type, $storeRequestedCompany);
-    } else {
-        $stmt = $conn->prepare(
-            'INSERT INTO users (email, username, role, phone, active, registration_status, registration_type, registration_requested_at)
-             VALUES (?, ?, ?, ?, 0, "pending", ?, NOW())'
-        );
-        $stmt->bind_param('sssss', $email, $displayName, $role, $phone, $type);
+    try {
+        if ($installerId !== null) {
+            $stmt = $conn->prepare(
+                'INSERT INTO users (email, username, role, phone, installer_id, active, registration_status, registration_type, registration_display_name, registration_requested_at)
+                 VALUES (?, ?, ?, ?, ?, 0, "pending", ?, ?, NOW())'
+            );
+            $stmt->bind_param('ssssiss', $email, $username, $role, $phone, $installerId, $type, $displayName);
+        } elseif ($storeRequestedCompany !== null) {
+            $stmt = $conn->prepare(
+                'INSERT INTO users (email, username, role, phone, active, registration_status, registration_type, registration_display_name, registration_requested_company_name, registration_requested_at)
+                 VALUES (?, ?, ?, ?, 0, "pending", ?, ?, ?, NOW())'
+            );
+            $stmt->bind_param('sssssss', $email, $username, $role, $phone, $type, $displayName, $storeRequestedCompany);
+        } else {
+            $stmt = $conn->prepare(
+                'INSERT INTO users (email, username, role, phone, active, registration_status, registration_type, registration_display_name, registration_requested_at)
+                 VALUES (?, ?, ?, ?, 0, "pending", ?, ?, NOW())'
+            );
+            $stmt->bind_param('ssssss', $email, $username, $role, $phone, $type, $displayName);
+        }
+        $stmt->execute();
+        $userId = (int) $stmt->insert_id;
+        $stmt->close();
+    } catch (mysqli_sql_exception $e) {
+        abas_log_error('registration', $e->getMessage(), [
+            'email' => $email,
+            'type' => $type,
+            'username' => $username,
+        ]);
+
+        if ((int) $e->getCode() === 1062 || str_contains($e->getMessage(), 'Duplicate entry')) {
+            if (str_contains($e->getMessage(), 'uq_email')) {
+                return ['ok' => false, 'message' => 'Der findes allerede en bruger med denne e-mail.'];
+            }
+
+            return ['ok' => false, 'message' => 'Ansøgningen kunne ikke gemmes. Kontakt TrekantBrand hvis problemet fortsætter.'];
+        }
+
+        return ['ok' => false, 'message' => 'Ansøgningen kunne ikke gemmes lige nu. Prøv igen om lidt.'];
     }
-    $stmt->execute();
-    $userId = (int) $stmt->insert_id;
-    $stmt->close();
 
     if ($type !== 'montor') {
         $ins = $conn->prepare('INSERT INTO registration_installation_requests (user_id, miscno2) VALUES (?, ?)');

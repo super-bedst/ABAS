@@ -20,20 +20,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!is_array($miscList)) {
         $miscList = [$miscList];
     }
-    $result = abas_submit_registration(
-        $conn,
-        (string) ($_POST['registration_type'] ?? ''),
-        (string) ($_POST['name'] ?? ''),
-        (string) ($_POST['email'] ?? ''),
-        (string) ($_POST['phone'] ?? ''),
-        $miscList,
-        !empty($_POST['request_new_company']),
-        (string) ($_POST['requested_company_name'] ?? '')
-    );
-    if ($result['ok']) {
-        $success = true;
-    } else {
-        $error = $result['message'] ?? 'Kunne ikke sende anmodning.';
+    try {
+        $result = abas_submit_registration(
+            $conn,
+            (string) ($_POST['registration_type'] ?? ''),
+            (string) ($_POST['name'] ?? ''),
+            (string) ($_POST['email'] ?? ''),
+            (string) ($_POST['phone'] ?? ''),
+            $miscList,
+            !empty($_POST['request_new_company']),
+            (string) ($_POST['requested_company_name'] ?? '')
+        );
+        if ($result['ok']) {
+            $success = true;
+        } else {
+            $error = $result['message'] ?? 'Kunne ikke sende anmodning.';
+        }
+    } catch (Throwable $e) {
+        require_once __DIR__ . '/../includes/app_log.php';
+        abas_log_error('registration', $e->getMessage(), [
+            'email' => (string) ($_POST['email'] ?? ''),
+            'type' => (string) ($_POST['registration_type'] ?? ''),
+        ]);
+        $error = 'Ansøgningen kunne ikke gemmes lige nu. Prøv igen om lidt.';
     }
 }
 

@@ -27,5 +27,6 @@ require __DIR__ . '/../partials/header.php';
     <a href="<?= abas_url('admin/api-tokens.php') ?>" class="abas-admin-tile">API-tokens</a>
     <a href="<?= abas_url('admin/endpoints.php') ?>" class="abas-admin-tile">API-endpoints</a>
     <a href="<?= abas_url('admin/sms-inbound-log.php') ?>" class="abas-admin-tile">SMS inbound log</a>
+    <a href="<?= abas_url('admin/error-log.php') ?>" class="abas-admin-tile">Fejllog</a>
 </div>
 <?php require __DIR__ . '/../partials/footer.php';
