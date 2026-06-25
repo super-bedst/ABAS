@@ -661,6 +661,35 @@ function abas_filter_alarmlog_rows_since(array $rows, int $sinceTs): array
     ));
 }
 
+function abas_alarmlog_row_is_hidden(array $row): bool
+{
+    $event = strtoupper(trim(abas_alarmlog_field_value($row, 'event')));
+    if (!str_contains($event, 'SYS KOMM')) {
+        return false;
+    }
+
+    foreach (['comm_gen', 'text', 'comment', 'comm'] as $key) {
+        $text = strtolower(trim(abas_alarmlog_field_value($row, $key)));
+        if ($text !== '' && str_contains($text, 'den seneste signaltest lykkedes')) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * @param list<array<string, mixed>> $rows
+ * @return list<array<string, mixed>>
+ */
+function abas_filter_alarmlog_hidden_rows(array $rows): array
+{
+    return array_values(array_filter(
+        $rows,
+        static fn (array $row): bool => !abas_alarmlog_row_is_hidden($row)
+    ));
+}
+
 function abas_fetch_installation_log(array $installation, string $mode, ?array $customRange = null, ?array $user = null): array
 {
     $client = abas_trekant();
@@ -688,6 +717,7 @@ function abas_fetch_installation_log(array $installation, string $mode, ?array $
     if ($mode === '24h' && $sinceTs !== null) {
         $rows = abas_filter_alarmlog_rows_since($rows, $sinceTs);
     }
+    $rows = abas_filter_alarmlog_hidden_rows($rows);
     $rows = abas_prepare_alarmlog_display_rows($rows, $maxIncidents);
 
     return ['code' => abas_trekant_return_code($resp), 'rows' => $rows, 'raw' => $resp];
@@ -770,18 +800,32 @@ function abas_alarmlog_row_tone(array $row): string
 {
     $color = strtoupper(trim((string) ($row['row_color'] ?? '')));
     if ($color === '008000' || $color === '00FF00') {
-        return 'ok';
+        return 'restore';
     }
     if (in_array($color, ['FFFF00', 'FFA500', 'FF0000'], true)) {
-        return 'warn';
+        return 'alarm';
     }
 
     $event = strtoupper(trim((string) ($row['event'] ?? '')));
     if (str_contains($event, 'ALARM') || str_contains($event, 'FEJL')) {
-        return 'warn';
+        return 'alarm';
     }
-    if (str_contains($event, 'RESTORE') || str_contains($event, 'SYS KOMM')) {
-        return 'ok';
+    if (str_contains($event, 'RESTORE')) {
+        return 'restore';
+    }
+    if (str_contains($event, 'SYS KOMM')) {
+        return 'neutral';
+    }
+
+    $ecode = strtoupper(trim(abas_alarmlog_field_value($row, 'ecode')));
+    if ($ecode !== '') {
+        require_once __DIR__ . '/installation_details.php';
+        if (abas_zone_is_alarm_code($ecode)) {
+            return 'alarm';
+        }
+        if (abas_zone_is_restore_code($ecode)) {
+            return 'restore';
+        }
     }
 
     return 'neutral';
@@ -951,7 +995,7 @@ function abas_group_alarmlog_rows(array $rows): array
 
 function abas_alarmlog_group_tone(array $group): string
 {
-    $toneRank = ['warn' => 3, 'ok' => 2, 'neutral' => 1];
+    $toneRank = ['alarm' => 3, 'restore' => 2, 'neutral' => 1];
     $best = 'neutral';
     foreach ($group as $row) {
         $tone = abas_alarmlog_row_tone($row);
@@ -1067,7 +1111,7 @@ function abas_render_alarmlog_rows_html(array $rows): string
                         <div class="flex-1 space-y-1 min-w-0">
                             <?php foreach ($lines as $line): ?>
                                 <?php if ($line['is_head']): ?>
-                                    <div class="font-medium text-gray-900 break-words"><?= htmlspecialchars($line['summary']) ?></div>
+                                    <div class="font-medium break-words abas-log-entry-head"><?= htmlspecialchars($line['summary']) ?></div>
                                 <?php else: ?>
                                     <div class="abas-log-subline break-words"><?= htmlspecialchars($line['summary']) ?></div>
                                 <?php endif; ?>

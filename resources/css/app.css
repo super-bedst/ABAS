@@ -306,12 +306,20 @@
     @apply border-green-500;
   }
 
+  .abas-log-entry--restore {
+    @apply border-green-600 bg-green-50/70;
+  }
+
   .abas-log-entry--warn {
     @apply border-amber-400;
   }
 
+  .abas-log-entry--alarm {
+    @apply border-red-600 bg-red-50/70;
+  }
+
   .abas-log-entry--neutral {
-    @apply border-gray-300;
+    @apply border-gray-300 bg-gray-50/40;
   }
 
   .abas-log-dot {
@@ -322,12 +330,32 @@
     @apply bg-green-500;
   }
 
+  .abas-log-dot--restore {
+    @apply bg-green-600;
+  }
+
   .abas-log-dot--warn {
     @apply bg-amber-400;
   }
 
+  .abas-log-dot--alarm {
+    @apply bg-red-600;
+  }
+
   .abas-log-dot--neutral {
     @apply bg-gray-300;
+  }
+
+  .abas-log-entry-head {
+    @apply text-gray-900;
+  }
+
+  .abas-log-entry--alarm .abas-log-entry-head {
+    @apply text-red-950;
+  }
+
+  .abas-log-entry--restore .abas-log-entry-head {
+    @apply text-green-950;
   }
 
   .abas-log-subline {
