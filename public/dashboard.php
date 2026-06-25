@@ -8,62 +8,41 @@ require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/roles.php';
 require_once __DIR__ . '/../includes/trekant_client.php';
 require_once __DIR__ . '/../includes/installation_sync.php';
-require_once __DIR__ . '/../includes/service.php';
+require_once __DIR__ . '/../includes/dashboard_view.php';
 
 $conn = abas_db();
 $user = abas_require_login();
 $pendingRegistrations = 0;
-$externalInQueue = [];
-$showExternalQueue = in_array($user['role'] ?? '', ['admin', 'vagtcentral'], true);
 if (($user['role'] ?? '') === 'admin') {
     require_once __DIR__ . '/../includes/registration.php';
     $pendingRegistrations = abas_pending_registration_count($conn);
 }
-if ($showExternalQueue) {
-    require_once __DIR__ . '/../includes/service_reconcile.php';
-    $externalInQueue = abas_external_testqueue_installations($conn);
-}
+
 $q = trim($_GET['q'] ?? '');
-$installations = [];
-$listHeading = '';
-$showServiceInfo = false;
-$showServiceScope = false;
-$isOwner = in_array($user['role'], ['anlaegsejer', 'anlaegsafprover'], true);
-$isMontor = $user['role'] === 'montor';
-$userId = (int) $user['id'];
-$includeCompany = !$isMontor || ($_GET['scope'] ?? 'all') !== 'mine';
+$scope = ($_GET['scope'] ?? 'all') === 'mine' ? 'mine' : 'all';
+$state = abas_dashboard_build_state($conn, $user, $q, $scope);
+$isOwner = $state['isOwner'];
+$isMontor = $state['isMontor'];
+$autoRefresh = $q === '';
 
-if ($isOwner) {
-    $installations = $q === ''
-        ? abas_user_linked_installations($conn, $userId)
-        : abas_search_installations_local($conn, $q, false, $userId);
-    if ($q === '') {
-        $listHeading = 'Dine anlæg';
-        $installations = abas_flag_installations_in_service($conn, $installations);
-    }
-} elseif ($q !== '') {
-    $allAccess = abas_user_can_access_all_installations($user['role']);
-    $installations = abas_search_installations_local($conn, $q, $allAccess, $userId);
-
-    if ($installations === [] && $allAccess && abas_is_miscno2_query($q)) {
-        try {
-            $installations = abas_search_installations_from_api($conn, $user, $q);
-            if ($installations === []) {
-                abas_flash_set('error', 'Ingen anlæg fundet i TrekantBrand for: ' . $q);
-            }
-        } catch (Throwable $e) {
-            abas_flash_set('error', 'API-søgning fejlede: ' . $e->getMessage());
+if ($q !== '' && $state['installations'] === [] && abas_user_can_access_all_installations((string) $user['role']) && abas_is_miscno2_query($q)) {
+    try {
+        $fromApi = abas_search_installations_from_api($conn, $user, $q);
+        if ($fromApi === []) {
+            abas_flash_set('error', 'Ingen anlæg fundet i TrekantBrand for: ' . $q);
+        } else {
+            $state['installations'] = $fromApi;
         }
+    } catch (Throwable $e) {
+        abas_flash_set('error', 'API-søgning fejlede: ' . $e->getMessage());
     }
-} else {
-    $installations = abas_dashboard_in_service_installations($conn, $user, $includeCompany);
-    $showServiceInfo = true;
-    $showServiceScope = $isMontor;
-    $listHeading = $isMontor ? 'Anlæg i service' : 'Anlæg i service';
 }
 
 $pageTitle = 'Dashboard';
 $currentUser = $user;
+$extraHead = $autoRefresh
+    ? '<script src="' . htmlspecialchars(abas_asset_url('assets/js/dashboard-auto-refresh.js')) . '" defer></script>'
+    : '';
 require __DIR__ . '/partials/header.php';
 ?>
 <h1 class="abas-page-title">Dashboard</h1>
@@ -78,6 +57,10 @@ require __DIR__ . '/partials/header.php';
     <p class="abas-page-lead">Søg og find anlæg — se status og start eller stop service.</p>
 <?php endif; ?>
 
+<?php if ($autoRefresh): ?>
+    <p id="abas-dashboard-refresh-status" class="text-xs text-gray-500 mb-3" aria-live="polite"></p>
+<?php endif; ?>
+
 <form method="get" class="abas-search mb-6">
     <div class="abas-field flex-1">
         <label class="abas-label" for="q">Søg anlæg</label>
@@ -87,8 +70,8 @@ require __DIR__ . '/partials/header.php';
     <div class="abas-field sm:w-52">
         <label class="abas-label" for="scope">Visning</label>
         <select id="scope" name="scope" class="abas-select" onchange="this.form.submit()">
-            <option value="all" <?= $includeCompany ? 'selected' : '' ?>>Mine + firma i service</option>
-            <option value="mine" <?= !$includeCompany ? 'selected' : '' ?>>Kun mine i service</option>
+            <option value="all" <?= $state['includeCompany'] ? 'selected' : '' ?>>Mine + firma i service</option>
+            <option value="mine" <?= !$state['includeCompany'] ? 'selected' : '' ?>>Kun mine i service</option>
         </select>
     </div>
   <?php endif; ?>
@@ -97,63 +80,24 @@ require __DIR__ . '/partials/header.php';
     </div>
 </form>
 
-<?php if ($showExternalQueue && $externalInQueue !== [] && $q === ''): ?>
-    <div class="mb-8">
-        <h2 class="abas-card-title mb-3">I testkø uden for ABA Service (<?= count($externalInQueue) ?>)</h2>
-        <p class="text-sm text-gray-600 mb-3">Startet af VC eller andet — vises ikke på montør-dashboard. Opdateres via reconcile-poller.</p>
-        <div class="abas-table-wrap">
-            <table class="abas-table">
-                <thead>
-                    <tr>
-                        <th>ABA-nr.</th>
-                        <th>Navn</th>
-                        <th>By</th>
-                        <th>Udløber</th>
-                        <th>Kommentar</th>
-                    </tr>
-                </thead>
-                <tbody>
-                <?php foreach ($externalInQueue as $ext): ?>
-                    <tr class="abas-table-row-link" role="link" tabindex="0"
-                        data-href="<?= htmlspecialchars(abas_url('installation.php?id=' . (int) $ext['installation_id'])) ?>">
-                        <td class="font-mono font-medium text-sky-800"><?= htmlspecialchars((string) $ext['miscno2']) ?></td>
-                        <td><?= htmlspecialchars((string) $ext['name']) ?></td>
-                        <td><?= htmlspecialchars((string) $ext['city']) ?></td>
-                        <td class="text-sm"><?= htmlspecialchars(abas_format_datetime((string) ($ext['end_at'] ?? '')) ?: '—') ?></td>
-                        <td class="text-sm text-gray-600"><?= htmlspecialchars((string) ($ext['queue_comment'] ?? '')) ?></td>
-                    </tr>
-                <?php endforeach; ?>
-                </tbody>
-            </table>
-        </div>
-    </div>
-<?php endif; ?>
+<div id="abas-dashboard-external-wrap">
+<?= abas_dashboard_render_external_queue($state) ?>
+</div>
 
-<?php if ($installations === []): ?>
-    <div class="abas-panel">
-        <?php if ($isOwner && $q === ''): ?>
-            Du har ingen tilknyttede anlæg. Kontakt vagtcentralen.
-        <?php elseif ($q !== ''): ?>
-            Ingen anlæg fundet. Prøv et andet søgeord.
-        <?php elseif ($showExternalQueue && $externalInQueue !== []): ?>
-            Ingen anlæg i ABAS-service lige nu. <?= count($externalInQueue) ?> anlæg i ekstern testkø — se listen ovenfor.
-        <?php elseif ($isMontor): ?>
-            Ingen anlæg i service lige nu<?= $includeCompany ? '' : ' for dig' ?>. Søg efter et anlæg ovenfor.
-        <?php else: ?>
-            Ingen anlæg i service lige nu. Søg efter et anlæg ovenfor.
-        <?php endif; ?>
-    </div>
-<?php else: ?>
+<div id="abas-dashboard-main-wrap">
+<?= abas_dashboard_render_main($state) ?>
+</div>
 
-<?php if ($listHeading !== ''): ?>
-    <h2 class="abas-card-title mb-3"><?= htmlspecialchars($listHeading) ?> (<?= count($installations) ?>)</h2>
-<?php endif; ?>
-
-<?php
-$showServiceInfo = $showServiceInfo;
-$showServiceScope = $showServiceScope;
-require __DIR__ . '/partials/dashboard-installation-list.php';
-?>
-
+<?php if ($autoRefresh): ?>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    if (typeof window.abasInitDashboardAutoRefresh === 'function') {
+        window.abasInitDashboardAutoRefresh({
+            url: <?= json_encode(abas_url('dashboard-refresh.php?scope=' . rawurlencode($scope)), JSON_UNESCAPED_UNICODE) ?>,
+            intervalMs: 5000
+        });
+    }
+});
+</script>
 <?php endif; ?>
 <?php require __DIR__ . '/partials/footer.php';

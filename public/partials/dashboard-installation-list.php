@@ -100,17 +100,3 @@ if (!isset($installations) || $installations === []) {
         </a>
     <?php endforeach; ?>
 </div>
-
-<script>
-document.querySelectorAll('.abas-table-row-link').forEach(function (row) {
-    row.addEventListener('click', function () {
-        window.location.href = row.dataset.href;
-    });
-    row.addEventListener('keydown', function (event) {
-        if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            window.location.href = row.dataset.href;
-        }
-    });
-});
-</script>

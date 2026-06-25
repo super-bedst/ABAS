@@ -1,4 +1,23 @@
 document.addEventListener('DOMContentLoaded', function () {
+    document.addEventListener('click', function (event) {
+        var row = event.target.closest('.abas-table-row-link');
+        if (!row || !row.dataset.href) {
+            return;
+        }
+        window.location.href = row.dataset.href;
+    });
+    document.addEventListener('keydown', function (event) {
+        if (event.key !== 'Enter' && event.key !== ' ') {
+            return;
+        }
+        var row = event.target.closest('.abas-table-row-link');
+        if (!row || !row.dataset.href) {
+            return;
+        }
+        event.preventDefault();
+        window.location.href = row.dataset.href;
+    });
+
     document.querySelectorAll('.abas-ack-checkbox').forEach(function (ack) {
         var form = ack.closest('form');
         if (!form) {
