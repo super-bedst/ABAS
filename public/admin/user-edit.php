@@ -106,6 +106,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $email = strtolower(trim($_POST['email'] ?? ''));
     $username = trim($_POST['username'] ?? '');
+    $displayName = trim($_POST['registration_display_name'] ?? '');
     $phone = abas_normalize_phone(trim($_POST['phone'] ?? ''));
     $role = $_POST['role'] ?? $editUser['role'];
     $active = !empty($_POST['active']) ? 1 : 0;
@@ -169,15 +170,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($installerId !== null) {
+        $displayNameDb = $displayName !== '' ? $displayName : null;
         $upd = $conn->prepare(
-            'UPDATE users SET email=?, username=?, phone=?, role=?, active=?, trekant_userid=?, installer_id=?, sms_service_allowed=? WHERE id=?'
+            'UPDATE users SET email=?, username=?, phone=?, role=?, active=?, trekant_userid=?, installer_id=?, sms_service_allowed=?, registration_display_name=? WHERE id=?'
         );
-        $upd->bind_param('ssssisiii', $email, $username, $phone, $role, $active, $trekantUserid, $installerId, $smsServiceAllowed, $id);
+        $upd->bind_param('ssssisiiis', $email, $username, $phone, $role, $active, $trekantUserid, $installerId, $smsServiceAllowed, $displayNameDb, $id);
     } else {
+        $displayNameDb = $displayName !== '' ? $displayName : null;
         $upd = $conn->prepare(
-            'UPDATE users SET email=?, username=?, phone=?, role=?, active=?, trekant_userid=?, installer_id=NULL, sms_service_allowed=? WHERE id=?'
+            'UPDATE users SET email=?, username=?, phone=?, role=?, active=?, trekant_userid=?, installer_id=NULL, sms_service_allowed=?, registration_display_name=? WHERE id=?'
         );
-        $upd->bind_param('ssssisii', $email, $username, $phone, $role, $active, $trekantUserid, $smsServiceAllowed, $id);
+        $upd->bind_param('ssssisisi', $email, $username, $phone, $role, $active, $trekantUserid, $smsServiceAllowed, $displayNameDb, $id);
     }
     $upd->execute();
     $upd->close();
@@ -208,7 +211,7 @@ require __DIR__ . '/../partials/header.php';
     <a href="<?= htmlspecialchars($listUrl) ?>" class="abas-back-link">&larr; Tilbage til brugere</a>
 </div>
 <h1 class="abas-page-title !text-xl">Rediger bruger</h1>
-<p class="abas-page-lead"><?= htmlspecialchars(abas_role_label((string) $editUser['role'])) ?> — <?= htmlspecialchars((string) $editUser['username']) ?></p>
+<p class="abas-page-lead"><?= htmlspecialchars(abas_role_label((string) $editUser['role'])) ?> — <?= htmlspecialchars(abas_user_display_name($editUser)) ?></p>
 
 <form method="post" class="abas-card max-w-lg abas-form mb-6">
     <input type="hidden" name="id" value="<?= (int) $editUser['id'] ?>">
@@ -219,12 +222,18 @@ require __DIR__ . '/../partials/header.php';
     <input type="hidden" name="dir" value="<?= htmlspecialchars($listDir) ?>">
     <?php endif; ?>
     <div class="abas-field">
+        <label class="abas-label" for="registration_display_name">Visningsnavn</label>
+        <input id="registration_display_name" name="registration_display_name" value="<?= htmlspecialchars((string) ($editUser['registration_display_name'] ?? '')) ?>" class="abas-input" placeholder="Navn fra ansøgning eller kontaktperson">
+        <p class="abas-hint">Vises i lister og e-mails — adskilt fra login-brugernavn.</p>
+    </div>
+    <div class="abas-field">
         <label class="abas-label" for="email">E-mail</label>
         <input id="email" name="email" type="email" required value="<?= htmlspecialchars((string) $editUser['email']) ?>" class="abas-input">
     </div>
     <div class="abas-field">
-        <label class="abas-label" for="username">Brugernavn</label>
+        <label class="abas-label" for="username">Login-brugernavn</label>
         <input id="username" name="username" required value="<?= htmlspecialchars((string) $editUser['username']) ?>" class="abas-input">
+        <p class="abas-hint">Bruges ved login — som udgangspunkt samme som e-mail.</p>
     </div>
     <div class="abas-field">
         <label class="abas-label" for="phone">Telefon</label>

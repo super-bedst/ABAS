@@ -162,7 +162,7 @@ $types = str_repeat('s', count($rolesInFilter));
 $orderSql = abas_admin_users_order_sql($sort, $sortDir);
 $stmt = $conn->prepare(
     "SELECT u.id, u.email, u.username, u.role, u.active, u.phone, u.sms_secret_hash, u.sms_service_allowed,
-            u.registration_status, u.last_login_at, ai.company_name
+            u.registration_status, u.registration_display_name, u.last_login_at, ai.company_name
      FROM users u
      LEFT JOIN approved_installers ai ON ai.id = u.installer_id
      WHERE u.role IN ($placeholders)
@@ -272,8 +272,11 @@ require __DIR__ . '/../partials/header.php';
     <?php foreach ($rows as $r): ?>
         <tr class="<?= empty($r['active']) ? 'opacity-60' : '' ?>">
             <td>
-                <?= htmlspecialchars($r['username']) ?><br>
+                <?= htmlspecialchars(abas_user_display_name($r)) ?><br>
                 <span class="text-gray-500 text-xs"><?= htmlspecialchars($r['email']) ?></span>
+                <?php if ((string) $r['username'] !== (string) $r['email']): ?>
+                    <br><span class="text-gray-400 text-xs">Login: <?= htmlspecialchars((string) $r['username']) ?></span>
+                <?php endif; ?>
             </td>
             <td class="whitespace-nowrap text-sm"><?= htmlspecialchars(abas_role_label($r['role'])) ?></td>
             <td class="whitespace-nowrap text-sm"><?= htmlspecialchars((string) ($r['phone'] ?? '—')) ?></td>

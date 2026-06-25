@@ -359,11 +359,12 @@ function abas_approve_registration(
     }
 
     $smsFlag = $smsAllowed ? 1 : 0;
+    $loginUsername = abas_generate_username_from_email($conn, (string) $user['email'], $userId);
     $upd = $conn->prepare(
-        'UPDATE users SET active=1, role=?, registration_status="approved", registration_reviewed_at=NOW(),
+        'UPDATE users SET active=1, role=?, username=?, registration_status="approved", registration_reviewed_at=NOW(),
          registration_reviewed_by_user_id=?, sms_service_allowed=? WHERE id=?'
     );
-    $upd->bind_param('siii', $approveRole, $adminId, $smsFlag, $userId);
+    $upd->bind_param('ssiii', $approveRole, $loginUsername, $adminId, $smsFlag, $userId);
     $upd->execute();
     $upd->close();
 

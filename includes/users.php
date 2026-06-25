@@ -17,7 +17,7 @@ function abas_validate_phone(string $phone): bool
     return (bool) preg_match('/^\+?\d{8,}$/', $normalized);
 }
 
-function abas_generate_username_from_email(mysqli $conn, string $email): string
+function abas_generate_username_from_email(mysqli $conn, string $email, ?int $excludeUserId = null): string
 {
     $email = strtolower(trim($email));
     if ($email === '') {
@@ -27,8 +27,13 @@ function abas_generate_username_from_email(mysqli $conn, string $email): string
     $candidate = $email;
     $n = 1;
     while (true) {
-        $stmt = $conn->prepare('SELECT id FROM users WHERE username = ? LIMIT 1');
-        $stmt->bind_param('s', $candidate);
+        if ($excludeUserId !== null && $excludeUserId > 0) {
+            $stmt = $conn->prepare('SELECT id FROM users WHERE username = ? AND id <> ? LIMIT 1');
+            $stmt->bind_param('si', $candidate, $excludeUserId);
+        } else {
+            $stmt = $conn->prepare('SELECT id FROM users WHERE username = ? LIMIT 1');
+            $stmt->bind_param('s', $candidate);
+        }
         $stmt->execute();
         $exists = (bool) $stmt->get_result()->fetch_row();
         $stmt->close();

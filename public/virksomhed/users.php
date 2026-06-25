@@ -51,12 +51,24 @@ $stmt->execute();
 $users = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $stmt->close();
 
+$actorId = (int) $actor['id'];
+$adminsStmt = $conn->prepare(
+    "SELECT id, email, username, phone, registration_display_name
+     FROM users
+     WHERE installer_id = ? AND role = 'virksomhedsadmin' AND id <> ?
+     ORDER BY registration_display_name, username"
+);
+$adminsStmt->bind_param('ii', $installerId, $actorId);
+$adminsStmt->execute();
+$companyAdmins = $adminsStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+$adminsStmt->close();
+
 $pageTitle = 'Virksomhedsbrugere';
 $currentUser = $actor;
 require __DIR__ . '/../partials/header.php';
 ?>
 <h1 class="abas-page-title">Virksomhedsbrugere</h1>
-<p class="abas-page-lead">Montører og øvrige brugere tilknyttet <?= htmlspecialchars(abas_user_company_name($conn, $actor)) ?>.</p>
+<p class="abas-page-lead">Montører og øvrige brugere du kan administrere hos <?= htmlspecialchars(abas_user_company_name($conn, $actor)) ?>.</p>
 
 <div class="abas-table-wrap mt-6">
     <table class="abas-table">
@@ -71,6 +83,13 @@ require __DIR__ . '/../partials/header.php';
             </tr>
         </thead>
         <tbody>
+        <?php if ($users === []): ?>
+            <tr>
+                <td colspan="6" class="text-gray-500 text-sm p-4">
+                    Ingen montører eller andre redigerbare brugere endnu. Når montører er godkendt til jeres firma, vises de her.
+                </td>
+            </tr>
+        <?php endif; ?>
         <?php foreach ($users as $u): ?>
             <tr>
                 <td><?= htmlspecialchars(abas_user_display_name($u)) ?></td>
@@ -92,4 +111,31 @@ require __DIR__ . '/../partials/header.php';
         </tbody>
     </table>
 </div>
+
+<?php if ($companyAdmins !== []): ?>
+<div class="mt-8">
+    <h2 class="text-lg font-semibold text-gray-900 mb-2">Andre virksomhedsadministratorer</h2>
+    <p class="text-sm text-gray-600 mb-3">Disse kan kun administreres af TrekantBrand.</p>
+    <div class="abas-table-wrap">
+        <table class="abas-table">
+            <thead>
+                <tr>
+                    <th>Navn</th>
+                    <th>E-mail</th>
+                    <th>Telefon</th>
+                </tr>
+            </thead>
+            <tbody>
+            <?php foreach ($companyAdmins as $adminUser): ?>
+                <tr>
+                    <td><?= htmlspecialchars(abas_user_display_name($adminUser)) ?></td>
+                    <td><?= htmlspecialchars((string) $adminUser['email']) ?></td>
+                    <td><?= htmlspecialchars((string) ($adminUser['phone'] ?? '—')) ?></td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
+<?php endif; ?>
 <?php require __DIR__ . '/../partials/footer.php';
