@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/../includes/bootstrap.php';
-require_once __DIR__ . '/../includes/db.php';
-require_once __DIR__ . '/../includes/auth.php';
-require_once __DIR__ . '/../includes/roles.php';
-require_once __DIR__ . '/../includes/users.php';
-require_once __DIR__ . '/../includes/user_management.php';
-require_once __DIR__ . '/../includes/password_flow.php';
+require_once __DIR__ . '/../../includes/bootstrap.php';
+require_once __DIR__ . '/../../includes/db.php';
+require_once __DIR__ . '/../../includes/auth.php';
+require_once __DIR__ . '/../../includes/roles.php';
+require_once __DIR__ . '/../../includes/users.php';
+require_once __DIR__ . '/../../includes/user_management.php';
+require_once __DIR__ . '/../../includes/password_flow.php';
 
 $conn = abas_db();
 $actor = abas_require_login();
