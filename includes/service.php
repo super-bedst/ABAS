@@ -809,23 +809,19 @@ function abas_alarmlog_tone_class(string $tone, string $prefix): string
 
 function abas_alarmlog_row_tone(array $row): string
 {
-    $color = strtoupper(trim((string) ($row['row_color'] ?? '')));
-    if ($color === '008000' || $color === '00FF00') {
-        return 'restore';
-    }
-    if (in_array($color, ['FFFF00', 'FFA500', 'FF0000'], true)) {
-        return 'alarm';
+    $event = strtoupper(trim(abas_alarmlog_field_value($row, 'event')));
+
+    foreach (['KOMMENTAR', 'SYS KOMM', 'I TEST', 'UDE AF TES'] as $neutralEvent) {
+        if (str_contains($event, $neutralEvent)) {
+            return 'neutral';
+        }
     }
 
-    $event = strtoupper(trim((string) ($row['event'] ?? '')));
-    if (str_contains($event, 'ALARM') || str_contains($event, 'FEJL')) {
-        return 'alarm';
-    }
     if (str_contains($event, 'RESTORE')) {
         return 'restore';
     }
-    if (str_contains($event, 'SYS KOMM')) {
-        return 'neutral';
+    if (str_contains($event, 'ALARM') || str_contains($event, 'FEJL')) {
+        return 'alarm';
     }
 
     $ecode = strtoupper(trim(abas_alarmlog_field_value($row, 'ecode')));
@@ -837,6 +833,14 @@ function abas_alarmlog_row_tone(array $row): string
         if (abas_zone_is_restore_code($ecode)) {
             return 'restore';
         }
+    }
+
+    $color = strtoupper(trim((string) ($row['row_color'] ?? '')));
+    if ($color === '008000' || $color === '00FF00') {
+        return 'restore';
+    }
+    if ($color === 'FF0000') {
+        return 'alarm';
     }
 
     return 'neutral';
@@ -1087,34 +1091,53 @@ function abas_render_alarmlog_rows_html(array $rows): string
 
     ob_start();
     foreach (abas_group_alarmlog_rows($rows) as $group) {
+        $lines = [];
         foreach ($group as $row) {
-            $summary = abas_format_alarmlog_compact($row, true);
+            $summary = abas_format_alarmlog_compact($row, $lines !== []);
             if ($summary === '') {
                 continue;
             }
-
-            $tone = abas_alarmlog_row_tone($row);
-            $rowClass = abas_alarmlog_tone_class($tone, 'abas-log-row');
-            $entryClass = abas_alarmlog_tone_class($tone, 'abas-log-entry');
-            $dotClass = abas_alarmlog_tone_class($tone, 'abas-log-dot');
-            ?>
-        <tr class="<?= htmlspecialchars($rowClass) ?>">
+            $lines[] = [
+                'row' => $row,
+                'summary' => $summary,
+                'is_head' => $lines === [],
+                'tone' => abas_alarmlog_row_tone($row),
+            ];
+        }
+        if ($lines === []) {
+            continue;
+        }
+        ?>
+        <tr>
             <td class="align-top whitespace-nowrap">
-                <div class="abas-log-time font-medium text-gray-900">
-                    <?= htmlspecialchars(abas_format_alarmlog_timestamp($row)) ?>
+                <div class="abas-log-times">
+                    <?php foreach ($lines as $line): ?>
+                        <div class="<?= $line['is_head'] ? 'font-medium text-gray-900 abas-log-time-row' : 'abas-log-subline-time text-xs text-gray-500' ?>">
+                            <?= htmlspecialchars(abas_format_alarmlog_timestamp($line['row'])) ?>
+                        </div>
+                    <?php endforeach; ?>
                 </div>
             </td>
             <td class="align-top">
-                <div class="abas-log-entry <?= htmlspecialchars($entryClass) ?>">
-                    <div class="flex gap-2">
-                        <span class="abas-log-dot <?= htmlspecialchars($dotClass) ?>" aria-hidden="true"></span>
-                        <div class="font-medium break-words abas-log-entry-head min-w-0 flex-1"><?= htmlspecialchars($summary) ?></div>
-                    </div>
+                <div class="abas-log-group">
+                    <?php foreach ($lines as $line): ?>
+                        <?php
+                        $entryClass = abas_alarmlog_tone_class($line['tone'], 'abas-log-entry');
+                        $dotClass = abas_alarmlog_tone_class($line['tone'], 'abas-log-dot');
+                        ?>
+                        <div class="abas-log-entry <?= htmlspecialchars($entryClass) ?>">
+                            <div class="flex gap-2">
+                                <span class="abas-log-dot <?= htmlspecialchars($dotClass) ?>" aria-hidden="true"></span>
+                                <div class="<?= $line['is_head'] ? 'font-medium break-words abas-log-entry-head' : 'abas-log-subline-text break-words' ?> min-w-0 flex-1">
+                                    <?= htmlspecialchars($line['summary']) ?>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
                 </div>
             </td>
         </tr>
-            <?php
-        }
+        <?php
     }
 
     return (string) ob_get_clean();

@@ -299,7 +299,15 @@
   }
 
   .abas-log-entry {
-    @apply border-l-4 pl-3 py-1.5 rounded-r-md;
+    @apply border-l-4 pl-2 py-0.5;
+  }
+
+  .abas-log-group {
+    @apply space-y-0.5;
+  }
+
+  .abas-log-times {
+    @apply space-y-0.5;
   }
 
   .abas-log-entry--alarm {
@@ -326,7 +334,7 @@
   }
 
   .abas-log-dot {
-    @apply mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full;
+    @apply mt-1 h-2 w-2 shrink-0 rounded-full;
   }
 
   .abas-log-dot--alarm {
@@ -353,28 +361,26 @@
     @apply text-gray-900;
   }
 
-  .abas-log-entry--alarm .abas-log-entry-head {
+  .abas-log-entry--alarm .abas-log-entry-head,
+  .abas-log-entry--alarm .abas-log-subline-text {
     color: #450a0a;
   }
 
-  .abas-log-entry--restore .abas-log-entry-head {
+  .abas-log-entry--restore .abas-log-entry-head,
+  .abas-log-entry--restore .abas-log-subline-text {
     color: #052e16;
   }
 
-  .abas-log-row--alarm > td {
-    background-color: rgb(254 242 242 / 0.45);
+  .abas-log-subline-text {
+    @apply text-xs text-gray-700;
   }
 
-  .abas-log-row--restore > td {
-    background-color: rgb(240 253 244 / 0.45);
+  .abas-log-subline-time {
+    @apply min-h-[1.125rem] leading-5;
   }
 
-  .abas-log-row--neutral > td {
-    background-color: transparent;
-  }
-
-  .abas-log-time {
-    @apply min-h-[1.25rem] leading-5 py-1.5;
+  .abas-log-time-row {
+    @apply min-h-[1.25rem] leading-5;
   }
 
   .abas-log-entry-detail {
