@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/error_handler.php';
+
 function abas_roles(): array
 {
     return ['admin', 'vagtcentral', 'montor', 'anlaegsejer', 'anlaegsafprover', 'virksomhedsadmin'];
@@ -57,7 +59,6 @@ function abas_require_role(array $allowed): void
 {
     $role = $_SESSION['user_role'] ?? '';
     if (!in_array($role, $allowed, true)) {
-        http_response_code(403);
-        exit('Adgang nægtet.');
+        abas_forbidden('Du har ikke adgang til denne side.', ['role' => $role, 'allowed' => implode(',', $allowed)]);
     }
 }

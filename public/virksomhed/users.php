@@ -7,7 +7,6 @@ require_once __DIR__ . '/../../includes/db.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/roles.php';
 require_once __DIR__ . '/../../includes/users.php';
-require_once __DIR__ . '/../../includes/password_flow.php';
 
 $conn = abas_db();
 $actor = abas_require_login();
@@ -15,11 +14,11 @@ abas_require_role(['virksomhedsadmin']);
 
 $installerId = (int) ($actor['installer_id'] ?? 0);
 if ($installerId <= 0) {
-    http_response_code(403);
-    exit('Ingen virksomhed tilknyttet.');
+    abas_forbidden('Ingen virksomhed tilknyttet din konto.', ['installer_id' => $installerId]);
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    require_once __DIR__ . '/../../includes/password_flow.php';
     $targetId = (int) ($_POST['user_id'] ?? 0);
     $action = $_POST['action'] ?? '';
     $stmt = $conn->prepare('SELECT * FROM users WHERE id = ? AND installer_id = ? LIMIT 1');
@@ -58,13 +57,15 @@ $users = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $stmt->close();
 
 $actorId = (int) $actor['id'];
+$companyName = abas_user_company_name($conn, $actor);
+abas_session_release();
 
 $pageTitle = 'Virksomhedsbrugere';
 $currentUser = $actor;
 require __DIR__ . '/../partials/header.php';
 ?>
 <h1 class="abas-page-title">Virksomhedsbrugere</h1>
-<p class="abas-page-lead">Montører, virksomhedsadministratorer og øvrige brugere hos <?= htmlspecialchars(abas_user_company_name($conn, $actor)) ?>.</p>
+<p class="abas-page-lead">Montører, virksomhedsadministratorer og øvrige brugere hos <?= htmlspecialchars($companyName) ?>.</p>
 
 <div class="abas-table-wrap mt-6">
     <table class="abas-table">

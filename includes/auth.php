@@ -3,8 +3,16 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/db.php';
-require_once __DIR__ . '/password_flow.php';
 require_once __DIR__ . '/roles.php';
+
+function abas_access_needs_confirm(?array $user): bool
+{
+    if (!$user || empty($user['access_confirm_due_at'])) {
+        return false;
+    }
+
+    return strtotime((string) $user['access_confirm_due_at']) <= time();
+}
 
 function abas_current_user(mysqli $conn): ?array
 {

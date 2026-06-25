@@ -101,17 +101,23 @@ require_once __DIR__ . '/paths.php';
 
 function abas_setting(mysqli $conn, string $key, ?string $default = null): ?string
 {
-    $stmt = $conn->prepare('SELECT `value` FROM system_settings WHERE `key` = ? LIMIT 1');
-    if (!$stmt) {
-        return $default;
+    if (!isset($GLOBALS['_abas_settings_cache'])) {
+        $GLOBALS['_abas_settings_cache'] = [];
     }
-    $stmt->bind_param('s', $key);
-    $stmt->execute();
-    $res = $stmt->get_result();
-    $row = $res ? $res->fetch_assoc() : null;
-    $stmt->close();
+    if (!array_key_exists($key, $GLOBALS['_abas_settings_cache'])) {
+        $stmt = $conn->prepare('SELECT `value` FROM system_settings WHERE `key` = ? LIMIT 1');
+        if (!$stmt) {
+            return $default;
+        }
+        $stmt->bind_param('s', $key);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $row = $res ? $res->fetch_assoc() : null;
+        $stmt->close();
+        $GLOBALS['_abas_settings_cache'][$key] = $row['value'] ?? $default;
+    }
 
-    return $row['value'] ?? $default;
+    return $GLOBALS['_abas_settings_cache'][$key];
 }
 
 function abas_set_setting(mysqli $conn, string $key, string $value): void
@@ -121,5 +127,8 @@ function abas_set_setting(mysqli $conn, string $key, string $value): void
         $stmt->bind_param('ss', $key, $value);
         $stmt->execute();
         $stmt->close();
+    }
+    if (isset($GLOBALS['_abas_settings_cache'])) {
+        unset($GLOBALS['_abas_settings_cache'][$key]);
     }
 }

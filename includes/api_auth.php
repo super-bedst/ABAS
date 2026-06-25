@@ -3,9 +3,19 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/app_log.php';
 
 function abas_api_json(int $status, array $payload): void
 {
+    if ($status >= 400) {
+        $message = (string) ($payload['error'] ?? $payload['message'] ?? 'API-fejl');
+        abas_log_error('api', $message, [
+            'status' => $status,
+            'uri' => (string) ($_SERVER['REQUEST_URI'] ?? ''),
+            'user_id' => (int) ($_SESSION['user_id'] ?? 0),
+        ]);
+    }
+
     http_response_code($status);
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode($payload, JSON_UNESCAPED_UNICODE);

@@ -64,5 +64,4 @@ if ($type === 'montors') {
     exit;
 }
 
-http_response_code(400);
-echo json_encode(['error' => 'Ukendt søgetype'], JSON_UNESCAPED_UNICODE);
+abas_json_error(400, 'Ukendt søgetype.', 'http_error', ['type' => $type]);

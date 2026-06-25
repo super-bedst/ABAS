@@ -20,6 +20,7 @@ if (($user['role'] ?? '') === 'admin') {
 
 $q = trim($_GET['q'] ?? '');
 $scope = ($_GET['scope'] ?? 'all') === 'mine' ? 'mine' : 'all';
+abas_session_release();
 $state = abas_dashboard_build_state($conn, $user, $q, $scope);
 $isOwner = $state['isOwner'];
 $isMontor = $state['isMontor'];

@@ -15,8 +15,7 @@ abas_require_role(['virksomhedsadmin']);
 
 $installerId = (int) ($actor['installer_id'] ?? 0);
 if ($installerId <= 0) {
-    http_response_code(403);
-    exit('Ingen virksomhed tilknyttet.');
+    abas_forbidden('Ingen virksomhed tilknyttet din konto.', ['installer_id' => $installerId]);
 }
 
 $targetId = (int) ($_GET['id'] ?? $_POST['id'] ?? 0);
@@ -27,8 +26,7 @@ $editUser = $stmt->get_result()->fetch_assoc();
 $stmt->close();
 
 if (!$editUser || !abas_virksomhedsadmin_may_manage_user($actor, $editUser)) {
-    http_response_code(403);
-    exit('Ingen adgang til brugeren.');
+    abas_forbidden('Ingen adgang til brugeren.', ['target_user_id' => $targetId]);
 }
 
 $isSelf = (int) $editUser['id'] === (int) $actor['id'];

@@ -20,6 +20,9 @@ function abas_session_start(): void
 
 function abas_flash_set(string $type, string $message): void
 {
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        abas_session_start();
+    }
     $_SESSION['flash'] = ['type' => $type, 'message' => $message];
 }
 
@@ -32,4 +35,11 @@ function abas_flash_get(): ?array
     unset($_SESSION['flash']);
 
     return $flash;
+}
+
+function abas_session_release(): void
+{
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        session_write_close();
+    }
 }

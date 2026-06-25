@@ -11,6 +11,7 @@ header('Content-Type: application/json; charset=utf-8');
 
 $conn = abas_db();
 $user = abas_require_login();
+abas_session_release();
 
 $q = trim($_GET['q'] ?? '');
 $scope = ($_GET['scope'] ?? 'all') === 'mine' ? 'mine' : 'all';

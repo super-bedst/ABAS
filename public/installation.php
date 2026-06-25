@@ -23,8 +23,7 @@ $stmt->execute();
 $installation = $stmt->get_result()->fetch_assoc();
 $stmt->close();
 if (!$installation || !abas_user_may_access_installation($conn, $user, $installation)) {
-    http_response_code(404);
-    exit('Anlæg ikke fundet.');
+    abas_not_found('Anlægget findes ikke, eller du har ikke adgang til det.', ['installation_id' => $id]);
 }
 
 $session = abas_active_session_for_installation($conn, $id);

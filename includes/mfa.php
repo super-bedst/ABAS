@@ -26,13 +26,19 @@ function abas_client_ip(): string
 
 function abas_mfa_ip_whitelisted(mysqli $conn, ?string $ip = null): bool
 {
-    $ip = $ip ?? abas_client_ip();
-    $result = $conn->query('SELECT ip_cidr FROM mfa_ip_whitelist WHERE active = 1');
-    if (!$result) {
-        return false;
+    static $whitelist = null;
+    if ($whitelist === null) {
+        $whitelist = [];
+        $result = $conn->query('SELECT ip_cidr FROM mfa_ip_whitelist WHERE active = 1');
+        if ($result) {
+            while ($row = $result->fetch_assoc()) {
+                $whitelist[] = trim((string) $row['ip_cidr']);
+            }
+        }
     }
-    while ($row = $result->fetch_assoc()) {
-        $cidr = trim((string) $row['ip_cidr']);
+
+    $ip = $ip ?? abas_client_ip();
+    foreach ($whitelist as $cidr) {
         if ($cidr === $ip) {
             return true;
         }
@@ -66,15 +72,7 @@ function abas_ip_in_cidr(string $ip, string $cidr): bool
 
 function abas_mfa_required_globally(mysqli $conn): bool
 {
-    $stmt = $conn->prepare('SELECT value FROM system_settings WHERE `key` = "mfa_required" LIMIT 1');
-    if (!$stmt) {
-        return true;
-    }
-    $stmt->execute();
-    $row = $stmt->get_result()->fetch_assoc();
-    $stmt->close();
-
-    return ($row['value'] ?? '1') === '1';
+    return abas_setting($conn, 'mfa_required', '1') === '1';
 }
 
 function abas_user_mfa_method(mysqli $conn, int $userId): string

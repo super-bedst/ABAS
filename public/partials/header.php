@@ -11,6 +11,7 @@ require_once dirname(__DIR__, 2) . '/includes/theme.php';
 $appName = abas_config()['app_name'];
 $title = ($pageTitle ?? 'Dashboard') . ' — ' . $appName;
 $flash = abas_flash_get();
+abas_session_release();
 ?>
 <!DOCTYPE html>
 <html lang="da">

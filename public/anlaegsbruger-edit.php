@@ -23,10 +23,11 @@ $editUser = $stmt->get_result()->fetch_assoc();
 $stmt->close();
 
 if (!$editUser || !abas_anlaegsejer_may_manage_user($conn, $actor, $editUser)) {
-    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         abas_flash_set('error', 'Ingen adgang til brugeren.');
+        abas_redirect('anlaegsbrugere.php');
     }
-    abas_redirect('anlaegsbrugere.php');
+    abas_forbidden('Ingen adgang til brugeren.', ['target_user_id' => $targetId]);
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {

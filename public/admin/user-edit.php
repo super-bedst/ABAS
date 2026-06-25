@@ -29,8 +29,7 @@ $editUser = $stmt->get_result()->fetch_assoc();
 $stmt->close();
 
 if (!$editUser) {
-    http_response_code(404);
-    exit('Bruger ikke fundet.');
+    abas_not_found('Brugeren findes ikke.', ['user_id' => $id]);
 }
 
 $listFilter = (string) ($_GET['filter'] ?? $_POST['filter'] ?? 'alle');

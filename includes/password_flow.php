@@ -90,11 +90,4 @@ function abas_access_set_due(mysqli $conn, int $userId): void
     $stmt->close();
 }
 
-function abas_access_needs_confirm(?array $user): bool
-{
-    if (!$user || empty($user['access_confirm_due_at'])) {
-        return false;
-    }
-
-    return strtotime((string) $user['access_confirm_due_at']) <= time();
-}
+// abas_access_needs_confirm() lives in auth.php (used on every request).
