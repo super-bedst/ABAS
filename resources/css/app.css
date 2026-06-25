@@ -332,9 +332,31 @@
     @apply sticky top-0 z-10 bg-tablehead shadow-[0_1px_0_0_rgba(0,0,0,0.06)];
   }
 
-  .abas-log-group-row--follow td {
-    border-top-width: 0;
-    padding-top: 0.125rem;
+  .abas-log-table {
+    table-layout: fixed;
+  }
+
+  .abas-log-table thead th:first-child {
+    width: 11rem;
+  }
+
+  .abas-log-group-cell {
+    @apply p-3;
+  }
+
+  .abas-log-group {
+    @apply space-y-0.5;
+  }
+
+  .abas-log-line {
+    display: grid;
+    grid-template-columns: 11rem minmax(0, 1fr);
+    column-gap: 0;
+    align-items: start;
+  }
+
+  .abas-log-line-detail {
+    min-width: 0;
   }
 
   .abas-log-entry {
