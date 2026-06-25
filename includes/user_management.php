@@ -240,3 +240,91 @@ function abas_save_virksomhed_managed_user(
 
     return ['ok' => true];
 }
+
+/**
+ * @param list<int> $installationIds
+ * @return array{ok:bool, message:string, user_id?:int}
+ */
+function abas_create_anlaegsejer_managed_user(
+    mysqli $conn,
+    array $actor,
+    string $email,
+    string $username,
+    string $phone,
+    string $displayName,
+    string $role,
+    array $installationIds,
+    bool $smsServiceAllowed,
+    string $smsCode
+): array {
+    if (($actor['role'] ?? '') !== 'anlaegsejer') {
+        return ['ok' => false, 'message' => 'Ingen adgang.'];
+    }
+    if (!in_array($role, ['anlaegsejer', 'anlaegsafprover'], true)) {
+        return ['ok' => false, 'message' => 'Ugyldig rolle.'];
+    }
+
+    $email = strtolower(trim($email));
+    $username = trim($username);
+    $phone = abas_normalize_phone(trim($phone));
+    $displayName = trim($displayName);
+    if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        return ['ok' => false, 'message' => 'Angiv en gyldig e-mail.'];
+    }
+    if ($username === '') {
+        return ['ok' => false, 'message' => 'Brugernavn er påkrævet.'];
+    }
+    if (!abas_validate_phone($phone)) {
+        return ['ok' => false, 'message' => 'Angiv et gyldigt telefonnummer (min. 8 cifre).'];
+    }
+
+    $smsAllowed = $smsServiceAllowed ? 1 : 0;
+    if (abas_user_sms_service_code_required_on_create($role, $smsAllowed === 1, $smsCode)) {
+        return ['ok' => false, 'message' => 'SMS-kode skal være mindst 6 tegn når SMS-betjening er aktiveret.'];
+    }
+
+    $actorInstIds = abas_user_installation_ids($conn, (int) $actor['id']);
+    $installationIds = array_values(array_unique(array_filter(
+        array_map(static fn ($id): int => (int) $id, $installationIds),
+        static fn (int $id): bool => $id > 0
+    )));
+    if ($installationIds === []) {
+        return ['ok' => false, 'message' => 'Vælg mindst ét anlæg.'];
+    }
+    foreach ($installationIds as $installationId) {
+        if (!in_array($installationId, $actorInstIds, true)) {
+            return ['ok' => false, 'message' => 'Du kan kun tilknytte dine egne anlæg.'];
+        }
+    }
+
+    $chk = $conn->prepare('SELECT id FROM users WHERE email = ? OR username = ? LIMIT 1');
+    $chk->bind_param('ss', $email, $username);
+    $chk->execute();
+    if ($chk->get_result()->fetch_row()) {
+        $chk->close();
+
+        return ['ok' => false, 'message' => 'En bruger med samme e-mail eller brugernavn findes allerede.'];
+    }
+    $chk->close();
+
+    $actorId = (int) $actor['id'];
+    $displayNameDb = $displayName !== '' ? $displayName : null;
+    $stmt = $conn->prepare(
+        'INSERT INTO users (email, username, role, phone, active, sms_service_allowed, registration_status, registration_display_name, created_by_user_id)
+         VALUES (?, ?, ?, ?, 1, ?, "approved", ?, ?)'
+    );
+    $stmt->bind_param('ssssisi', $email, $username, $role, $phone, $smsAllowed, $displayNameDb, $actorId);
+    $stmt->execute();
+    $newId = (int) $stmt->insert_id;
+    $stmt->close();
+
+    if ($smsAllowed === 1 && $smsCode !== '' && abas_user_role_uses_sms_code($role)) {
+        abas_set_user_sms_code($conn, $newId, $smsCode);
+    }
+
+    foreach ($installationIds as $installationId) {
+        abas_link_user_installation($conn, $newId, $installationId);
+    }
+
+    return ['ok' => true, 'message' => 'Bruger oprettet og tilknyttet.', 'user_id' => $newId];
+}

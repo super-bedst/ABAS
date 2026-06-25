@@ -70,3 +70,53 @@ function abasSetFormLoading(form, message) {
     form.setAttribute('data-abas-loading', message || 'Arbejder…');
     form.dispatchEvent(new Event('submit', { cancelable: true }));
 }
+
+function abasInitModal(openButtonId, modalId) {
+    var openBtn = document.getElementById(openButtonId);
+    var modal = document.getElementById(modalId);
+    if (!openBtn || !modal) {
+        return;
+    }
+
+    var panel = modal.querySelector('.abas-modal-panel');
+    var lastFocus = null;
+
+    function syncExpanded(isOpen) {
+        openBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        modal.classList.toggle('hidden', !isOpen);
+        document.body.classList.toggle('overflow-hidden', isOpen);
+    }
+
+    function openModal() {
+        lastFocus = document.activeElement;
+        syncExpanded(true);
+        var firstField = modal.querySelector('input:not([type="hidden"]), select, textarea');
+        if (firstField) {
+            firstField.focus();
+        }
+    }
+
+    function closeModal() {
+        syncExpanded(false);
+        if (lastFocus && typeof lastFocus.focus === 'function') {
+            lastFocus.focus();
+        }
+    }
+
+    openBtn.addEventListener('click', openModal);
+    modal.querySelectorAll('[data-abas-modal-close]').forEach(function (el) {
+        el.addEventListener('click', closeModal);
+    });
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape' && !modal.classList.contains('hidden')) {
+            closeModal();
+        }
+    });
+    if (panel) {
+        panel.addEventListener('click', function (event) {
+            event.stopPropagation();
+        });
+    }
+}
+
+window.abasInitModal = abasInitModal;
