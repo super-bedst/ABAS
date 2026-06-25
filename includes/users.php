@@ -188,6 +188,11 @@ function abas_installer_id_for_email(mysqli $conn, string $email): ?int
 
 function abas_user_company_name(mysqli $conn, array $user): string
 {
+    $company = trim((string) ($user['company_name'] ?? ''));
+    if ($company !== '') {
+        return $company;
+    }
+
     $installerId = (int) ($user['installer_id'] ?? 0);
     if ($installerId <= 0) {
         return '';
@@ -199,6 +204,46 @@ function abas_user_company_name(mysqli $conn, array $user): string
     $stmt->close();
 
     return trim((string) ($row['company_name'] ?? ''));
+}
+
+function abas_user_display_name(array $user): string
+{
+    $name = trim((string) ($user['registration_display_name'] ?? ''));
+    if ($name !== '') {
+        return $name;
+    }
+
+    return trim((string) ($user['username'] ?? ''));
+}
+
+/**
+ * @return list<string>
+ */
+function abas_service_log_actor_parts(mysqli $conn, array $user): array
+{
+    $parts = [];
+
+    $name = abas_user_display_name($user);
+    if ($name !== '') {
+        $parts[] = $name;
+    }
+
+    $company = abas_user_company_name($conn, $user);
+    if ($company !== '') {
+        $parts[] = $company;
+    }
+
+    $phone = trim((string) ($user['phone'] ?? ''));
+    if ($phone !== '') {
+        $parts[] = $phone;
+    }
+
+    $role = abas_role_label((string) ($user['role'] ?? ''));
+    if ($role !== '') {
+        $parts[] = $role;
+    }
+
+    return $parts;
 }
 
 function abas_assign_installer_for_montor(mysqli $conn, string $email): ?int
@@ -283,12 +328,10 @@ function abas_service_event_label(string $action): string
 }
 
 /**
- * Trekant KOMMENTAR: Hændelse, evt. brugerkommentar, navn, telefon, rolle.
+ * Trekant KOMMENTAR: Hændelse, evt. brugerkommentar, navn, firma, telefon, rolle.
  */
 function abas_build_service_log_comment(mysqli $conn, array $user, string $action, string $userComment = ''): string
 {
-    unset($conn);
-
     $parts = [abas_service_event_label($action)];
 
     $userComment = trim($userComment);
@@ -296,19 +339,11 @@ function abas_build_service_log_comment(mysqli $conn, array $user, string $actio
         $parts[] = $userComment;
     }
 
-    foreach ([
-        trim((string) ($user['username'] ?? '')),
-        trim((string) ($user['phone'] ?? '')),
-        abas_role_label((string) ($user['role'] ?? '')),
-    ] as $part) {
-        if ($part !== '') {
-            $parts[] = $part;
-        }
-    }
+    $parts = array_merge($parts, abas_service_log_actor_parts($conn, $user));
 
     require_once __DIR__ . '/trekant_client.php';
 
-    return abas_trekant_trim_log_parts($parts, 80);
+    return abas_trekant_trim_log_parts($parts, 80, 4);
 }
 
 function abas_enrich_service_start_comment(mysqli $conn, array $user, string $comment): string

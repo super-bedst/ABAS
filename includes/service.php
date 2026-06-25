@@ -163,7 +163,12 @@ function abas_start_service_session(
         if ($actorOverride !== null) {
             $actor = $actorOverride;
         } elseif ($onBehalfUserId) {
-            $actorStmt = $conn->prepare('SELECT * FROM users WHERE id = ? LIMIT 1');
+            $actorStmt = $conn->prepare(
+                'SELECT u.*, ai.company_name
+                 FROM users u
+                 LEFT JOIN approved_installers ai ON ai.id = u.installer_id
+                 WHERE u.id = ? LIMIT 1'
+            );
             $actorStmt->bind_param('i', $onBehalfUserId);
             $actorStmt->execute();
             $behalfUser = $actorStmt->get_result()->fetch_assoc();
@@ -315,7 +320,12 @@ function abas_stop_service_session(
     }
     $actor = $user;
     if ($onBehalfUserId) {
-        $actorStmt = $conn->prepare('SELECT * FROM users WHERE id = ? LIMIT 1');
+        $actorStmt = $conn->prepare(
+            'SELECT u.*, ai.company_name
+             FROM users u
+             LEFT JOIN approved_installers ai ON ai.id = u.installer_id
+             WHERE u.id = ? LIMIT 1'
+        );
         $actorStmt->bind_param('i', $onBehalfUserId);
         $actorStmt->execute();
         $behalfUser = $actorStmt->get_result()->fetch_assoc();

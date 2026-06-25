@@ -424,7 +424,7 @@ function abas_trekant_trim_comment(string $comment, int $maxLen = 80): string
         : substr($text, 0, $maxLen);
 }
 
-function abas_trekant_trim_log_parts(array $parts, int $maxLen = 80): string
+function abas_trekant_trim_log_parts(array $parts, int $maxLen = 80, int $preserveTail = 4): string
 {
     $parts = array_values(array_filter($parts, static fn (string $part): bool => trim($part) !== ''));
     if ($parts === []) {
@@ -449,7 +449,7 @@ function abas_trekant_trim_log_parts(array $parts, int $maxLen = 80): string
     }
 
     $event = $parts[0];
-    $tailCount = min(3, count($parts) - 1);
+    $tailCount = min(max(1, $preserveTail), count($parts) - 1);
     $tailParts = array_slice($parts, -$tailCount);
     $tail = $join($tailParts);
     $middle = count($parts) > 1 + $tailCount
