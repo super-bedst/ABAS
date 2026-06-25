@@ -226,16 +226,6 @@ require __DIR__ . '/partials/header.php';
             </ul>
         <?php endif; ?>
 
-        <details class="mt-4 pt-3 border-t group" id="inst-zones-wrap">
-            <summary class="text-sm font-semibold text-gray-900 cursor-pointer list-none flex items-center justify-between gap-2">
-                <span>Zonestatus<?php if ($zones !== []): ?> (<?= count($zones) ?>)<?php endif; ?></span>
-                <span class="text-gray-400 text-xs group-open:rotate-180 transition-transform" aria-hidden="true">▼</span>
-            </summary>
-            <div class="mt-2" id="inst-zones-content">
-                <?= abas_render_installation_zones_html($zones, $zonesError) ?>
-            </div>
-        </details>
-
         <dl class="grid grid-cols-2 gap-1 mt-4 pt-3 border-t text-xs">
             <?php if ($alid !== ''): ?>
             <dt class="text-gray-500">ALID</dt><dd class="font-mono"><?= htmlspecialchars($alid) ?></dd>
@@ -316,6 +306,13 @@ require __DIR__ . '/partials/header.php';
             </table>
         </div>
     <?php endif; ?>
+</div>
+
+<div class="abas-card mt-4" id="inst-zones-wrap">
+    <h2 class="abas-card-title">Zonestatus<?php if ($zones !== []): ?> (<?= count($zones) ?>)<?php endif; ?></h2>
+    <div id="inst-zones-content">
+        <?= abas_render_installation_zones_html($zones, $zonesError) ?>
+    </div>
 </div>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
