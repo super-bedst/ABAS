@@ -182,10 +182,147 @@ function abas_registration_installation_requests(mysqli $conn, int $userId): arr
 }
 
 /**
+ * @return list<array{request_id:int, miscno2:string, found:bool, installation:?array<string, mixed>}>
+ */
+function abas_registration_installation_preview(mysqli $conn, int $userId): array
+{
+    $preview = [];
+    foreach (abas_registration_installation_requests($conn, $userId) as $req) {
+        $misc = (string) $req['miscno2'];
+        $installation = abas_find_installation_by_miscno2($conn, $misc);
+        $preview[] = [
+            'request_id' => (int) $req['id'],
+            'miscno2' => $misc,
+            'found' => $installation !== null,
+            'installation' => $installation,
+        ];
+    }
+
+    return $preview;
+}
+
+/**
+ * @return array{ok:bool, message:string, synced:int}
+ */
+function abas_registration_sync_missing_installations(mysqli $conn, int $userId, ?array $adminUser): array
+{
+    $requests = abas_registration_installation_requests($conn, $userId);
+    if ($requests === []) {
+        return ['ok' => false, 'message' => 'Ingen anlæg på ansøgningen.', 'synced' => 0];
+    }
+
+    $synced = 0;
+    $errors = [];
+    foreach ($requests as $req) {
+        $misc = (string) $req['miscno2'];
+        if (abas_find_installation_by_miscno2($conn, $misc) !== null) {
+            continue;
+        }
+        try {
+            $rows = abas_search_installations_from_api($conn, $adminUser, $misc);
+            if ($rows === []) {
+                $errors[] = $misc . ': ikke fundet i TrekantBrand';
+            } else {
+                $synced++;
+            }
+        } catch (Throwable $e) {
+            $errors[] = $misc . ': ' . $e->getMessage();
+        }
+    }
+
+    if ($errors !== [] && $synced === 0) {
+        return ['ok' => false, 'message' => implode(' · ', $errors), 'synced' => 0];
+    }
+
+    $message = $synced > 0 ? $synced . ' anlæg hentet fra TrekantBrand.' : 'Alle anlæg findes allerede lokalt.';
+    if ($errors !== []) {
+        $message .= ' Mangler: ' . implode(' · ', $errors);
+    }
+
+    return ['ok' => true, 'message' => $message, 'synced' => $synced];
+}
+
+/**
+ * @return array{ok:bool, message:string, installer_id?:int}
+ */
+function abas_registration_attach_new_company(
+    mysqli $conn,
+    int $userId,
+    int $adminId,
+    string $companyName,
+    string $emailDomain
+): array {
+    $stmt = $conn->prepare(
+        'SELECT * FROM users WHERE id = ? AND registration_status = "pending" AND role = "montor" LIMIT 1'
+    );
+    $stmt->bind_param('i', $userId);
+    $stmt->execute();
+    $user = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    if (!$user) {
+        return ['ok' => false, 'message' => 'Ansøgning ikke fundet eller ikke en montør-ansøgning.'];
+    }
+    if (!empty($user['installer_id'])) {
+        return ['ok' => false, 'message' => 'Ansøgningen har allerede et tilknyttet firma.'];
+    }
+
+    $companyName = trim($companyName);
+    $emailDomain = abas_normalize_email_domain($emailDomain);
+    if ($companyName === '') {
+        $companyName = trim((string) ($user['registration_requested_company_name'] ?? ''));
+    }
+    if ($emailDomain === '') {
+        $emailDomain = abas_email_domain((string) $user['email']);
+    }
+    if ($companyName === '' || $emailDomain === '') {
+        return ['ok' => false, 'message' => 'Angiv firmanavn og e-mail-domæne.'];
+    }
+
+    $existing = abas_installer_approved_for_domain($conn, $emailDomain);
+    if ($existing) {
+        $installerId = (int) $existing['id'];
+        $link = $conn->prepare('UPDATE users SET installer_id = ? WHERE id = ?');
+        $link->bind_param('ii', $installerId, $userId);
+        $link->execute();
+        $link->close();
+
+        return [
+            'ok' => true,
+            'message' => 'Domænet findes allerede — ansøger tilknyttet ' . ($existing['company_name'] ?? 'firma') . '.',
+            'installer_id' => $installerId,
+        ];
+    }
+
+    $create = abas_installer_create($conn, $companyName, $emailDomain, $adminId);
+    if (!$create['ok']) {
+        return ['ok' => false, 'message' => $create['message'] ?? 'Kunne ikke oprette firma.'];
+    }
+
+    $installerId = (int) $create['id'];
+    $link = $conn->prepare('UPDATE users SET installer_id = ? WHERE id = ?');
+    $link->bind_param('ii', $installerId, $userId);
+    $link->execute();
+    $link->close();
+
+    return [
+        'ok' => true,
+        'message' => 'Firma oprettet og tilknyttet ansøgningen.',
+        'installer_id' => $installerId,
+    ];
+}
+
+/**
  * @return array{ok:bool, message:string}
  */
-function abas_approve_registration(mysqli $conn, int $userId, int $adminId, bool $smsAllowed = false, ?string $smsCode = null): array
-{
+function abas_approve_registration(
+    mysqli $conn,
+    int $userId,
+    int $adminId,
+    bool $smsAllowed = false,
+    ?string $smsCode = null,
+    ?string $finalRole = null
+): array {
     $stmt = $conn->prepare('SELECT * FROM users WHERE id = ? AND registration_status = "pending" LIMIT 1');
     $stmt->bind_param('i', $userId);
     $stmt->execute();
@@ -194,6 +331,11 @@ function abas_approve_registration(mysqli $conn, int $userId, int $adminId, bool
 
     if (!$user) {
         return ['ok' => false, 'message' => 'Ansøgning ikke fundet eller allerede behandlet.'];
+    }
+
+    $approveRole = (string) $user['role'];
+    if ($finalRole === 'virksomhedsadmin' && $approveRole === 'montor') {
+        $approveRole = 'virksomhedsadmin';
     }
 
     $role = (string) $user['role'];
@@ -238,10 +380,10 @@ function abas_approve_registration(mysqli $conn, int $userId, int $adminId, bool
 
     $smsFlag = $smsAllowed ? 1 : 0;
     $upd = $conn->prepare(
-        'UPDATE users SET active=1, registration_status="approved", registration_reviewed_at=NOW(),
+        'UPDATE users SET active=1, role=?, registration_status="approved", registration_reviewed_at=NOW(),
          registration_reviewed_by_user_id=?, sms_service_allowed=? WHERE id=?'
     );
-    $upd->bind_param('iii', $adminId, $smsFlag, $userId);
+    $upd->bind_param('siii', $approveRole, $adminId, $smsFlag, $userId);
     $upd->execute();
     $upd->close();
 
