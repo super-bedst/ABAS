@@ -215,7 +215,13 @@ function abas_zone_is_restore_code(string $code): bool
 
 function abas_extract_zone_ecode(array $row): string
 {
-    foreach (['ecode', 'c_ecode', 'r_ecode', 'ref_ecode'] as $field) {
+    // c_ecode is the live status on the point; ecode is often the configured event type for the slot.
+    $current = strtoupper(trim((string) ($row['c_ecode'] ?? '')));
+    if ($current !== '') {
+        return $current;
+    }
+
+    foreach (['ecode', 'r_ecode', 'ref_ecode'] as $field) {
         $code = strtoupper(trim((string) ($row[$field] ?? '')));
         if ($code !== '') {
             return $code;
@@ -365,12 +371,6 @@ function abas_aggregate_installation_zones(array $zones): array
     }
 
     usort($merged, static function (array $a, array $b): int {
-        $kindOrder = ['zone' => 0, 'system' => 1];
-        $kindCmp = ($kindOrder[$a['kind']] ?? 2) <=> ($kindOrder[$b['kind']] ?? 2);
-        if ($kindCmp !== 0) {
-            return $kindCmp;
-        }
-
         return abas_zone_number_sort_compare($a['zone_no'], $b['zone_no']);
     });
 
@@ -452,15 +452,6 @@ function abas_zone_number_sort_compare(string $left, string $right): int
  */
 function abas_prepare_installation_zones(array $rows): array
 {
-    $skipLabels = [
-        'brandalarm',
-        'brandalarm restore',
-        'linje fejl',
-        'linje fejl restore',
-        'ux (intern dalko)',
-        'fejl aba',
-        'fejl aba restore',
-    ];
     $byKey = [];
 
     foreach ($rows as $row) {
@@ -481,9 +472,6 @@ function abas_prepare_installation_zones(array $rows): array
             continue;
         }
         $kind = $zix >= 23 ? 'system' : 'zone';
-        if ($kind === 'zone' && in_array(strtolower($label), $skipLabels, true)) {
-            continue;
-        }
 
         $ecode = abas_extract_zone_ecode($row);
         $rowKey = abas_zone_row_key($row);
