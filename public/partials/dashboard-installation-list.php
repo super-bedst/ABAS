@@ -46,22 +46,7 @@ if (!isset($installations) || $installations === []) {
                 </td>
                 <td class="hidden md:table-cell"><?= htmlspecialchars((string) $inst['city']) ?></td>
                 <td class="hidden lg:table-cell text-sm text-gray-600">
-                    <?php if (!empty($showServiceInfo)): ?>
-                        <?php if (!empty($inst['service_started_at'])): ?>
-                            Siden <?= htmlspecialchars(abas_format_datetime((string) $inst['service_started_at'])) ?>
-                            <?php if (!empty($inst['service_expires_at'])): ?>
-                                <span class="text-gray-400">· udløber <?= htmlspecialchars(abas_format_datetime((string) $inst['service_expires_at'])) ?></span>
-                            <?php endif; ?>
-                        <?php endif; ?>
-                    <?php else: ?>
-                        <?php
-                        $inSvc = !empty($inst['in_service']);
-                        echo abas_mon_stat_label((string) ($inst['mon_stat'] ?? ''));
-                        if ($inSvc) {
-                            echo ' · I service';
-                        }
-                        ?>
-                    <?php endif; ?>
+                    <?= abas_render_dashboard_installation_status($inst, !empty($showServiceInfo)) ?>
                 </td>
             </tr>
         <?php endforeach; ?>
@@ -91,9 +76,17 @@ if (!isset($installations) || $installations === []) {
                 </div>
             <?php elseif (!empty($inst['mon_stat']) || !empty($inst['in_service'])): ?>
                 <div class="abas-installation-badges mt-2">
-                    <span class="<?= htmlspecialchars(abas_mon_stat_badge_class((string) ($inst['mon_stat'] ?? ''))) ?>"><?= htmlspecialchars(abas_mon_stat_label((string) ($inst['mon_stat'] ?? ''))) ?></span>
-                    <?php if (!empty($inst['in_service'])): ?>
-                        <span class="abas-badge-in-service">I service</span>
+                    <?php
+                    $monStat = (string) ($inst['mon_stat'] ?? '');
+                    $inSvc = !empty($inst['in_service']);
+                    $label = abas_mon_stat_label($monStat);
+                    $badgeClass = abas_installation_is_active($monStat) && !$inSvc
+                        ? 'abas-badge-ok'
+                        : abas_mon_stat_badge_class($monStat);
+                    ?>
+                    <span class="<?= htmlspecialchars($badgeClass) ?>"><?= htmlspecialchars($label) ?></span>
+                    <?php if ($inSvc): ?>
+                        <span class="abas-badge-in-service"><?= !empty($inst['in_external_service']) ? 'Ekstern service' : 'I service' ?></span>
                     <?php endif; ?>
                 </div>
             <?php endif; ?>

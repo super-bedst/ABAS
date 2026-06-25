@@ -125,8 +125,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         abas_flash_set('error', 'SMS-kode skal være mindst 6 tegn.');
         abas_redirect('admin/user-edit.php?id=' . $id);
     }
-    if (abas_user_role_uses_sms_code($role) && $smsCode === '' && !abas_user_has_sms_code($editUser)) {
-        abas_flash_set('error', 'Angiv SMS-kode (min. 6 tegn) for montør og anlægsejer.');
+    if (abas_user_sms_service_code_required_on_edit($role, $smsServiceAllowed === 1, $editUser, $smsCode)) {
+        abas_flash_set('error', 'Angiv SMS-kode (min. 6 tegn) når SMS-betjening er aktiveret.');
         abas_redirect('admin/user-edit.php?id=' . $id);
     }
 
@@ -218,10 +218,11 @@ require __DIR__ . '/../partials/header.php';
         <input id="phone" name="phone" required value="<?= htmlspecialchars((string) ($editUser['phone'] ?? '')) ?>" class="abas-input" placeholder="+45...">
     </div>
     <div class="abas-field" id="sms-code-field">
-        <label class="abas-label" for="sms_code">SMS-kode</label>
+        <label class="abas-label" for="sms_code">SMS-kode (anlægsbetjening)</label>
         <input id="sms_code" name="sms_code" minlength="6" autocomplete="new-password" class="abas-input font-mono" placeholder="<?= abas_user_has_sms_code($editUser) ? 'Tom = behold nuværende' : 'Min. 6 tegn' ?>">
         <p class="abas-hint">
-            Påkrævet for montør og anlægsejer — bruges sammen med telefonnummer ved SMS.
+            Bruges til at starte/stoppe anlæg via SMS — ikke til 2FA-login.
+            Påkrævet når «Må betjene anlæg via SMS» er valgt.
             <?php if (abas_user_has_sms_code($editUser)): ?>
                 Kode er sat; tom felt bevarer nuværende.
             <?php endif; ?>
@@ -258,8 +259,9 @@ require __DIR__ . '/../partials/header.php';
         <label class="abas-label" for="mfa_method">2FA-metode</label>
         <select id="mfa_method" name="mfa_method" class="abas-select">
             <option value="passkey" <?= abas_user_mfa_method($conn, $id) === 'passkey' ? 'selected' : '' ?>>Passkey (standard)</option>
-            <option value="sms_otp" <?= abas_user_mfa_method($conn, $id) === 'sms_otp' ? 'selected' : '' ?>>SMS engangskode</option>
+            <option value="sms_otp" <?= abas_user_mfa_method($conn, $id) === 'sms_otp' ? 'selected' : '' ?>>SMS engangskode (login)</option>
         </select>
+        <p class="abas-hint">SMS engangskode sendes automatisk ved login — kræver ikke SMS-kode til anlægsbetjening.</p>
     </div>
     <div class="flex flex-wrap gap-2 pt-2">
         <button class="abas-btn-primary">Gem</button>

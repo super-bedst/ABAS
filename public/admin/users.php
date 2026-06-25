@@ -69,8 +69,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $smsCode = trim($_POST['sms_code'] ?? '');
-    if (abas_user_role_uses_sms_code($role) && !abas_validate_sms_code($smsCode)) {
-        abas_flash_set('error', 'SMS-kode skal være mindst 6 tegn for montør og anlægsbruger.');
+    $smsAllowed = !empty($_POST['sms_service_allowed']) ? 1 : 0;
+    if (abas_user_sms_service_code_required_on_create($role, $smsAllowed === 1, $smsCode)) {
+        abas_flash_set('error', 'SMS-kode skal være mindst 6 tegn når SMS-betjening er aktiveret.');
         abas_redirect($redirectUrl);
     }
 
@@ -106,7 +107,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt->execute();
         $uid = (int) $stmt->insert_id;
         $stmt->close();
-        if (abas_user_role_uses_sms_code($role)) {
+        if ($smsAllowed && $smsCode !== '' && abas_user_role_uses_sms_code($role)) {
             abas_set_user_sms_code($conn, $uid, $smsCode);
         }
         $successMsg = 'Bruger oprettet.';
@@ -201,9 +202,9 @@ require __DIR__ . '/../partials/header.php';
         <div class="abas-field"><label class="abas-label">Brugernavn</label><input name="username" required class="abas-input"></div>
         <div class="abas-field"><label class="abas-label">Telefon</label><input name="phone" required placeholder="+45..." class="abas-input"></div>
         <div class="abas-field">
-            <label class="abas-label" for="sms_code">SMS-kode</label>
+            <label class="abas-label" for="sms_code">SMS-kode (anlægsbetjening)</label>
             <input id="sms_code" name="sms_code" minlength="6" autocomplete="off" class="abas-input font-mono" placeholder="Min. 6 tegn">
-            <p class="abas-hint">Påkrævet for montør, anlægsejer og anlægsafprøver.</p>
+            <p class="abas-hint">Påkrævet når «Må betjene anlæg via SMS» er valgt — ikke til 2FA-login.</p>
         </div>
         <div class="abas-field">
             <label class="abas-label">Rolle</label>

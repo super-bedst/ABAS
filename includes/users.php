@@ -64,6 +64,27 @@ function abas_user_has_sms_code(array $user): bool
     return trim((string) ($user['sms_secret_hash'] ?? '')) !== '';
 }
 
+function abas_user_sms_service_code_required_on_create(string $role, bool $smsServiceAllowed, string $smsCode): bool
+{
+    if (!$smsServiceAllowed || !abas_user_role_uses_sms_code($role)) {
+        return false;
+    }
+
+    return !abas_validate_sms_code($smsCode);
+}
+
+function abas_user_sms_service_code_required_on_edit(string $role, bool $smsServiceAllowed, array $user, string $newSmsCode): bool
+{
+    if (!$smsServiceAllowed || !abas_user_role_uses_sms_code($role)) {
+        return false;
+    }
+    if ($newSmsCode !== '') {
+        return false;
+    }
+
+    return !abas_user_has_sms_code($user);
+}
+
 /**
  * @return list<array{id:int, miscno2:string, name:string, city:string}>
  */

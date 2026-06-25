@@ -38,9 +38,13 @@ $flash = abas_flash_get();
             <?php if ($currentUser['role'] === 'admin'): ?>
                 <a href="<?= abas_url('admin/index.php') ?>" class="px-3 py-1.5 rounded-full hover:bg-white/15">Admin</a>
             <?php endif; ?>
+            <?php if ($currentUser['role'] === 'anlaegsejer'): ?>
+                <a href="<?= abas_url('anlaegsbrugere.php') ?>" class="px-3 py-1.5 rounded-full hover:bg-white/15">Anlægsbrugere</a>
+            <?php endif; ?>
             <?php if ($currentUser['role'] === 'virksomhedsadmin'): ?>
                 <a href="<?= abas_url('virksomhed/users.php') ?>" class="px-3 py-1.5 rounded-full hover:bg-white/15">Virksomhedsbrugere</a>
             <?php endif; ?>
+            <a href="<?= abas_url('profile.php') ?>" class="px-3 py-1.5 rounded-full hover:bg-white/15">Min konto</a>
             <span class="hidden sm:inline px-2.5 py-1 rounded-full bg-white/10 text-white/90 text-xs">
                 <?= htmlspecialchars($currentUser['username']) ?> · <?= htmlspecialchars(abas_role_label($currentUser['role'])) ?>
             </span>

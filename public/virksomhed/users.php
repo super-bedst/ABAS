@@ -36,28 +36,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'reset_password') {
         abas_password_send_flow_email($conn, $targetId, 'reset');
         abas_flash_set('success', 'Nulstillings-e-mail sendt.');
-    } elseif ($action === 'delete') {
-        $result = abas_delete_user($conn, $targetId, (int) $actor['id']);
-        abas_flash_set($result['ok'] ? 'success' : 'error', $result['message']);
-    } elseif ($action === 'save_phone') {
-        $phone = abas_normalize_phone(trim($_POST['phone'] ?? ''));
-        if (!abas_validate_phone($phone)) {
-            abas_flash_set('error', 'Ugyldigt telefonnummer.');
-        } else {
-            $upd = $conn->prepare('UPDATE users SET phone = ? WHERE id = ?');
-            $upd->bind_param('si', $phone, $targetId);
-            $upd->execute();
-            $upd->close();
-            abas_flash_set('success', 'Telefon opdateret.');
-        }
     }
     abas_redirect('virksomhed/users.php');
 }
 
 $stmt = $conn->prepare(
-    "SELECT id, email, username, phone, role, active FROM users
+    "SELECT id, email, username, phone, role, active, registration_display_name, sms_service_allowed
+     FROM users
      WHERE installer_id = ? AND role NOT IN ('admin','vagtcentral','virksomhedsadmin')
-     ORDER BY username"
+     ORDER BY role, username"
 );
 $stmt->bind_param('i', $installerId);
 $stmt->execute();
@@ -69,36 +56,36 @@ $currentUser = $actor;
 require __DIR__ . '/../partials/header.php';
 ?>
 <h1 class="abas-page-title">Virksomhedsbrugere</h1>
-<p class="abas-page-lead">Brugere tilknyttet <?= htmlspecialchars(abas_user_company_name($conn, $actor)) ?>.</p>
+<p class="abas-page-lead">Montører og øvrige brugere tilknyttet <?= htmlspecialchars(abas_user_company_name($conn, $actor)) ?>.</p>
 
 <div class="abas-table-wrap mt-6">
     <table class="abas-table">
-        <thead><tr><th>Navn</th><th>E-mail</th><th>Telefon</th><th>Rolle</th><th>Handlinger</th></tr></thead>
+        <thead>
+            <tr>
+                <th>Navn</th>
+                <th>E-mail</th>
+                <th>Telefon</th>
+                <th>Rolle</th>
+                <th>Status</th>
+                <th></th>
+            </tr>
+        </thead>
         <tbody>
         <?php foreach ($users as $u): ?>
             <tr>
-                <td><?= htmlspecialchars($u['username']) ?></td>
+                <td><?= htmlspecialchars(abas_user_display_name($u)) ?></td>
                 <td><?= htmlspecialchars($u['email']) ?></td>
-                <td>
-                    <form method="post" class="flex gap-2 items-center">
-                        <input type="hidden" name="user_id" value="<?= (int) $u['id'] ?>">
-                        <input type="hidden" name="action" value="save_phone">
-                        <input name="phone" value="<?= htmlspecialchars((string) $u['phone']) ?>" class="abas-input !py-1 text-sm w-36">
-                        <button class="abas-btn-secondary !py-1 text-xs">Gem</button>
-                    </form>
-                </td>
+                <td><?= htmlspecialchars((string) $u['phone']) ?></td>
                 <td><?= htmlspecialchars(abas_role_label($u['role'])) ?></td>
-                <td class="space-x-2">
-                    <form method="post" class="inline">
-                        <input type="hidden" name="user_id" value="<?= (int) $u['id'] ?>">
-                        <input type="hidden" name="action" value="reset_password">
-                        <button class="text-sm abas-link">Nulstil adgangskode</button>
-                    </form>
-                    <form method="post" class="inline" onsubmit="return confirm('Slet/deaktiver bruger?')">
-                        <input type="hidden" name="user_id" value="<?= (int) $u['id'] ?>">
-                        <input type="hidden" name="action" value="delete">
-                        <button class="text-sm text-red-700">Slet</button>
-                    </form>
+                <td>
+                    <?php if ($u['active']): ?>
+                        <span class="abas-badge-ok">Aktiv</span>
+                    <?php else: ?>
+                        <span class="abas-badge bg-gray-100 text-gray-600 border-gray-200">Inaktiv</span>
+                    <?php endif; ?>
+                </td>
+                <td class="whitespace-nowrap">
+                    <a href="<?= abas_url('virksomhed/user-edit.php?id=' . (int) $u['id']) ?>" class="abas-link text-sm">Rediger</a>
                 </td>
             </tr>
         <?php endforeach; ?>

@@ -62,6 +62,52 @@ function abas_installation_allows_service(string $monStat): bool
     return $code !== '' && str_starts_with($code, 'AKT');
 }
 
+function abas_installation_is_active(string $monStat): bool
+{
+    return abas_installation_allows_service($monStat);
+}
+
+/**
+ * Dashboard statuscelle: grøn "Aktiv"-label når anlægget er aktivt uden service.
+ */
+function abas_render_dashboard_installation_status(array $inst, bool $showServiceInfo): string
+{
+    if ($showServiceInfo) {
+        if (empty($inst['service_started_at'])) {
+            return '';
+        }
+        $html = 'Siden ' . htmlspecialchars(abas_format_datetime((string) $inst['service_started_at']));
+        if (!empty($inst['service_expires_at'])) {
+            $html .= ' <span class="text-gray-400">· udløber '
+                . htmlspecialchars(abas_format_datetime((string) $inst['service_expires_at']))
+                . '</span>';
+        }
+
+        return $html;
+    }
+
+    $monStat = (string) ($inst['mon_stat'] ?? '');
+    $inSvc = !empty($inst['in_service']);
+    $label = abas_mon_stat_label($monStat);
+    $isActive = abas_installation_is_active($monStat);
+
+    ob_start();
+    if ($isActive && !$inSvc) {
+        ?>
+        <span class="abas-badge-ok"><?= htmlspecialchars($label) ?></span>
+        <?php
+    } else {
+        ?>
+        <span class="<?= htmlspecialchars(abas_mon_stat_badge_class($monStat)) ?>"><?= htmlspecialchars($label) ?></span>
+        <?php if ($inSvc): ?>
+            <span class="abas-badge-in-service ml-1.5">I service</span>
+        <?php endif; ?>
+        <?php
+    }
+
+    return (string) ob_get_clean();
+}
+
 function abas_render_installation_in_service_banner(?array $session): string
 {
     if ($session === null) {
