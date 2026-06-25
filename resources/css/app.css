@@ -33,6 +33,40 @@
     @apply text-base font-semibold text-brand mb-3;
   }
 
+  .abas-collapsible summary {
+    list-style: none;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .abas-collapsible summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .abas-collapsible-summary {
+    @apply flex items-center gap-2;
+  }
+
+  .abas-collapsible-summary::before {
+    content: '';
+    display: inline-block;
+    width: 0;
+    height: 0;
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+    border-left: 6px solid #91191A;
+    transition: transform 0.15s ease;
+    flex-shrink: 0;
+  }
+
+  .abas-collapsible[open] > .abas-collapsible-summary::before {
+    transform: rotate(90deg);
+  }
+
+  .abas-collapsible-body {
+    @apply pt-3 mt-3 border-t border-gray-100;
+  }
+
   .abas-panel {
     @apply bg-basbg border-l-4 border-brand-gold rounded-r-2xl px-4 py-3 text-sm text-gray-700;
   }

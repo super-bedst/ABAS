@@ -308,12 +308,14 @@ require __DIR__ . '/partials/header.php';
     <?php endif; ?>
 </div>
 
-<div class="abas-card mt-4" id="inst-zones-wrap">
-    <h2 class="abas-card-title">Zonestatus<?php if ($zones !== []): ?> (<?= count($zones) ?>)<?php endif; ?></h2>
-    <div id="inst-zones-content">
+<details class="abas-card abas-collapsible mt-4" id="inst-zones-wrap">
+    <summary class="abas-collapsible-summary">
+        <span class="abas-card-title !mb-0">Zonestatus<?php if ($zones !== []): ?> (<?= count($zones) ?>)<?php endif; ?></span>
+    </summary>
+    <div id="inst-zones-content" class="abas-collapsible-body">
         <?= abas_render_installation_zones_html($zones, $zonesError) ?>
     </div>
-</div>
+</details>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     if (typeof window.abasInitInstallationAutoRefresh === 'function') {
