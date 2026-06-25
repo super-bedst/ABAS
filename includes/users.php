@@ -17,6 +17,43 @@ function abas_validate_phone(string $phone): bool
     return (bool) preg_match('/^\+?\d{8,}$/', $normalized);
 }
 
+function abas_generate_username_from_email(mysqli $conn, string $email): string
+{
+    $email = strtolower(trim($email));
+    if ($email === '') {
+        $email = 'user@invalid';
+    }
+
+    $candidate = $email;
+    $n = 1;
+    while (true) {
+        $stmt = $conn->prepare('SELECT id FROM users WHERE username = ? LIMIT 1');
+        $stmt->bind_param('s', $candidate);
+        $stmt->execute();
+        $exists = (bool) $stmt->get_result()->fetch_row();
+        $stmt->close();
+        if (!$exists) {
+            return $candidate;
+        }
+
+        $suffix = (string) $n;
+        $maxLen = 255;
+        if (strlen($email) + strlen($suffix) <= $maxLen) {
+            $candidate = $email . $suffix;
+        } else {
+            $candidate = substr($email, 0, $maxLen - strlen($suffix)) . $suffix;
+        }
+        $n++;
+    }
+}
+
+function abas_resolve_username_for_email(mysqli $conn, string $email, string $username): string
+{
+    $username = trim($username);
+
+    return $username !== '' ? $username : abas_generate_username_from_email($conn, $email);
+}
+
 function abas_user_role_uses_sms_code(string $role): bool
 {
     return in_array($role, ['montor', 'anlaegsejer', 'anlaegsafprover'], true);

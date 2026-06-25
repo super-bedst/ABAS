@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS approved_installer_domains (
 CREATE TABLE IF NOT EXISTS users (
     id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     email VARCHAR(255) NOT NULL,
-    username VARCHAR(100) NOT NULL,
+    username VARCHAR(255) NOT NULL,
     password_hash VARCHAR(255) NULL,
     role ENUM('admin','vagtcentral','montor','anlaegsejer','anlaegsafprover','virksomhedsadmin') NOT NULL,
     phone VARCHAR(32) NULL,

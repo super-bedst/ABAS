@@ -23,26 +23,6 @@ function abas_registration_type_label(string $type): string
     };
 }
 
-function abas_generate_username_from_email(mysqli $conn, string $email): string
-{
-    $local = preg_replace('/[^a-z0-9._-]/', '', strtolower(explode('@', $email)[0] ?? 'user')) ?: 'user';
-    $base = substr($local, 0, 80);
-    $candidate = $base;
-    $n = 1;
-    while (true) {
-        $stmt = $conn->prepare('SELECT id FROM users WHERE username = ? LIMIT 1');
-        $stmt->bind_param('s', $candidate);
-        $stmt->execute();
-        $exists = (bool) $stmt->get_result()->fetch_row();
-        $stmt->close();
-        if (!$exists) {
-            return $candidate;
-        }
-        $candidate = substr($base, 0, 75) . $n;
-        $n++;
-    }
-}
-
 /**
  * @param list<string> $miscno2List
  * @return array{ok:bool, message?:string, user_id?:int}

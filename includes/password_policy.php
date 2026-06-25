@@ -62,7 +62,6 @@ function abas_password_hibp_is_pwned(string $pwd): ?bool
         curl_setopt_array($ch, $opts);
         $raw = curl_exec($ch);
         $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
         if ($code === 200 && is_string($raw)) {
             return $raw;
         }

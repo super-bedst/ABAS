@@ -62,7 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $email = strtolower(trim($_POST['email'] ?? ''));
-    $username = trim($_POST['username'] ?? '');
+    $username = abas_resolve_username_for_email($conn, $email, (string) ($_POST['username'] ?? ''));
     $phone = abas_normalize_phone(trim($_POST['phone'] ?? ''));
     $role = $_POST['role'] ?? 'montor';
     $miscno2 = strtolower(trim($_POST['miscno2'] ?? ''));
@@ -218,7 +218,7 @@ require __DIR__ . '/../partials/header.php';
     <form method="post" class="mt-4 space-y-0">
         <input type="hidden" name="action" value="create">
         <div class="abas-field"><label class="abas-label">E-mail</label><input name="email" type="email" required class="abas-input"></div>
-        <div class="abas-field"><label class="abas-label">Brugernavn</label><input name="username" required class="abas-input"></div>
+        <div class="abas-field"><label class="abas-label">Brugernavn</label><input name="username" maxlength="255" class="abas-input" placeholder="Samme som e-mail hvis tom"></div>
         <div class="abas-field"><label class="abas-label">Telefon</label><input name="phone" required placeholder="+45..." class="abas-input"></div>
         <div class="abas-field">
             <label class="abas-label" for="sms_code">SMS-kode (anlægsbetjening)</label>
