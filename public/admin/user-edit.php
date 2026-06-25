@@ -33,8 +33,17 @@ if (!$editUser) {
     exit('Bruger ikke fundet.');
 }
 
-$listFilter = $_GET['filter'] ?? $_POST['filter'] ?? '';
-$listUrl = 'admin/users.php' . ($listFilter !== '' && $listFilter !== 'alle' ? '?filter=' . rawurlencode($listFilter) : '');
+$listFilter = (string) ($_GET['filter'] ?? $_POST['filter'] ?? 'alle');
+if ($listFilter === '') {
+    $listFilter = 'alle';
+}
+$listSort = (string) ($_GET['sort'] ?? $_POST['sort'] ?? '');
+if (!in_array($listSort, abas_admin_users_sort_columns(), true)) {
+    $listSort = '';
+}
+$listDir = strtolower((string) ($_GET['dir'] ?? $_POST['dir'] ?? 'asc')) === 'desc' ? 'desc' : 'asc';
+$listUrl = abas_admin_users_list_url($listFilter, $listSort !== '' ? $listSort : null, $listSort !== '' ? $listDir : null);
+$selfUrl = abas_admin_user_edit_url($id, $listFilter, $listSort !== '' ? $listSort : null, $listSort !== '' ? $listDir : null);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? 'save';
@@ -42,11 +51,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'delete') {
         if (empty($_POST['confirm_delete'])) {
             abas_flash_set('error', 'Bekræft sletning med afkrydsningsfeltet.');
-            abas_redirect('admin/user-edit.php?id=' . $id);
+            abas_redirect($selfUrl);
         }
         $result = abas_delete_user($conn, $id, (int) $admin['id']);
         abas_flash_set($result['ok'] ? 'success' : 'error', $result['message']);
-        abas_redirect($result['ok'] ? $listUrl : 'admin/user-edit.php?id=' . $id . ($listFilter !== '' ? '&filter=' . rawurlencode($listFilter) : ''));
+        abas_redirect($result['ok'] ? $listUrl : $selfUrl);
     }
 
     if ($action === 'unlink') {
@@ -56,7 +65,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             abas_flash_set('error', 'Kunne ikke fjerne tilknytning.');
         }
-        abas_redirect('admin/user-edit.php?id=' . $id);
+        abas_redirect($selfUrl);
     }
 
     if ($action === 'link') {
@@ -66,13 +75,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             abas_flash_set('success', 'Anlæg tilknyttet.');
         }
-        abas_redirect('admin/user-edit.php?id=' . $id);
+        abas_redirect($selfUrl);
     }
 
     if ($action === 'reset_mfa') {
         abas_mfa_reset_user($conn, $id);
         abas_flash_set('success', '2FA nulstillet — brugeren skal opsætte igen ved næste login.');
-        abas_redirect('admin/user-edit.php?id=' . $id);
+        abas_redirect($selfUrl);
     }
 
     if ($action === 'send_welcome') {
@@ -80,7 +89,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         abas_flash_set($sent ? 'success' : 'error', $sent
             ? 'Velkomst-e-mail sendt til ' . ($editUser['email'] ?? '') . '.'
             : 'Kunne ikke sende velkomst-e-mail — tjek mail-konfiguration.');
-        abas_redirect('admin/user-edit.php?id=' . $id . ($listFilter !== '' ? '&filter=' . rawurlencode($listFilter) : ''));
+        abas_redirect($selfUrl);
     }
 
     if ($action === 'send_reset') {
@@ -88,11 +97,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         abas_flash_set($sent ? 'success' : 'error', $sent
             ? 'Nulstillings-e-mail sendt til ' . ($editUser['email'] ?? '') . '.'
             : 'Kunne ikke sende nulstillings-e-mail — tjek mail-konfiguration.');
-        abas_redirect('admin/user-edit.php?id=' . $id . ($listFilter !== '' ? '&filter=' . rawurlencode($listFilter) : ''));
+        abas_redirect($selfUrl);
     }
 
     if ($action !== 'save') {
-        abas_redirect('admin/user-edit.php?id=' . $id);
+        abas_redirect($selfUrl);
     }
 
     $email = strtolower(trim($_POST['email'] ?? ''));
@@ -113,21 +122,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     if ($email === '' || $username === '') {
         abas_flash_set('error', 'E-mail og brugernavn er påkrævet.');
-        abas_redirect('admin/user-edit.php?id=' . $id);
+        abas_redirect($selfUrl);
     }
     if (!abas_validate_phone($phone)) {
         abas_flash_set('error', 'Angiv et gyldigt telefonnummer (min. 8 cifre).');
-        abas_redirect('admin/user-edit.php?id=' . $id);
+        abas_redirect($selfUrl);
     }
 
     $smsCode = trim($_POST['sms_code'] ?? '');
     if ($smsCode !== '' && !abas_validate_sms_code($smsCode)) {
         abas_flash_set('error', 'SMS-kode skal være mindst 6 tegn.');
-        abas_redirect('admin/user-edit.php?id=' . $id);
+        abas_redirect($selfUrl);
     }
     if (abas_user_sms_service_code_required_on_edit($role, $smsServiceAllowed === 1, $editUser, $smsCode)) {
         abas_flash_set('error', 'Angiv SMS-kode (min. 6 tegn) når SMS-betjening er aktiveret.');
-        abas_redirect('admin/user-edit.php?id=' . $id);
+        abas_redirect($selfUrl);
     }
 
     $installerId = null;
@@ -135,7 +144,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $installerId = abas_assign_installer_for_montor($conn, $email);
         if ($installerId === null) {
             abas_flash_set('error', 'Montør skal have e-mail fra et godkendt installatør-domæne.');
-            abas_redirect('admin/user-edit.php?id=' . $id);
+            abas_redirect($selfUrl);
         }
     }
 
@@ -146,7 +155,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $dupEmail->close();
     if ($emailConflict) {
         abas_flash_set('error', 'E-mail findes allerede (bruger: ' . ($emailConflict['username'] ?? '?') . ').');
-        abas_redirect('admin/user-edit.php?id=' . $id);
+        abas_redirect($selfUrl);
     }
 
     $dupUser = $conn->prepare('SELECT id, email FROM users WHERE username = ? AND id <> ? LIMIT 1');
@@ -156,7 +165,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $dupUser->close();
     if ($userConflict) {
         abas_flash_set('error', 'Brugernavn findes allerede (e-mail: ' . ($userConflict['email'] ?? '?') . ').');
-        abas_redirect('admin/user-edit.php?id=' . $id);
+        abas_redirect($selfUrl);
     }
 
     if ($installerId !== null) {
@@ -180,7 +189,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     abas_flash_set('success', 'Bruger opdateret.');
-    abas_redirect('admin/user-edit.php?id=' . $id);
+    abas_redirect($selfUrl);
 }
 
 $linkedInstallations = abas_user_installation_links($conn, $id);
@@ -196,7 +205,7 @@ $currentUser = $admin;
 require __DIR__ . '/../partials/header.php';
 ?>
 <div class="mb-2">
-    <a href="<?= abas_url($listUrl) ?>" class="abas-back-link">&larr; Tilbage til brugere</a>
+    <a href="<?= htmlspecialchars($listUrl) ?>" class="abas-back-link">&larr; Tilbage til brugere</a>
 </div>
 <h1 class="abas-page-title !text-xl">Rediger bruger</h1>
 <p class="abas-page-lead"><?= htmlspecialchars(abas_role_label((string) $editUser['role'])) ?> — <?= htmlspecialchars((string) $editUser['username']) ?></p>
@@ -204,7 +213,11 @@ require __DIR__ . '/../partials/header.php';
 <form method="post" class="abas-card max-w-lg abas-form mb-6">
     <input type="hidden" name="id" value="<?= (int) $editUser['id'] ?>">
     <input type="hidden" name="action" value="save">
-    <?php if ($listFilter !== ''): ?><input type="hidden" name="filter" value="<?= htmlspecialchars($listFilter) ?>"><?php endif; ?>
+    <?php if ($listFilter !== 'alle'): ?><input type="hidden" name="filter" value="<?= htmlspecialchars($listFilter) ?>"><?php endif; ?>
+    <?php if ($listSort !== ''): ?>
+    <input type="hidden" name="sort" value="<?= htmlspecialchars($listSort) ?>">
+    <input type="hidden" name="dir" value="<?= htmlspecialchars($listDir) ?>">
+    <?php endif; ?>
     <div class="abas-field">
         <label class="abas-label" for="email">E-mail</label>
         <input id="email" name="email" type="email" required value="<?= htmlspecialchars((string) $editUser['email']) ?>" class="abas-input">
@@ -265,7 +278,7 @@ require __DIR__ . '/../partials/header.php';
     </div>
     <div class="flex flex-wrap gap-2 pt-2">
         <button class="abas-btn-primary">Gem</button>
-        <a href="<?= abas_url($listUrl) ?>" class="abas-btn-secondary">Annuller</a>
+        <a href="<?= htmlspecialchars($listUrl) ?>" class="abas-btn-secondary">Annuller</a>
     </div>
 </form>
 

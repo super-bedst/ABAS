@@ -390,3 +390,95 @@ function abas_enrich_service_user_comment(mysqli $conn, array $user, string $com
 {
     return abas_enrich_service_actor_comment($conn, $user, $comment);
 }
+
+function abas_record_user_login(mysqli $conn, int $userId): void
+{
+    if ($userId <= 0) {
+        return;
+    }
+
+    $stmt = $conn->prepare('UPDATE users SET last_login_at = NOW() WHERE id = ?');
+    $stmt->bind_param('i', $userId);
+    $stmt->execute();
+    $stmt->close();
+}
+
+/** @return list<string> */
+function abas_admin_users_sort_columns(): array
+{
+    return ['username', 'role', 'phone', 'company', 'sms', 'active', 'last_login'];
+}
+
+function abas_admin_users_order_sql(string $sort, string $dir): string
+{
+    /** @var array<string, string> */
+    $columns = [
+        'username' => 'u.username',
+        'role' => 'u.role',
+        'phone' => 'u.phone',
+        'company' => 'COALESCE(ai.company_name, "")',
+        'sms' => 'u.sms_service_allowed',
+        'active' => 'u.active',
+        'last_login' => 'u.last_login_at',
+    ];
+
+    $dir = strtolower($dir) === 'desc' ? 'DESC' : 'ASC';
+    if (!isset($columns[$sort])) {
+        return 'u.role ASC, u.username ASC';
+    }
+
+    $col = $columns[$sort];
+    if ($sort === 'last_login') {
+        return "$col IS NULL, $col $dir, u.username ASC";
+    }
+
+    return "$col $dir, u.username ASC";
+}
+
+function abas_admin_users_list_url(string $filter = 'alle', ?string $sort = null, ?string $dir = null): string
+{
+    $params = [];
+    if ($filter !== 'alle') {
+        $params['filter'] = $filter;
+    }
+    if ($sort !== null && $sort !== '' && in_array($sort, abas_admin_users_sort_columns(), true)) {
+        $params['sort'] = $sort;
+        $params['dir'] = strtolower((string) $dir) === 'desc' ? 'desc' : 'asc';
+    }
+
+    $path = 'admin/users.php';
+
+    return $params === [] ? abas_url($path) : abas_url($path . '?' . http_build_query($params));
+}
+
+function abas_admin_user_edit_url(int $userId, string $filter = 'alle', ?string $sort = null, ?string $dir = null): string
+{
+    $params = ['id' => $userId];
+    if ($filter !== 'alle') {
+        $params['filter'] = $filter;
+    }
+    if ($sort !== null && $sort !== '' && in_array($sort, abas_admin_users_sort_columns(), true)) {
+        $params['sort'] = $sort;
+        $params['dir'] = strtolower((string) $dir) === 'desc' ? 'desc' : 'asc';
+    }
+
+    return abas_url('admin/user-edit.php?' . http_build_query($params));
+}
+
+/**
+ * @return array{href: string, active: bool, indicator: string}
+ */
+function abas_admin_users_sort_link(string $column, string $currentSort, string $currentDir, string $filter): array
+{
+    if (!in_array($column, abas_admin_users_sort_columns(), true)) {
+        throw new InvalidArgumentException('Unknown sort column: ' . $column);
+    }
+
+    $nextDir = $currentSort === $column && $currentDir === 'asc' ? 'desc' : 'asc';
+
+    return [
+        'href' => abas_admin_users_list_url($filter, $column, $nextDir),
+        'active' => $currentSort === $column,
+        'indicator' => $currentSort === $column ? ($currentDir === 'asc' ? '↑' : '↓') : '',
+    ];
+}

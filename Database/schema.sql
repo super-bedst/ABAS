@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS users (
     password_set_at DATETIME NULL,
     access_confirmed_at DATETIME NULL,
     access_confirm_due_at DATETIME NULL,
+    last_login_at DATETIME NULL,
     responsibility_ack_at DATETIME NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by_user_id INT UNSIGNED NULL,
@@ -64,6 +65,7 @@ CREATE TABLE IF NOT EXISTS users (
     UNIQUE KEY uq_username (username),
     KEY idx_role (role),
     KEY idx_installer (installer_id),
+    KEY idx_last_login (last_login_at),
     CONSTRAINT fk_users_installer FOREIGN KEY (installer_id) REFERENCES approved_installers(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

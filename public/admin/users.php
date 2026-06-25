@@ -41,7 +41,13 @@ if (!isset($filterGroups[$filter])) {
 }
 $rolesInFilter = $filterGroups[$filter];
 
-$redirectUrl = 'admin/users.php' . ($filter !== 'alle' ? '?filter=' . rawurlencode($filter) : '');
+$sort = (string) ($_GET['sort'] ?? '');
+if (!in_array($sort, abas_admin_users_sort_columns(), true)) {
+    $sort = '';
+}
+$sortDir = strtolower((string) ($_GET['dir'] ?? 'asc')) === 'desc' ? 'desc' : 'asc';
+
+$redirectUrl = abas_admin_users_list_url($filter, $sort !== '' ? $sort : null, $sort !== '' ? $sortDir : null);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? 'create';
@@ -153,13 +159,14 @@ $filterCount = static function (string $key) use ($filterGroups, $roleCounts): i
 
 $placeholders = implode(',', array_fill(0, count($rolesInFilter), '?'));
 $types = str_repeat('s', count($rolesInFilter));
+$orderSql = abas_admin_users_order_sql($sort, $sortDir);
 $stmt = $conn->prepare(
     "SELECT u.id, u.email, u.username, u.role, u.active, u.phone, u.sms_secret_hash, u.sms_service_allowed,
-            u.registration_status, ai.company_name
+            u.registration_status, u.last_login_at, ai.company_name
      FROM users u
      LEFT JOIN approved_installers ai ON ai.id = u.installer_id
      WHERE u.role IN ($placeholders)
-     ORDER BY u.role, u.username"
+     ORDER BY $orderSql"
 );
 $stmt->bind_param($types, ...$rolesInFilter);
 $stmt->execute();
@@ -167,6 +174,18 @@ $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $stmt->close();
 
 $ownerInstallations = abas_user_installations_with_service_status($conn);
+
+/** @param array{href: string, active: bool, indicator: string} $link */
+$renderSortTh = static function (string $label, string $column) use ($sort, $sortDir, $filter): void {
+    $link = abas_admin_users_sort_link($column, $sort, $sortDir, $filter);
+    $class = 'abas-table-sort' . ($link['active'] ? ' abas-table-sort--active' : '');
+    echo '<th scope="col"><a href="' . htmlspecialchars($link['href']) . '" class="' . $class . '">';
+    echo htmlspecialchars($label);
+    if ($link['indicator'] !== '') {
+        echo ' <span class="abas-table-sort-indicator" aria-hidden="true">' . $link['indicator'] . '</span>';
+    }
+    echo '</a></th>';
+};
 
 $pageTitle = 'Brugere';
 $currentUser = $user;
@@ -182,7 +201,7 @@ require __DIR__ . '/../partials/header.php';
     <?php foreach ($filterLabels as $key => $label): ?>
         <?php
         $isActive = $filter === $key;
-        $href = $key === 'alle' ? abas_url('admin/users.php') : abas_url('admin/users.php?filter=' . rawurlencode($key));
+        $href = abas_admin_users_list_url($key, $sort !== '' ? $sort : null, $sort !== '' ? $sortDir : null);
         ?>
         <a
             href="<?= $href ?>"
@@ -236,18 +255,19 @@ require __DIR__ . '/../partials/header.php';
 <table class="abas-table">
     <thead>
         <tr>
-            <th>Bruger</th>
-            <th>Rolle</th>
-            <th>Telefon</th>
-            <th>Firma / anlæg</th>
-            <th>SMS</th>
-            <th>Aktiv</th>
-            <th></th>
+            <?php $renderSortTh('Bruger', 'username'); ?>
+            <?php $renderSortTh('Rolle', 'role'); ?>
+            <?php $renderSortTh('Telefon', 'phone'); ?>
+            <?php $renderSortTh('Firma / anlæg', 'company'); ?>
+            <?php $renderSortTh('SMS', 'sms'); ?>
+            <?php $renderSortTh('Aktiv', 'active'); ?>
+            <?php $renderSortTh('Senest aktiv', 'last_login'); ?>
+            <th scope="col"></th>
         </tr>
     </thead>
     <tbody>
     <?php if ($rows === []): ?>
-        <tr><td colspan="7" class="text-gray-500 text-sm">Ingen brugere i dette filter.</td></tr>
+        <tr><td colspan="8" class="text-gray-500 text-sm">Ingen brugere i dette filter.</td></tr>
     <?php endif; ?>
     <?php foreach ($rows as $r): ?>
         <tr class="<?= empty($r['active']) ? 'opacity-60' : '' ?>">
@@ -287,8 +307,14 @@ require __DIR__ . '/../partials/header.php';
                 <?php endif; ?>
             </td>
             <td class="text-center text-sm"><?= $r['active'] ? 'Ja' : 'Nej' ?></td>
+            <td class="whitespace-nowrap text-sm text-gray-600">
+                <?php
+                $lastLogin = trim((string) ($r['last_login_at'] ?? ''));
+                echo $lastLogin !== '' ? htmlspecialchars(abas_format_datetime($lastLogin, 'd/m/Y H:i')) : '—';
+                ?>
+            </td>
             <td class="text-right whitespace-nowrap space-x-2">
-                <a href="<?= abas_url('admin/user-edit.php?id=' . (int) $r['id'] . ($filter !== 'alle' ? '&filter=' . rawurlencode($filter) : '')) ?>" class="abas-link text-sm">Rediger</a>
+                <a href="<?= htmlspecialchars(abas_admin_user_edit_url((int) $r['id'], $filter, $sort !== '' ? $sort : null, $sort !== '' ? $sortDir : null)) ?>" class="abas-link text-sm">Rediger</a>
                 <?php if ((int) $r['id'] !== (int) $user['id']): ?>
                 <form method="post" class="inline" onsubmit="return confirm('Slet eller deaktiver <?= htmlspecialchars($r['username'], ENT_QUOTES) ?>?')">
                     <input type="hidden" name="action" value="delete">

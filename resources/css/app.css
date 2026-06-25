@@ -105,6 +105,22 @@
     @apply text-left p-3 font-semibold text-gray-900 bg-tablehead/90 first:rounded-tl-2xl last:rounded-tr-2xl;
   }
 
+  .abas-table-sort {
+    @apply inline-flex items-center gap-1 text-inherit no-underline hover:text-brand;
+  }
+
+  .abas-table-sort--active {
+    @apply text-brand;
+  }
+
+  .abas-table-sort-indicator {
+    @apply text-xs text-gray-400;
+  }
+
+  .abas-table-sort--active .abas-table-sort-indicator {
+    @apply text-brand;
+  }
+
   .abas-table tbody td {
     @apply p-3 border-t border-gray-100 align-top;
   }

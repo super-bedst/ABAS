@@ -217,6 +217,12 @@ function abas_mfa_store_credential(mysqli $conn, int $userId, string $credential
 function abas_mfa_complete_verification(): void
 {
     $_SESSION['mfa_verified'] = true;
+
+    $userId = (int) ($_SESSION['user_id'] ?? 0);
+    if ($userId > 0) {
+        require_once __DIR__ . '/users.php';
+        abas_record_user_login(abas_db(), $userId);
+    }
 }
 
 function abas_mfa_clear_verification(): void
