@@ -64,7 +64,15 @@ function abas_app_url(): string
 
 function abas_redirect(string $path, int $code = 302): never
 {
-    header('Location: ' . abas_url($path), true, $code);
+    if (preg_match('#^https?://#i', $path)) {
+        $location = $path;
+    } elseif (str_starts_with($path, '/')) {
+        $location = $path;
+    } else {
+        $location = abas_url($path);
+    }
+
+    header('Location: ' . $location, true, $code);
     exit;
 }
 
