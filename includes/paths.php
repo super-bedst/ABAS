@@ -13,6 +13,35 @@ function abas_normalize_public_base(string $base): string
     return $base;
 }
 
+function abas_public_base_from_script(string $script): string
+{
+    $script = str_replace('\\', '/', $script);
+    if ($script === '' || $script === '/') {
+        return '';
+    }
+
+    if (preg_match('#^(.*)/public(?:/|$)#', $script, $m)) {
+        return abas_normalize_public_base($m[1] . '/public');
+    }
+
+    $subpathPatterns = [
+        '#^(.*)/admin/[^/]+\.php$#',
+        '#^(.*)/admin/?$#',
+        '#^(.*)/api/v1/index\.php$#',
+        '#^(.*)/api/v1/.+#',
+        '#^(.*)/api/.+#',
+    ];
+    foreach ($subpathPatterns as $pattern) {
+        if (preg_match($pattern, $script, $m)) {
+            return abas_normalize_public_base($m[1]);
+        }
+    }
+
+    $dir = dirname($script);
+
+    return abas_normalize_public_base($dir);
+}
+
 function abas_public_base(): string
 {
     static $base = null;
@@ -28,15 +57,7 @@ function abas_public_base(): string
     }
 
     $script = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '');
-    if (preg_match('#^(.*)/public(?:/|$)#', $script, $m)) {
-        $base = abas_normalize_public_base(str_replace('\\', '/', $m[1]) . '/public');
-
-        return $base;
-    }
-
-    // Windows: dirname('/index.php') kan returnere '\' → //assets/… → hostname "assets"
-    $dir = str_replace('\\', '/', dirname($script));
-    $base = abas_normalize_public_base($dir);
+    $base = abas_public_base_from_script($script);
 
     return $base;
 }
@@ -45,6 +66,11 @@ function abas_url(string $path = ''): string
 {
     $path = ltrim(str_replace('\\', '/', $path), '/');
     $base = abas_public_base();
+
+    // Undgå /admin/admin/ når APP_BASE_PATH=/admin og path starter med admin/
+    if ($path !== '' && str_starts_with($path, 'admin/') && $base !== '' && str_ends_with($base, '/admin')) {
+        $path = substr($path, strlen('admin/'));
+    }
 
     if ($path === '') {
         return $base === '' ? '/' : $base . '/';
