@@ -57,6 +57,28 @@ function abas_login_error_for_user(?array $user): string
 
 function abas_logout(): void
 {
+    if (!empty($_SESSION['user_id'])) {
+        require_once __DIR__ . '/db.php';
+        require_once __DIR__ . '/activity_log.php';
+        $conn = abas_db();
+        $userId = (int) $_SESSION['user_id'];
+        abas_log_activity(
+            $conn,
+            'auth',
+            'logout',
+            $userId,
+            $_SESSION['user_name'] ?? null,
+            'user',
+            (string) $userId,
+            null,
+            null,
+            null,
+            null,
+            'web',
+            abas_activity_client_ip()
+        );
+    }
+
     $_SESSION = [];
     if (ini_get('session.use_cookies')) {
         $p = session_get_cookie_params();

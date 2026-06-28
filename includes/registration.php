@@ -144,6 +144,23 @@ function abas_submit_registration(
         $ins->close();
     }
 
+    require_once __DIR__ . '/activity_log.php';
+    abas_log_activity(
+        $conn,
+        'registration',
+        'submitted',
+        null,
+        $displayName,
+        'user',
+        (string) $userId,
+        $email,
+        'Type: ' . $type,
+        null,
+        null,
+        'web',
+        abas_activity_client_ip()
+    );
+
     return ['ok' => true, 'user_id' => $userId];
 }
 
@@ -374,6 +391,23 @@ function abas_approve_registration(
 
     abas_password_send_flow_email($conn, $userId, 'welcome');
 
+    require_once __DIR__ . '/activity_log.php';
+    abas_log_activity(
+        $conn,
+        'registration',
+        'approved',
+        $adminId,
+        null,
+        'user',
+        (string) $userId,
+        $user['email'] ?? null,
+        'Rolle: ' . $approveRole,
+        null,
+        null,
+        'web',
+        abas_activity_client_ip()
+    );
+
     return ['ok' => true, 'message' => 'Ansøgning godkendt. Velkomst-e-mail sendt.'];
 }
 
@@ -387,6 +421,25 @@ function abas_reject_registration(mysqli $conn, int $userId, int $adminId): arra
     $upd->execute();
     $ok = $upd->affected_rows > 0;
     $upd->close();
+
+    if ($ok) {
+        require_once __DIR__ . '/activity_log.php';
+        abas_log_activity(
+            $conn,
+            'registration',
+            'rejected',
+            $adminId,
+            null,
+            'user',
+            (string) $userId,
+            null,
+            null,
+            null,
+            null,
+            'web',
+            abas_activity_client_ip()
+        );
+    }
 
     return $ok
         ? ['ok' => true, 'message' => 'Ansøgning afvist.']

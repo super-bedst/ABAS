@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/activity_log.php';
 require_once __DIR__ . '/trekant_client.php';
 require_once __DIR__ . '/users.php';
 require_once __DIR__ . '/installation_status.php';
@@ -29,6 +30,21 @@ function abas_log_service_action(
     $stmt->bind_param('iiiissssssi', $userId, $onBehalfId, $sessionId, $sIns, $dealId, $action, $testTime, $comm, $ackAt, $source, $returnCode);
     $stmt->execute();
     $stmt->close();
+
+    abas_log_activity(
+        $conn,
+        'service',
+        $action,
+        $userId > 0 ? $userId : null,
+        null,
+        'installation',
+        (string) $sIns,
+        'Anlæg ' . $sIns . ' · ' . $dealId,
+        $comm,
+        $sIns,
+        $dealId,
+        $source
+    );
 }
 
 function abas_service_max_hours_per_start(): float

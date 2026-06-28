@@ -223,6 +223,23 @@ function abas_delete_user(mysqli $conn, int $userId, int $actorId): array
         $deact->execute();
         $deact->close();
 
+        require_once __DIR__ . '/activity_log.php';
+        abas_log_activity(
+            $conn,
+            'user',
+            'deactivated',
+            $actorId,
+            null,
+            'user',
+            (string) $userId,
+            null,
+            'Har servicehistorik',
+            null,
+            null,
+            'web',
+            abas_activity_client_ip()
+        );
+
         return ['ok' => true, 'deactivated' => true, 'message' => 'Bruger deaktiveret (har servicehistorik og kan ikke slettes helt).'];
     }
 
@@ -235,6 +252,23 @@ function abas_delete_user(mysqli $conn, int $userId, int $actorId): array
     if (!$deleted) {
         return ['ok' => false, 'message' => 'Bruger kunne ikke slettes.'];
     }
+
+    require_once __DIR__ . '/activity_log.php';
+    abas_log_activity(
+        $conn,
+        'user',
+        'deleted',
+        $actorId,
+        null,
+        'user',
+        (string) $userId,
+        null,
+        null,
+        null,
+        null,
+        'web',
+        abas_activity_client_ip()
+    );
 
     return ['ok' => true, 'message' => 'Bruger slettet.'];
 }
@@ -443,6 +477,23 @@ function abas_record_user_login(mysqli $conn, int $userId): void
     $stmt->bind_param('i', $userId);
     $stmt->execute();
     $stmt->close();
+
+    require_once __DIR__ . '/activity_log.php';
+    abas_log_activity(
+        $conn,
+        'auth',
+        'login',
+        $userId,
+        null,
+        'user',
+        (string) $userId,
+        null,
+        null,
+        null,
+        null,
+        'web',
+        abas_activity_client_ip()
+    );
 }
 
 /** @return list<string> */

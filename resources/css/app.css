@@ -304,6 +304,145 @@
     @apply block abas-card-hover font-medium text-gray-800;
   }
 
+  .abas-admin-body {
+    @apply bg-basbg text-gray-900;
+  }
+
+  .abas-admin-shell {
+    @apply min-h-screen grid;
+    grid-template-columns: 3.5rem 1fr;
+  }
+
+  @media (min-width: 1024px) {
+    .abas-admin-shell {
+      grid-template-columns: 3.5rem 14rem 1fr;
+    }
+  }
+
+  .abas-admin-rail {
+    @apply bg-brand text-white flex flex-col items-center py-4 gap-4 sticky top-0 h-screen;
+  }
+
+  .abas-admin-rail-logo {
+    @apply block p-2 rounded-lg hover:bg-white/10;
+  }
+
+  .abas-admin-rail-nav {
+    @apply flex flex-col gap-1 w-full px-1;
+  }
+
+  .abas-admin-rail-link {
+    @apply flex items-center justify-center w-full aspect-square rounded-lg text-lg hover:bg-white/15 no-underline text-white/90;
+  }
+
+  .abas-admin-rail-link--active {
+    @apply bg-brand-gold text-brand font-semibold;
+  }
+
+  .abas-admin-panel {
+    @apply min-w-0 flex flex-col;
+  }
+
+  @media (min-width: 1024px) {
+    .abas-admin-panel {
+      display: grid;
+      grid-template-columns: 14rem 1fr;
+      grid-template-rows: auto 1fr;
+    }
+
+    .abas-admin-topbar {
+      grid-column: 1 / -1;
+    }
+
+    .abas-admin-sidebar {
+      @apply block border-r border-brand-gold/30 bg-white/60;
+    }
+
+    .abas-admin-main {
+      @apply p-5 sm:p-6;
+    }
+  }
+
+  .abas-admin-topbar {
+    @apply bg-white/80 border-b border-brand-gold/25 px-4 sm:px-6 py-4 flex flex-wrap items-start justify-between gap-3;
+  }
+
+  .abas-admin-topbar-title {
+    @apply text-xl font-bold text-brand;
+  }
+
+  .abas-admin-topbar-lead {
+    @apply text-sm text-gray-600 mt-0.5;
+  }
+
+  .abas-admin-topbar-actions {
+    @apply flex flex-wrap items-center gap-2;
+  }
+
+  .abas-admin-sidebar-nav {
+    @apply p-3 flex flex-col gap-0.5 sticky top-0;
+  }
+
+  .abas-admin-sidebar-link {
+    @apply block px-3 py-2 rounded-lg text-sm text-gray-700 no-underline hover:bg-brand/5 hover:text-brand;
+  }
+
+  .abas-admin-sidebar-link--active {
+    @apply bg-brand/10 text-brand font-semibold;
+  }
+
+  .abas-admin-main {
+    @apply p-4 sm:p-5 flex-1;
+  }
+
+  .abas-kpi-card {
+    @apply abas-card border-brand-gold/20;
+  }
+
+  .abas-kpi-label {
+    @apply text-xs uppercase tracking-wide text-gray-500 font-semibold;
+  }
+
+  .abas-kpi-value {
+    @apply text-3xl font-bold text-brand mt-1;
+  }
+
+  .abas-kpi-meta {
+    @apply text-sm text-gray-500 mt-2;
+  }
+
+  .abas-kpi-card--service-start {
+    @apply border-l-4 border-l-emerald-600;
+  }
+
+  .abas-kpi-card--service-stop {
+    @apply border-l-4 border-l-rose-600;
+  }
+
+  .abas-activity-badge {
+    @apply inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700;
+  }
+
+  .abas-activity-badge--service {
+    @apply bg-brand/10 text-brand;
+  }
+
+  .abas-activity-badge--auth {
+    @apply bg-sky-100 text-sky-800;
+  }
+
+  .abas-activity-badge--registration {
+    @apply bg-amber-100 text-amber-900;
+  }
+
+  .abas-activity-badge--user {
+    @apply bg-violet-100 text-violet-900;
+  }
+
+  .abas-table-head {
+    @apply bg-brand text-white;
+  }
+
   .abas-mobile-card {
     @apply block abas-card-hover no-underline text-inherit;
   }
