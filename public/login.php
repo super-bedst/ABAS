@@ -18,11 +18,7 @@ $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $login = trim($_POST['login'] ?? '');
     $pass = $_POST['password'] ?? '';
-    $stmt = $conn->prepare('SELECT * FROM users WHERE (email = ? OR username = ?) LIMIT 1');
-    $stmt->bind_param('ss', $login, $login);
-    $stmt->execute();
-    $user = $stmt->get_result()->fetch_assoc();
-    $stmt->close();
+    $user = abas_find_user_by_login($conn, $login);
 
     if (!$user || empty($user['password_hash']) || !password_verify($pass, $user['password_hash'])) {
         $error = abas_login_error_for_user($user);

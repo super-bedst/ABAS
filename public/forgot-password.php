@@ -4,17 +4,14 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../includes/bootstrap.php';
 require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/password_flow.php';
 
 $conn = abas_db();
 $msg = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $login = trim($_POST['login'] ?? '');
-    $stmt = $conn->prepare('SELECT id FROM users WHERE (email = ? OR username = ?) AND active = 1 LIMIT 1');
-    $stmt->bind_param('ss', $login, $login);
-    $stmt->execute();
-    $user = $stmt->get_result()->fetch_assoc();
-    $stmt->close();
+    $user = abas_find_user_by_login($conn, $login, true);
     if ($user) {
         abas_password_send_flow_email($conn, (int) $user['id'], 'reset');
     }

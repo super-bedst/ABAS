@@ -55,6 +55,56 @@ function abas_login_error_for_user(?array $user): string
     return 'Forkert login eller adgangskode.';
 }
 
+/**
+ * Find bruger via e-mail, brugernavn eller (uden @) unikt match på e-mailens lokale del.
+ * E-mail og brugernavn er case-insensitive.
+ */
+function abas_find_user_by_login(mysqli $conn, string $login, bool $activeOnly = false): ?array
+{
+    $login = trim($login);
+    if ($login === '') {
+        return null;
+    }
+
+    $loginKey = mb_strtolower($login, 'UTF-8');
+    $activeSql = $activeOnly ? ' AND active = 1' : '';
+
+    if (str_contains($login, '@')) {
+        $stmt = $conn->prepare("SELECT * FROM users WHERE LOWER(email) = ?{$activeSql} LIMIT 1");
+        $stmt->bind_param('s', $loginKey);
+        $stmt->execute();
+        $user = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if ($user) {
+            return $user;
+        }
+    }
+
+    $stmt = $conn->prepare("SELECT * FROM users WHERE LOWER(username) = ?{$activeSql} LIMIT 1");
+    $stmt->bind_param('s', $loginKey);
+    $stmt->execute();
+    $user = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if ($user) {
+        return $user;
+    }
+
+    if (!str_contains($login, '@')) {
+        $stmt = $conn->prepare(
+            "SELECT * FROM users WHERE LOWER(SUBSTRING_INDEX(email, '@', 1)) = ?{$activeSql} LIMIT 2"
+        );
+        $stmt->bind_param('s', $loginKey);
+        $stmt->execute();
+        $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+        if (count($rows) === 1) {
+            return $rows[0];
+        }
+    }
+
+    return null;
+}
+
 function abas_logout(): void
 {
     if (!empty($_SESSION['user_id'])) {
