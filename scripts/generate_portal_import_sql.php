@@ -6,7 +6,9 @@ declare(strict_types=1);
  * Genererer SQL til import af data fra trekantbrand_portal → ABAS.
  *
  * Kør på portalservren (har adgang til lokal MySQL):
- *   php scripts/generate_portal_import_sql.php > Database/imports/portal_migration.sql
+ *   php scripts/generate_portal_import_sql.php --output=Database/imports/portal_migration.sql
+ *
+ * Vigtigt: Gem filen som UTF-8 uden BOM. Undgå Windows PowerShell Out-File (ø/å bliver korrupte).
  *
  * Miljøvariabler (valgfri):
  *   PORTAL_DB_HOST, PORTAL_DB_NAME, PORTAL_DB_USER, PORTAL_DB_PASS
@@ -53,11 +55,19 @@ function portal_username(string $email, ?string $preferred, array &$used): strin
     return $candidate;
 }
 
-function portal_domain(string $domain, int $virksomhedId, string $cvr): string
+function portal_domain(string $domain, int $virksomhedId, string $cvr, string $ansvarligEmail = ''): string
 {
-    $domain = strtolower(trim($domain));
+    $domain = strtolower(trim(ltrim($domain, '@')));
     if ($domain !== '') {
-        return ltrim($domain, '@');
+        return $domain;
+    }
+
+    $ansvarligEmail = strtolower(trim($ansvarligEmail));
+    if ($ansvarligEmail !== '' && str_contains($ansvarligEmail, '@')) {
+        $fromEmail = trim((string) substr($ansvarligEmail, (int) strrpos($ansvarligEmail, '@') + 1));
+        if ($fromEmail !== '' && str_contains($fromEmail, '.')) {
+            return $fromEmail;
+        }
     }
 
     $cvrClean = preg_replace('/\D+/', '', $cvr) ?: (string) $virksomhedId;
@@ -92,7 +102,7 @@ $out[] = '';
 
 // Installers
 $out[] = '-- Godkendte installatører (virksomheder)';
-$virks = $mysqli->query('SELECT id, navn, cvr, email_domaene, aktiv, created_at FROM virksomheder ORDER BY id');
+$virks = $mysqli->query('SELECT id, navn, cvr, email_domaene, ansvarlig_email, aktiv, created_at FROM virksomheder ORDER BY id');
 while ($v = $virks->fetch_assoc()) {
     $id = (int) $v['id'];
     $name = (string) $v['navn'];
@@ -107,7 +117,7 @@ while ($v = $virks->fetch_assoc()) {
         $approvedAt
     );
 
-    $domain = portal_domain((string) $v['email_domaene'], $id, (string) $v['cvr']);
+    $domain = portal_domain((string) $v['email_domaene'], $id, (string) $v['cvr'], (string) ($v['ansvarlig_email'] ?? ''));
     $out[] = sprintf(
         "INSERT INTO approved_installer_domains (installer_id, email_domain, created_at)\nSELECT %d, %s, %s FROM DUAL\nWHERE NOT EXISTS (SELECT 1 FROM approved_installer_domains WHERE email_domain = %s);",
         $id,
@@ -116,7 +126,10 @@ while ($v = $virks->fetch_assoc()) {
         sql_quote($domain)
     );
     if (trim((string) $v['email_domaene']) === '') {
-        $out[] = '-- OBS: virksomhed ' . $id . ' (' . $name . ') havde tomt e-maildomæne → syntetisk domæne ' . $domain;
+        $suffix = str_ends_with($domain, '.trekantbrand-import.local')
+            ? ' → syntetisk domæne ' . $domain . ' (tilføj rigtigt domæne i ABAS admin)'
+            : ' → domæne hentet fra ansvarlig e-mail: ' . $domain;
+        $out[] = '-- OBS: virksomhed ' . $id . ' (' . $name . ') havde tomt e-maildomæne' . $suffix;
     }
     $out[] = '';
 }
@@ -277,8 +290,25 @@ while ($a = $audit->fetch_assoc()) {
     );
 }
 
-$out[] = '';
 $out[] = 'SET FOREIGN_KEY_CHECKS = 1;';
 $out[] = '-- Efter import: send velkomst-mails til alle brugere med password_hash IS NULL';
 
-echo implode(PHP_EOL, $out) . PHP_EOL;
+$output = implode(PHP_EOL, $out) . PHP_EOL;
+
+foreach ($argv ?? [] as $arg) {
+    if (str_starts_with($arg, '--output=')) {
+        $path = substr($arg, strlen('--output='));
+        if ($path === '') {
+            fwrite(STDERR, 'Tom sti til --output' . PHP_EOL);
+            exit(1);
+        }
+        if (file_put_contents($path, $output) === false) {
+            fwrite(STDERR, 'Kunne ikke skrive ' . $path . PHP_EOL);
+            exit(1);
+        }
+        fwrite(STDERR, 'Skrev ' . $path . ' (' . strlen($output) . ' bytes, UTF-8)' . PHP_EOL);
+        exit(0);
+    }
+}
+
+echo $output;

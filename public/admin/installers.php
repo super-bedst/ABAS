@@ -66,12 +66,22 @@ require __DIR__ . '/../partials/header.php';
         $montorCount = (int) ($r['montor_count'] ?? 0);
         $companyName = (string) $r['company_name'];
         $domains = $r['domains'] ?? [];
+        $hasPlaceholderDomain = false;
+        foreach ($domains as $domain) {
+            if (str_ends_with(strtolower((string) $domain), '.trekantbrand-import.local')) {
+                $hasPlaceholderDomain = true;
+                break;
+            }
+        }
         ?>
     <div class="abas-card">
         <div class="flex flex-wrap justify-between gap-3 mb-3">
             <div>
                 <h2 class="text-lg font-semibold text-brand"><?= htmlspecialchars($companyName) ?></h2>
                 <p class="text-sm text-gray-600"><?= $montorCount ?> montør(er) / virksomhedsadmin(s) tilknyttet</p>
+                <?php if ($hasPlaceholderDomain): ?>
+                    <p class="text-sm text-amber-800 mt-1">Import-placeholder domæne — tilføj det rigtige e-mail-domæne nedenfor, så montør-registrering virker.</p>
+                <?php endif; ?>
             </div>
             <form method="post" class="shrink-0"
                   onsubmit="return confirm(<?= json_encode(
@@ -91,8 +101,10 @@ require __DIR__ . '/../partials/header.php';
                 <p class="text-sm text-amber-700">Ingen domæner — tilføj mindst ét domæne.</p>
             <?php else: ?>
                 <ul class="flex flex-wrap gap-2">
-                    <?php foreach ($domains as $domain): ?>
-                        <li class="abas-badge bg-gray-100 text-gray-800 border border-gray-200 font-mono text-xs"><?= htmlspecialchars($domain) ?></li>
+                    <?php foreach ($domains as $domain):
+                        $isPlaceholder = str_ends_with(strtolower((string) $domain), '.trekantbrand-import.local');
+                        ?>
+                        <li class="abas-badge <?= $isPlaceholder ? 'bg-amber-50 text-amber-900 border-amber-200' : 'bg-gray-100 text-gray-800 border border-gray-200' ?> font-mono text-xs"><?= htmlspecialchars($domain) ?></li>
                     <?php endforeach; ?>
                 </ul>
             <?php endif; ?>
