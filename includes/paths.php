@@ -2,6 +2,17 @@
 
 declare(strict_types=1);
 
+/** Tom streng = app i DocumentRoot (fx public/ på teknikweb2). */
+function abas_normalize_public_base(string $base): string
+{
+    $base = rtrim(str_replace('\\', '/', $base), '/');
+    if ($base === '' || $base === '/' || $base === '.') {
+        return '';
+    }
+
+    return $base;
+}
+
 function abas_public_base(): string
 {
     static $base = null;
@@ -11,26 +22,21 @@ function abas_public_base(): string
 
     $override = abas_env('APP_BASE_PATH');
     if ($override !== null && $override !== '') {
-        $base = '/' . trim(str_replace('\\', '/', $override), '/');
+        $base = abas_normalize_public_base('/' . trim(str_replace('\\', '/', $override), '/'));
 
         return $base;
     }
 
     $script = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '');
     if (preg_match('#^(.*)/public(?:/|$)#', $script, $m)) {
-        $base = $m[1] . '/public';
+        $base = abas_normalize_public_base(str_replace('\\', '/', $m[1]) . '/public');
 
         return $base;
     }
 
-    // Windows: dirname('/index.php') kan returnere '\' → href bliver \/assets/…
-    // Browser tolker //assets/… som hostname "assets" → ERR_NAME_NOT_RESOLVED
-    $dir = rtrim(str_replace('\\', '/', dirname($script)), '/');
-    if ($dir === '' || $dir === '/' || $dir === '.') {
-        $base = '';
-    } else {
-        $base = $dir;
-    }
+    // Windows: dirname('/index.php') kan returnere '\' → //assets/… → hostname "assets"
+    $dir = str_replace('\\', '/', dirname($script));
+    $base = abas_normalize_public_base($dir);
 
     return $base;
 }
