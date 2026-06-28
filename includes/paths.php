@@ -23,7 +23,9 @@ function abas_public_base(): string
         return $base;
     }
 
-    $dir = rtrim(dirname($script), '/');
+    // Windows: dirname('/index.php') kan returnere '\' → href bliver \/assets/…
+    // Browser tolker //assets/… som hostname "assets" → ERR_NAME_NOT_RESOLVED
+    $dir = rtrim(str_replace('\\', '/', dirname($script)), '/');
     if ($dir === '' || $dir === '/' || $dir === '.') {
         $base = '';
     } else {
