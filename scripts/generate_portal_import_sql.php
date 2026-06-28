@@ -6,7 +6,11 @@ declare(strict_types=1);
  * Genererer SQL til import af data fra trekantbrand_portal → ABAS.
  *
  * Kør på portalservren (har adgang til lokal MySQL):
- *   php scripts/generate_portal_import_sql.php --output=Database/imports/portal_migration.sql
+ *   php scripts/generate_portal_import_sql.php --output=Database/imports/portal_migration_update.sql
+ *
+ * Standard (uden --include-audit): opdaterer eksisterende firmaer/brugere — sikkert at genkøre.
+ *   --installers-only   kun firmaer + domæner
+ *   --include-audit     inkl. historisk audit_logs (kun første import)
  *
  * Vigtigt: Gem filen som UTF-8 uden BOM. Undgå Windows PowerShell Out-File (ø/å bliver korrupte).
  *
@@ -75,6 +79,38 @@ function portal_domain(string $domain, int $virksomhedId, string $cvr, string $a
     return 'import-' . $cvrClean . '.trekantbrand-import.local';
 }
 
+function portal_is_placeholder_domain(string $domain): bool
+{
+    return str_ends_with(strtolower(trim($domain)), '.trekantbrand-import.local');
+}
+
+/** @param list<string> $out */
+function portal_emit_domain_sql(array &$out, int $installerId, string $domain, string $approvedAtSql): void
+{
+    if (!portal_is_placeholder_domain($domain)) {
+        $out[] = sprintf(
+            "DELETE FROM approved_installer_domains WHERE installer_id = %d AND email_domain LIKE 'import-%%.trekantbrand-import.local';",
+            $installerId
+        );
+        $out[] = sprintf(
+            "INSERT INTO approved_installer_domains (installer_id, email_domain, created_at)\nVALUES (%d, %s, %s)\nON DUPLICATE KEY UPDATE installer_id = VALUES(installer_id);",
+            $installerId,
+            sql_quote($domain),
+            $approvedAtSql
+        );
+
+        return;
+    }
+
+    $out[] = sprintf(
+        "INSERT INTO approved_installer_domains (installer_id, email_domain, created_at)\nSELECT %d, %s, %s FROM DUAL\nWHERE NOT EXISTS (SELECT 1 FROM approved_installer_domains WHERE installer_id = %d);",
+        $installerId,
+        sql_quote($domain),
+        $approvedAtSql,
+        $installerId
+    );
+}
+
 function portal_map_audit_category(string $handling): array
 {
     return match ($handling) {
@@ -89,19 +125,24 @@ function portal_map_audit_category(string $handling): array
     };
 }
 
+$includeAudit = in_array('--include-audit', $argv ?? [], true);
+$installersOnly = in_array('--installers-only', $argv ?? [], true);
+
 $usedUsernames = [];
 $out = [];
 
-$out[] = '-- ABAS import fra trekantbrand_portal';
+$out[] = '-- ABAS opdatering/import fra trekantbrand_portal';
 $out[] = '-- Genereret: ' . date('c');
-$out[] = '-- Kør mod tom/ny ABAS-database eller efter backup. Eksisterende rækker med samme e-mail/domæne springes over.';
+$out[] = $includeAudit
+    ? '-- Fuld import inkl. audit_logs (første gang).'
+    : '-- Opdatering: genkør sikkert mod eksisterende ABAS-database (firmanavne, domæner, brugere).';
 $out[] = '';
 $out[] = 'SET NAMES utf8mb4;';
 $out[] = 'SET FOREIGN_KEY_CHECKS = 0;';
 $out[] = '';
 
 // Installers
-$out[] = '-- Godkendte installatører (virksomheder)';
+$out[] = '-- Godkendte installatører (virksomheder) — INSERT eller UPDATE på id';
 $virks = $mysqli->query('SELECT id, navn, cvr, email_domaene, ansvarlig_email, aktiv, created_at FROM virksomheder ORDER BY id');
 while ($v = $virks->fetch_assoc()) {
     $id = (int) $v['id'];
@@ -109,7 +150,7 @@ while ($v = $virks->fetch_assoc()) {
     $active = (int) $v['aktiv'];
     $approvedAt = $v['created_at'] ? sql_quote((string) $v['created_at']) : 'NOW()';
     $out[] = sprintf(
-        "INSERT INTO approved_installers (id, company_name, active, approved_at, created_at)\nVALUES (%d, %s, %d, %s, %s)\nON DUPLICATE KEY UPDATE company_name = VALUES(company_name), active = VALUES(active);",
+        "INSERT INTO approved_installers (id, company_name, active, approved_at, created_at)\nVALUES (%d, %s, %d, %s, %s)\nON DUPLICATE KEY UPDATE company_name = VALUES(company_name), active = VALUES(active), approved_at = COALESCE(approved_installers.approved_at, VALUES(approved_at));",
         $id,
         sql_quote($name),
         $active,
@@ -118,20 +159,19 @@ while ($v = $virks->fetch_assoc()) {
     );
 
     $domain = portal_domain((string) $v['email_domaene'], $id, (string) $v['cvr'], (string) ($v['ansvarlig_email'] ?? ''));
-    $out[] = sprintf(
-        "INSERT INTO approved_installer_domains (installer_id, email_domain, created_at)\nSELECT %d, %s, %s FROM DUAL\nWHERE NOT EXISTS (SELECT 1 FROM approved_installer_domains WHERE email_domain = %s);",
-        $id,
-        sql_quote($domain),
-        $approvedAt,
-        sql_quote($domain)
-    );
+    portal_emit_domain_sql($out, $id, $domain, $approvedAt);
     if (trim((string) $v['email_domaene']) === '') {
-        $suffix = str_ends_with($domain, '.trekantbrand-import.local')
-            ? ' → syntetisk domæne ' . $domain . ' (tilføj rigtigt domæne i ABAS admin)'
-            : ' → domæne hentet fra ansvarlig e-mail: ' . $domain;
-        $out[] = '-- OBS: virksomhed ' . $id . ' (' . $name . ') havde tomt e-maildomæne' . $suffix;
+        $suffix = portal_is_placeholder_domain($domain)
+            ? ' → placeholder ' . $domain . ' (tilføj rigtigt domæne i admin hvis nødvendigt)'
+            : ' → domæne fra ansvarlig e-mail: ' . $domain;
+        $out[] = '-- OBS: virksomhed ' . $id . ' (' . $name . ') manglede e-maildomæne i portal' . $suffix;
     }
     $out[] = '';
+}
+
+if ($installersOnly) {
+    $out[] = 'SET FOREIGN_KEY_CHECKS = 1;';
+    goto portal_emit_output;
 }
 
 // Portal firma_admin users → virksomhedsadmin
@@ -189,7 +229,7 @@ while ($u = $staff->fetch_assoc()) {
     $displayName = sql_quote((string) $u['navn']);
 
     $out[] = sprintf(
-        "INSERT INTO users (email, username, password_hash, role, phone, active, registration_status, registration_display_name, last_login_at, created_at)\nVALUES (%s, %s, NULL, 'vagtcentral', %s, %d, 'approved', %s, %s, %s)\nON DUPLICATE KEY UPDATE username = VALUES(username), active = VALUES(active);",
+        "INSERT INTO users (email, username, password_hash, role, phone, active, registration_status, registration_display_name, last_login_at, created_at)\nVALUES (%s, %s, NULL, 'vagtcentral', %s, %d, 'approved', %s, %s, %s)\nON DUPLICATE KEY UPDATE username = VALUES(username), active = VALUES(active), registration_display_name = VALUES(registration_display_name);",
         sql_quote($email),
         sql_quote($username),
         $phoneSql,
@@ -219,7 +259,7 @@ while ($m = $montors->fetch_assoc()) {
     $displayName = sql_quote((string) $m['navn']);
 
     $out[] = sprintf(
-        "INSERT INTO users (email, username, password_hash, role, phone, installer_id, active, registration_status, registration_type, registration_display_name, registration_reviewed_at, password_set_at, access_confirmed_at, access_confirm_due_at, created_at)\nVALUES (%s, %s, NULL, 'montor', %s, %d, 1, 'approved', 'montor', %s, %s, NULL, NULL, NULL, %s)\nON DUPLICATE KEY UPDATE username = VALUES(username), installer_id = VALUES(installer_id), registration_display_name = VALUES(registration_display_name);",
+        "INSERT INTO users (email, username, password_hash, role, phone, installer_id, active, registration_status, registration_type, registration_display_name, registration_reviewed_at, password_set_at, access_confirmed_at, access_confirm_due_at, created_at)\nVALUES (%s, %s, NULL, 'montor', %s, %d, 1, 'approved', 'montor', %s, %s, NULL, NULL, NULL, %s)\nON DUPLICATE KEY UPDATE username = VALUES(username), installer_id = VALUES(installer_id), active = VALUES(active), registration_display_name = VALUES(registration_display_name);",
         sql_quote($email),
         sql_quote($username),
         $phoneSql,
@@ -249,7 +289,7 @@ while ($m = $pending->fetch_assoc()) {
     $displayName = sql_quote((string) $m['navn']);
 
     $out[] = sprintf(
-        "INSERT INTO users (email, username, password_hash, role, phone, installer_id, active, registration_status, registration_type, registration_display_name, registration_requested_at, created_at)\nVALUES (%s, %s, NULL, 'montor', %s, %d, 0, 'pending', 'montor', %s, %s, %s)\nON DUPLICATE KEY UPDATE registration_status = 'pending', installer_id = VALUES(installer_id);",
+        "INSERT INTO users (email, username, password_hash, role, phone, installer_id, active, registration_status, registration_type, registration_display_name, registration_requested_at, created_at)\nVALUES (%s, %s, NULL, 'montor', %s, %d, 0, 'pending', 'montor', %s, %s, %s)\nON DUPLICATE KEY UPDATE registration_status = 'pending', installer_id = VALUES(installer_id), registration_display_name = VALUES(registration_display_name);",
         sql_quote($email),
         sql_quote($username),
         $phoneSql,
@@ -261,8 +301,9 @@ while ($m = $pending->fetch_assoc()) {
     $out[] = '';
 }
 
-// Historisk audit log → activity_events (hvis tabellen findes i ABAS)
-$out[] = '-- Portal audit_logs → activity_events (kræver migration 008_activity_events.sql)';
+if ($includeAudit) {
+// Historisk audit log → activity_events (kun ved --include-audit)
+$out[] = '-- Portal audit_logs → activity_events';
 $audit = $mysqli->query(
     'SELECT user_id, user_navn, handling, objekt_type, objekt_id, objekt_beskrivelse, detaljer, ip, created_at
      FROM audit_logs ORDER BY id'
@@ -289,9 +330,13 @@ while ($a = $audit->fetch_assoc()) {
         sql_quote((string) $a['created_at'])
     );
 }
+}
 
+portal_emit_output:
 $out[] = 'SET FOREIGN_KEY_CHECKS = 1;';
-$out[] = '-- Efter import: send velkomst-mails til alle brugere med password_hash IS NULL';
+if (!$installersOnly) {
+    $out[] = '-- Efter import: send velkomst-mails til brugere med password_hash IS NULL';
+}
 
 $output = implode(PHP_EOL, $out) . PHP_EOL;
 

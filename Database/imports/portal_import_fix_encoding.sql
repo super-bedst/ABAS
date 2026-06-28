@@ -1,10 +1,14 @@
--- Ret UTF-8 firmanavne efter import med korrupt SQL-fil (Windows PowerShell Out-File).
--- Bedre: regenerér portal_migration.sql på portalservren med UTF-8 og kør ON DUPLICATE KEY UPDATE.
+-- Opdater eksisterende portal-import (firmanavne m.m.)
 --
--- Eksempel (udfyld korrekte navne fra portalen):
--- UPDATE approved_installers SET company_name = 'Axel Sørensen El A/S' WHERE id = 44;
--- UPDATE approved_installers SET company_name = 'Bagger Låse & Alarm A/S' WHERE id = 53;
+-- 1. På portalservren (UTF-8 bevares):
+--    php ~/generate_portal_import_sql.php --installers-only --output=portal_migration_update_installers.sql
 --
--- Ret placeholder-domæner (tilføj rigtigt domæne via admin/installers.php eller SQL):
--- DELETE FROM approved_installer_domains WHERE email_domain LIKE 'import-%.trekantbrand-import.local';
--- INSERT INTO approved_installer_domains (installer_id, email_domain) VALUES (44, 'axel-soerensen.dk');
+--    Eller firma + brugere (uden audit_logs):
+--    php ~/generate_portal_import_sql.php --output=portal_migration_update.sql
+--
+-- 2. Kør den genererede fil mod ABAS:
+--    mysql ... abas < portal_migration_update_installers.sql
+--
+-- Scriptet opdaterer approved_installers.company_name via ON DUPLICATE KEY UPDATE,
+-- erstatter import-*.trekantbrand-import.local med rigtige domæner hvor muligt,
+-- og opdaterer brugernes display-navne.
