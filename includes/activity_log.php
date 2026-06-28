@@ -60,7 +60,7 @@ function abas_log_activity(
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
     $stmt->bind_param(
-        'issssssssisss',
+        'issssssssiss',
         $userId,
         $actorUsername,
         $category,

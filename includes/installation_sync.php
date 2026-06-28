@@ -136,9 +136,10 @@ function abas_search_installations_from_api(mysqli $conn, ?array $user, string $
     return $result;
 }
 
+/** miscno2: 3 bogstaver + 1–6 cifre (typisk 4, fx fab0100 eller fab700001). */
 function abas_is_miscno2_query(string $q): bool
 {
-    return (bool) preg_match('/^[a-z]{3}\d{4}$/i', trim($q));
+    return (bool) preg_match('/^[a-z]{3}\d{1,6}$/i', trim($q));
 }
 
 /**
