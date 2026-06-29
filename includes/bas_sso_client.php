@@ -366,10 +366,15 @@ function abas_bas_sso_format_token_error(string $body, int $httpCode): string
         }
     }
 
+    if (preg_match('/<\s*(?:html|body|!doctype)/i', $body)) {
+        return 'BAS SSO returnerede en serverfejl (HTTP ' . $httpCode
+            . '). Tjek error-log på test2.beredskabsalarmering.dk — ABAS-konfigurationen ser OK ud.';
+    }
+
     $plain = trim(preg_replace('/\s+/', ' ', strip_tags($body)) ?? '');
     if ($plain !== '') {
-        if (strlen($plain) > 180) {
-            $plain = substr($plain, 0, 180) . '…';
+        if (strlen($plain) > 120) {
+            $plain = substr($plain, 0, 120) . '…';
         }
 
         return 'BAS afviste token (HTTP ' . $httpCode . '): ' . $plain;
@@ -395,8 +400,9 @@ function abas_bas_sso_token_request(string $tokenUrl, array $fields, string $aut
 
     curl_setopt_array($ch, abas_bas_sso_curl_options([
         CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => http_build_query($fields),
+        CURLOPT_POSTFIELDS => http_build_query($fields, '', '&', PHP_QUERY_RFC3986),
         CURLOPT_TIMEOUT => 20,
+        CURLOPT_FOLLOWLOCATION => false,
         CURLOPT_HTTPHEADER => $headers,
     ]));
 
@@ -432,6 +438,8 @@ function abas_bas_sso_token_request(string $tokenUrl, array $fields, string $aut
                 'oauth_error' => is_array($decoded) ? ($decoded['error'] ?? null) : null,
                 'body' => substr($body, 0, 300),
                 'redirect_uri' => $fields['redirect_uri'] ?? null,
+                'token_url' => $tokenUrl,
+                'client_id' => $fields['client_id'] ?? null,
             ]);
         }
 
