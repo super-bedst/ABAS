@@ -22,8 +22,12 @@ if ($error !== '') {
 $code = trim((string) ($_GET['code'] ?? ''));
 $state = trim((string) ($_GET['state'] ?? ''));
 $expectedState = (string) ($_SESSION['abas_bas_sso_oauth_state'] ?? '');
-$verifier = (string) ($_SESSION['abas_bas_sso_pkce_verifier'] ?? '');
-unset($_SESSION['abas_bas_sso_oauth_state'], $_SESSION['abas_bas_sso_pkce_verifier']);
+$redirectUri = trim((string) ($_SESSION['abas_bas_sso_redirect_uri'] ?? ''));
+if ($redirectUri === '') {
+    $redirectUri = abas_bas_sso_login_redirect_uri();
+}
+unset($_SESSION['abas_bas_sso_oauth_state'], $_SESSION['abas_bas_sso_redirect_uri'], $_SESSION['abas_bas_sso_pkce_verifier']);
+$verifier = '';
 
 if ($code === '' || $state === '') {
     abas_flash_set('error', 'Ugyldigt SSO-svar (mangler code/state).');
@@ -39,7 +43,6 @@ if (!hash_equals($expectedState, $state)) {
 }
 
 try {
-    $redirectUri = abas_bas_sso_login_redirect_uri();
     $tokenPayload = abas_bas_sso_exchange_authorization_code($code, $redirectUri, $verifier);
     if ($tokenPayload === null) {
         $detail = abas_bas_sso_last_exchange_error();

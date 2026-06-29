@@ -53,7 +53,7 @@ function abas_bas_sso_client_id(): string
 
 function abas_bas_sso_client_secret(): string
 {
-    return (string) (abas_env('BAS_SSO_CLIENT_SECRET') ?? '');
+    return trim((string) (abas_env('BAS_SSO_CLIENT_SECRET') ?? ''));
 }
 
 function abas_bas_sso_endpoint(string $path): string
@@ -335,26 +335,34 @@ function abas_bas_sso_exchange_authorization_code(
     }
 
     $tokenUrl = abas_bas_sso_token_url();
-    $fields = [
+    $secret = abas_bas_sso_client_secret();
+    $coreFields = [
         'grant_type' => 'authorization_code',
         'code' => $code,
         'redirect_uri' => $redirectUri,
-        'client_id' => abas_bas_sso_client_id(),
     ];
     if ($codeVerifier !== '') {
-        $fields['code_verifier'] = $codeVerifier;
+        $coreFields['code_verifier'] = $codeVerifier;
     }
-    $secret = abas_bas_sso_client_secret();
 
-    $attempts = [
-        ['mode' => 'post', 'fields' => $fields + ($secret !== '' ? ['client_secret' => $secret] : [])],
-    ];
+    $attempts = [];
     if ($secret !== '') {
-        $basicFields = $fields;
         $attempts[] = [
             'mode' => 'basic',
-            'fields' => $basicFields,
+            'fields' => $coreFields,
             'auth' => base64_encode(abas_bas_sso_client_id() . ':' . $secret),
+        ];
+        $attempts[] = [
+            'mode' => 'post',
+            'fields' => $coreFields + [
+                'client_id' => abas_bas_sso_client_id(),
+                'client_secret' => $secret,
+            ],
+        ];
+    } else {
+        $attempts[] = [
+            'mode' => 'post',
+            'fields' => $coreFields + ['client_id' => abas_bas_sso_client_id()],
         ];
     }
 
@@ -420,8 +428,14 @@ function abas_bas_sso_token_request(string $tokenUrl, array $fields, string $aut
         $idpError = is_array($decoded)
             ? trim((string) ($decoded['error_description'] ?? $decoded['error'] ?? ''))
             : '';
+        if ($idpError === '') {
+            $idpError = trim(preg_replace('/\s+/', ' ', strip_tags($body)) ?? '');
+            if (strlen($idpError) > 180) {
+                $idpError = substr($idpError, 0, 180) . '…';
+            }
+        }
         $msg = $idpError !== ''
-            ? 'BAS afviste token: ' . $idpError
+            ? 'BAS afviste token (HTTP ' . $httpCode . '): ' . $idpError
             : 'BAS token-endpoint returnerede HTTP ' . $httpCode . '.';
         abas_bas_sso_set_last_exchange_error($msg);
         if (function_exists('abas_log_error')) {
@@ -430,6 +444,7 @@ function abas_bas_sso_token_request(string $tokenUrl, array $fields, string $aut
                 'idp_error' => $idpError !== '' ? $idpError : null,
                 'body' => substr($body, 0, 300),
                 'auth_mode' => $authMode,
+                'redirect_uri' => $fields['redirect_uri'] ?? null,
             ]);
         }
 
@@ -445,6 +460,7 @@ function abas_bas_sso_build_authorize_url(string $redirectUri, string $scope = '
 {
     $state = abas_bas_sso_random_token(16);
     $_SESSION['abas_bas_sso_oauth_state'] = $state;
+    $_SESSION['abas_bas_sso_redirect_uri'] = $redirectUri;
     unset($_SESSION['abas_bas_sso_pkce_verifier']);
 
     $authorizeUrl = abas_bas_sso_authorize_url();
