@@ -112,6 +112,16 @@ function abas_bas_sso_random_token(int $bytes = 32): string
     return abas_bas_sso_base64url(random_bytes($bytes));
 }
 
+function abas_bas_sso_authorize_url(): string
+{
+    return abas_bas_sso_endpoint('oidc/authorize');
+}
+
+function abas_bas_sso_token_url(): string
+{
+    return abas_bas_sso_endpoint('oidc/token');
+}
+
 /** @return array<string, mixed>|null */
 function abas_bas_sso_fetch_discovery(): ?array
 {
@@ -128,12 +138,13 @@ function abas_bas_sso_fetch_discovery(): ?array
         return null;
     }
     curl_setopt_array($ch, abas_bas_sso_curl_options());
-    $body = curl_exec($ch);
+    $body = abas_curl_exec($ch);
     $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
-    if (!is_string($body) || $code < 200 || $code >= 300) {
+    if (!is_string($body) || $body === '' || $code < 200 || $code >= 300) {
         return null;
     }
+    $body = ltrim($body, "\xEF\xBB\xBF");
     $decoded = json_decode($body, true);
     if (!is_array($decoded)) {
         return null;
@@ -163,7 +174,7 @@ function abas_bas_sso_fetch_jwks(): array
         return [];
     }
     curl_setopt_array($ch, abas_bas_sso_curl_options());
-    $body = curl_exec($ch);
+    $body = abas_curl_exec($ch);
     $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
     if (!is_string($body) || $code < 200 || $code >= 300) {
@@ -297,7 +308,7 @@ function abas_bas_sso_exchange_authorization_code(
     $discovery = abas_bas_sso_fetch_discovery();
     $tokenUrl = is_array($discovery) ? (string) ($discovery['token_endpoint'] ?? '') : '';
     if ($tokenUrl === '') {
-        $tokenUrl = abas_bas_sso_endpoint('oidc/token');
+        $tokenUrl = abas_bas_sso_token_url();
     }
     $fields = [
         'grant_type' => 'authorization_code',
@@ -322,10 +333,11 @@ function abas_bas_sso_exchange_authorization_code(
         CURLOPT_TIMEOUT => 20,
         CURLOPT_HTTPHEADER => ['Accept: application/json', 'Content-Type: application/x-www-form-urlencoded'],
     ]));
-    $body = curl_exec($ch);
+    $body = abas_curl_exec($ch);
     $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
     curl_close($ch);
-    if (!is_string($body) || $httpCode < 200 || $httpCode >= 300) {
+    if (!is_string($body) || $body === '' || $httpCode < 200 || $httpCode >= 300) {
         if (function_exists('abas_log_error')) {
             $decoded = is_string($body) ? json_decode($body, true) : null;
             $idpError = is_array($decoded) ? (string) ($decoded['error_description'] ?? $decoded['error'] ?? '') : '';
@@ -334,6 +346,8 @@ function abas_bas_sso_exchange_authorization_code(
                 'redirect_uri' => $redirectUri,
                 'idp_error' => $idpError !== '' ? $idpError : null,
                 'body' => is_string($body) ? substr($body, 0, 300) : null,
+                'curl_error' => $curlError !== '' ? $curlError : null,
+                'ca_bundle' => abas_curl_resolve_ca_bundle_path(),
             ]);
         }
 
@@ -352,11 +366,7 @@ function abas_bas_sso_build_authorize_url(string $redirectUri, string $scope = '
     $state = abas_bas_sso_random_token(16);
     $_SESSION['abas_bas_sso_oauth_state'] = $state;
 
-    $discovery = abas_bas_sso_fetch_discovery();
-    $authorizeUrl = is_array($discovery) ? (string) ($discovery['authorization_endpoint'] ?? '') : '';
-    if ($authorizeUrl === '') {
-        $authorizeUrl = abas_bas_sso_endpoint('oidc/authorize');
-    }
+    $authorizeUrl = abas_bas_sso_authorize_url();
 
     return $authorizeUrl . '?' . http_build_query([
         'client_id' => abas_bas_sso_client_id(),

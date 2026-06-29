@@ -24,7 +24,7 @@ try {
             'line' => $e->getLine(),
         ]);
     }
-    abas_flash_set('error', 'SSO kunne ikke startes. Tjek CURL_CAINFO i env.local og server-log.');
+    abas_flash_set('error', 'SSO kunne ikke startes: ' . $e->getMessage());
     abas_redirect('/login.php');
 }
 

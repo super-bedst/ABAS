@@ -33,9 +33,29 @@ function abas_curl_resolve_ca_bundle_path(): ?string
         }
     }
 
+    $phpExtras = dirname(PHP_BINARY) . DIRECTORY_SEPARATOR . 'extras' . DIRECTORY_SEPARATOR . 'ssl' . DIRECTORY_SEPARATOR . 'cacert.pem';
+    if (is_file($phpExtras) && is_readable($phpExtras)) {
+        $resolved = $phpExtras;
+
+        return $phpExtras;
+    }
+
     $resolved = '';
 
     return null;
+}
+
+/**
+ * Kør curl_exec uden at SSL-advarsler bliver til uncaught exceptions (Windows/WAMP).
+ */
+function abas_curl_exec(\CurlHandle $ch): string|false
+{
+    set_error_handler(static fn (): bool => true, E_WARNING);
+    try {
+        return curl_exec($ch);
+    } finally {
+        restore_error_handler();
+    }
 }
 
 function abas_curl_ssl_options(): array
