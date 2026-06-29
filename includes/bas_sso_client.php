@@ -149,7 +149,7 @@ function abas_bas_sso_fetch_discovery(): ?array
     curl_setopt_array($ch, abas_bas_sso_curl_options());
     $body = abas_curl_exec($ch);
     $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
+    abas_curl_close($ch);
     if (!is_string($body) || $body === '' || $code < 200 || $code >= 300) {
         return null;
     }
@@ -185,7 +185,7 @@ function abas_bas_sso_fetch_jwks(): array
     curl_setopt_array($ch, abas_bas_sso_curl_options());
     $body = abas_curl_exec($ch);
     $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
+    abas_curl_close($ch);
     if (!is_string($body) || $code < 200 || $code >= 300) {
         return [];
     }
@@ -345,7 +345,7 @@ function abas_bas_sso_exchange_authorization_code(
     $body = abas_curl_exec($ch);
     $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $curlError = curl_error($ch);
-    curl_close($ch);
+    abas_curl_close($ch);
     if (!is_string($body) || $body === '' || $httpCode < 200 || $httpCode >= 300) {
         if (function_exists('abas_log_error')) {
             $decoded = is_string($body) ? json_decode($body, true) : null;

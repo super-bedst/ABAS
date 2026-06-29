@@ -58,6 +58,12 @@ function abas_curl_exec(\CurlHandle $ch): string|false
     }
 }
 
+/** PHP 8+ frigiver CurlHandle automatisk — curl_close() er deprecated (8.5). */
+function abas_curl_close(?\CurlHandle $ch): void
+{
+    unset($ch);
+}
+
 function abas_curl_ssl_options(): array
 {
     $opts = [];

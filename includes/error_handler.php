@@ -122,6 +122,10 @@ function abas_register_error_handlers(): void
             return false;
         }
 
+        if ($severity === E_DEPRECATED || $severity === E_USER_DEPRECATED) {
+            return false;
+        }
+
         throw new ErrorException($message, 0, $severity, $file, $line);
     });
 }
