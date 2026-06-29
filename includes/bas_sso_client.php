@@ -305,20 +305,36 @@ function abas_bas_sso_jwt_verify(string $jwt): ?array
     return $payload;
 }
 
+/** @var string|null */
+$GLOBALS['_abas_bas_sso_last_exchange_error'] = null;
+
+function abas_bas_sso_last_exchange_error(): ?string
+{
+    return isset($GLOBALS['_abas_bas_sso_last_exchange_error'])
+        ? $GLOBALS['_abas_bas_sso_last_exchange_error']
+        : null;
+}
+
+function abas_bas_sso_set_last_exchange_error(?string $message): void
+{
+    $GLOBALS['_abas_bas_sso_last_exchange_error'] = $message;
+}
+
 /** @return array<string, mixed>|null */
 function abas_bas_sso_exchange_authorization_code(
     string $code,
     string $redirectUri,
     string $codeVerifier = ''
 ): ?array {
+    abas_bas_sso_set_last_exchange_error(null);
+
     if (!function_exists('curl_init')) {
+        abas_bas_sso_set_last_exchange_error('cURL er ikke tilgængelig på serveren.');
+
         return null;
     }
-    $discovery = abas_bas_sso_fetch_discovery();
-    $tokenUrl = is_array($discovery) ? (string) ($discovery['token_endpoint'] ?? '') : '';
-    if ($tokenUrl === '') {
-        $tokenUrl = abas_bas_sso_token_url();
-    }
+
+    $tokenUrl = abas_bas_sso_token_url();
     $fields = [
         'grant_type' => 'authorization_code',
         'code' => $code,
@@ -329,39 +345,97 @@ function abas_bas_sso_exchange_authorization_code(
         $fields['code_verifier'] = $codeVerifier;
     }
     $secret = abas_bas_sso_client_secret();
+
+    $attempts = [
+        ['mode' => 'post', 'fields' => $fields + ($secret !== '' ? ['client_secret' => $secret] : [])],
+    ];
     if ($secret !== '') {
-        $fields['client_secret'] = $secret;
+        $basicFields = $fields;
+        $attempts[] = [
+            'mode' => 'basic',
+            'fields' => $basicFields,
+            'auth' => base64_encode(abas_bas_sso_client_id() . ':' . $secret),
+        ];
     }
+
+    foreach ($attempts as $attempt) {
+        $result = abas_bas_sso_token_request($tokenUrl, $attempt['fields'], $attempt['mode'], $attempt['auth'] ?? null);
+        if ($result !== null) {
+            return $result;
+        }
+    }
+
+    return null;
+}
+
+/**
+ * @param array<string, string> $fields
+ * @return array<string, mixed>|null
+ */
+function abas_bas_sso_token_request(string $tokenUrl, array $fields, string $authMode = 'post', ?string $basicAuth = null): ?array
+{
     $ch = curl_init($tokenUrl);
     if ($ch === false) {
+        abas_bas_sso_set_last_exchange_error('Kunne ikke oprette HTTP-klient mod BAS.');
+
         return null;
     }
+
+    $headers = ['Accept: application/json', 'Content-Type: application/x-www-form-urlencoded'];
+    if ($authMode === 'basic' && $basicAuth !== null) {
+        $headers[] = 'Authorization: Basic ' . $basicAuth;
+    }
+
     curl_setopt_array($ch, abas_bas_sso_curl_options([
         CURLOPT_POST => true,
         CURLOPT_POSTFIELDS => http_build_query($fields),
         CURLOPT_TIMEOUT => 20,
-        CURLOPT_HTTPHEADER => ['Accept: application/json', 'Content-Type: application/x-www-form-urlencoded'],
+        CURLOPT_HTTPHEADER => $headers,
     ]));
+
     $body = abas_curl_exec($ch);
     $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $curlError = curl_error($ch);
     abas_curl_close($ch);
-    if (!is_string($body) || $body === '' || $httpCode < 200 || $httpCode >= 300) {
+
+    if (!is_string($body) || $body === '') {
+        $msg = $curlError !== ''
+            ? 'Netværksfejl mod BAS: ' . $curlError
+            : 'Tomt svar fra BAS token-endpoint (HTTP ' . $httpCode . ').';
+        abas_bas_sso_set_last_exchange_error($msg);
         if (function_exists('abas_log_error')) {
-            $decoded = is_string($body) ? json_decode($body, true) : null;
-            $idpError = is_array($decoded) ? (string) ($decoded['error_description'] ?? $decoded['error'] ?? '') : '';
             abas_log_error('bas_sso', 'Token exchange failed', [
                 'http' => $httpCode,
-                'redirect_uri' => $redirectUri,
-                'idp_error' => $idpError !== '' ? $idpError : null,
-                'body' => is_string($body) ? substr($body, 0, 300) : null,
                 'curl_error' => $curlError !== '' ? $curlError : null,
                 'ca_bundle' => abas_curl_resolve_ca_bundle_path(),
+                'auth_mode' => $authMode,
             ]);
         }
 
         return null;
     }
+
+    if ($httpCode < 200 || $httpCode >= 300) {
+        $decoded = json_decode($body, true);
+        $idpError = is_array($decoded)
+            ? trim((string) ($decoded['error_description'] ?? $decoded['error'] ?? ''))
+            : '';
+        $msg = $idpError !== ''
+            ? 'BAS afviste token: ' . $idpError
+            : 'BAS token-endpoint returnerede HTTP ' . $httpCode . '.';
+        abas_bas_sso_set_last_exchange_error($msg);
+        if (function_exists('abas_log_error')) {
+            abas_log_error('bas_sso', 'Token exchange failed', [
+                'http' => $httpCode,
+                'idp_error' => $idpError !== '' ? $idpError : null,
+                'body' => substr($body, 0, 300),
+                'auth_mode' => $authMode,
+            ]);
+        }
+
+        return null;
+    }
+
     $decoded = json_decode($body, true);
 
     return is_array($decoded) ? $decoded : null;
@@ -369,11 +443,9 @@ function abas_bas_sso_exchange_authorization_code(
 
 function abas_bas_sso_build_authorize_url(string $redirectUri, string $scope = 'openid profile email'): string
 {
-    $verifier = abas_bas_sso_random_token(48);
-    $challenge = abas_bas_sso_base64url(hash('sha256', $verifier, true));
-    $_SESSION['abas_bas_sso_pkce_verifier'] = $verifier;
     $state = abas_bas_sso_random_token(16);
     $_SESSION['abas_bas_sso_oauth_state'] = $state;
+    unset($_SESSION['abas_bas_sso_pkce_verifier']);
 
     $authorizeUrl = abas_bas_sso_authorize_url();
 
@@ -383,7 +455,5 @@ function abas_bas_sso_build_authorize_url(string $redirectUri, string $scope = '
         'response_type' => 'code',
         'scope' => $scope,
         'state' => $state,
-        'code_challenge' => $challenge,
-        'code_challenge_method' => 'S256',
     ]);
 }

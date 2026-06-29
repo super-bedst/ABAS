@@ -42,8 +42,9 @@ try {
     $redirectUri = abas_bas_sso_login_redirect_uri();
     $tokenPayload = abas_bas_sso_exchange_authorization_code($code, $redirectUri, $verifier);
     if ($tokenPayload === null) {
+        $detail = abas_bas_sso_last_exchange_error();
         throw new RuntimeException(
-            'Kunne ikke hente SSO-token. Tjek at BAS OIDC-klienten har redirect URI: ' . $redirectUri
+            $detail ?? ('Kunne ikke hente SSO-token. Tjek redirect URI: ' . $redirectUri)
         );
     }
     $claims = abas_bas_sso_claims_from_token_response($tokenPayload);
