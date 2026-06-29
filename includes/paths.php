@@ -27,6 +27,8 @@ function abas_public_base_from_script(string $script): string
     $subpathPatterns = [
         '#^(.*)/admin/[^/]+\.php$#',
         '#^(.*)/admin/?$#',
+        '#^(.*)/virksomhed/[^/]+\.php$#',
+        '#^(.*)/virksomhed/?$#',
         '#^(.*)/api/v1/index\.php$#',
         '#^(.*)/api/v1/.+#',
         '#^(.*)/api/.+#',

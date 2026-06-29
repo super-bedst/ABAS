@@ -30,6 +30,44 @@ function abas_installer_approved_for_domain(mysqli $conn, string $domain): ?arra
 }
 
 /**
+ * @return list<string>
+ */
+function abas_installers_sort_columns(): array
+{
+    return ['company', 'montor_count'];
+}
+
+function abas_admin_installers_list_url(?string $sort = null, ?string $dir = null, ?string $search = null): string
+{
+    require_once __DIR__ . '/table_list.php';
+
+    return abas_table_page_url('admin/installers.php', [
+        'sort' => $sort,
+        'dir' => $dir,
+        'q' => $search,
+    ]);
+}
+
+/**
+ * @return list<array<string, mixed>>
+ */
+function abas_list_installers(mysqli $conn, string $search = '', string $sort = 'company', string $sortDir = 'asc'): array
+{
+    require_once __DIR__ . '/table_list.php';
+
+    $rows = abas_installers_with_domains($conn);
+    $rows = abas_table_filter_rows($rows, $search, [
+        static fn (array $row): string => (string) ($row['company_name'] ?? ''),
+        static fn (array $row): string => implode(' ', $row['domains'] ?? []),
+    ]);
+
+    return abas_table_sort_rows($rows, $sort, $sortDir, [
+        'company' => static fn (array $row): string => (string) ($row['company_name'] ?? ''),
+        'montor_count' => static fn (array $row): string => sprintf('%010d', (int) ($row['montor_count'] ?? 0)),
+    ]);
+}
+
+/**
  * @return list<array<string, mixed>>
  */
 function abas_installers_with_domains(mysqli $conn): array
