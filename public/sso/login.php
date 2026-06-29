@@ -14,6 +14,19 @@ if (!empty($_SESSION['user_id'])) {
     abas_redirect('dashboard.php');
 }
 
-$url = abas_bas_sso_build_authorize_url(abas_bas_sso_login_redirect_uri());
+try {
+    $url = abas_bas_sso_build_authorize_url(abas_bas_sso_login_redirect_uri());
+} catch (Throwable $e) {
+    if (function_exists('abas_log_error')) {
+        abas_log_error('bas_sso', 'Authorize redirect failed', [
+            'message' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+        ]);
+    }
+    abas_flash_set('error', 'SSO kunne ikke startes. Tjek CURL_CAINFO i env.local og server-log.');
+    abas_redirect('/login.php');
+}
+
 header('Location: ' . $url, true, 302);
 exit;

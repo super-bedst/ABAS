@@ -2,6 +2,18 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/curl_cainfo.php';
+
+/** @param array<int, mixed> $extra */
+function abas_bas_sso_curl_options(array $extra = []): array
+{
+    return $extra + [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 15,
+        CURLOPT_HTTPHEADER => ['Accept: application/json'],
+    ] + abas_curl_ssl_options();
+}
+
 function abas_bas_sso_enabled(): bool
 {
     return abas_bas_sso_disabled_reason() === null;
@@ -115,11 +127,7 @@ function abas_bas_sso_fetch_discovery(): ?array
     if ($ch === false) {
         return null;
     }
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => 15,
-        CURLOPT_HTTPHEADER => ['Accept: application/json'],
-    ]);
+    curl_setopt_array($ch, abas_bas_sso_curl_options());
     $body = curl_exec($ch);
     $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
@@ -154,11 +162,7 @@ function abas_bas_sso_fetch_jwks(): array
     if ($ch === false) {
         return [];
     }
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => 15,
-        CURLOPT_HTTPHEADER => ['Accept: application/json'],
-    ]);
+    curl_setopt_array($ch, abas_bas_sso_curl_options());
     $body = curl_exec($ch);
     $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
@@ -312,13 +316,12 @@ function abas_bas_sso_exchange_authorization_code(
     if ($ch === false) {
         return null;
     }
-    curl_setopt_array($ch, [
+    curl_setopt_array($ch, abas_bas_sso_curl_options([
         CURLOPT_POST => true,
         CURLOPT_POSTFIELDS => http_build_query($fields),
-        CURLOPT_RETURNTRANSFER => true,
         CURLOPT_TIMEOUT => 20,
         CURLOPT_HTTPHEADER => ['Accept: application/json', 'Content-Type: application/x-www-form-urlencoded'],
-    ]);
+    ]));
     $body = curl_exec($ch);
     $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
