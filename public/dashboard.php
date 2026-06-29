@@ -75,7 +75,7 @@ require __DIR__ . '/partials/header.php';
     <p id="abas-dashboard-refresh-status" class="text-xs text-gray-500 mb-3" aria-live="polite"></p>
 <?php endif; ?>
 
-<form method="get" class="abas-search mb-6">
+<form method="get" class="abas-search mb-6" data-abas-loading="Søger anlæg…">
     <div class="abas-field flex-1">
         <label class="abas-label" for="q">Søg anlæg</label>
         <input id="q" name="q" value="<?= htmlspecialchars($q) ?>" placeholder="Anlægsnr., navn, by..." class="abas-input">

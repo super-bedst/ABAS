@@ -54,6 +54,45 @@ function abas_table_page_url(string $path, array $query = []): string
 }
 
 /**
+ * @return array{page:int, perPage:int, totalPages:int, offset:int}
+ */
+function abas_table_pagination_state(int $total, int $page, int $perPage = 50): array
+{
+    $perPage = max(1, $perPage);
+    $totalPages = max(1, (int) ceil($total / $perPage));
+    $page = min(max(1, $page), $totalPages);
+
+    return [
+        'page' => $page,
+        'perPage' => $perPage,
+        'totalPages' => $totalPages,
+        'offset' => ($page - 1) * $perPage,
+    ];
+}
+
+/**
+ * @param array<string, scalar|null> $queryBase
+ */
+function abas_render_table_pagination(string $path, array $queryBase, int $page, int $totalPages): void
+{
+    if ($totalPages <= 1) {
+        return;
+    }
+
+    echo '<nav class="flex flex-wrap gap-2 justify-center mt-4" aria-label="Paginering">';
+    for ($p = 1; $p <= $totalPages; $p++) {
+        if ($p === 1 || $p === $totalPages || abs($p - $page) <= 2) {
+            $href = abas_table_page_url($path, array_merge($queryBase, ['page' => $p]));
+            $class = 'abas-chip' . ($p === $page ? ' abas-chip-active' : '');
+            echo '<a href="' . htmlspecialchars($href) . '" class="' . $class . '">' . $p . '</a>';
+        } elseif (abs($p - $page) === 3) {
+            echo '<span class="px-2 text-gray-400">…</span>';
+        }
+    }
+    echo '</nav>';
+}
+
+/**
  * @param array{href: string, active: bool, indicator: string} $link
  */
 function abas_render_table_sort_th(string $label, array $link): void

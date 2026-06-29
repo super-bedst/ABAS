@@ -341,7 +341,7 @@ require __DIR__ . '/../partials/header.php';
                 ?>
                 <li class="flex flex-wrap items-center justify-between gap-2 border border-gray-100 rounded-xl px-3 py-2">
                     <div>
-                        <a href="<?= abas_url('installation.php?id=' . $instId) ?>" class="font-mono font-medium text-brand hover:underline">
+                        <a href="<?= abas_url('installation.php?id=' . $instId) ?>" class="font-mono font-medium text-brand hover:underline" data-abas-loading="Åbner anlæg…">
                             <?= htmlspecialchars((string) $inst['miscno2']) ?>
                         </a>
                         <span class="text-sm text-gray-600"> — <?= htmlspecialchars((string) $inst['name']) ?></span>

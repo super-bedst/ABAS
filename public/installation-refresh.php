@@ -83,5 +83,9 @@ echo json_encode([
     'logHtml' => $log['code'] === 0 ? abas_render_alarmlog_rows_html($log['rows']) : '',
     'logEmpty' => $log['code'] === 0 && $log['rows'] === [],
     'zonesHtml' => abas_render_installation_zones_html($instDetails['zones'], $instDetails['zones_error']),
+    'contactsHtml' => abas_render_installation_contacts_html($instDetails['contacts'], $instDetails['error']),
+    'mapLat' => $instDetails['lat'],
+    'mapLon' => $instDetails['lon'],
+    'alid' => trim((string) ($instDetails['alid'] ?? '')),
     'updatedAt' => date('c'),
 ], JSON_UNESCAPED_UNICODE);

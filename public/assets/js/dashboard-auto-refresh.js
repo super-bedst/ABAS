@@ -23,6 +23,10 @@
                 return;
             }
             busy = true;
+            if (mainWrap) {
+                mainWrap.classList.add('abas-loading-overlay');
+            }
+            setStatus('Opdaterer…');
             fetch(config.url, {
                 credentials: 'same-origin',
                 headers: { Accept: 'application/json' },
@@ -53,6 +57,9 @@
                 })
                 .finally(function () {
                     busy = false;
+                    if (mainWrap) {
+                        mainWrap.classList.remove('abas-loading-overlay');
+                    }
                 });
         }
 

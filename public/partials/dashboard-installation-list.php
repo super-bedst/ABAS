@@ -36,7 +36,8 @@ $sortColumns = ['miscno2', 'name', 'city', 'service'];
             <tr class="abas-table-row-link"
                 role="link"
                 tabindex="0"
-                data-href="<?= htmlspecialchars($href) ?>">
+                data-href="<?= htmlspecialchars($href) ?>"
+                data-abas-loading="Åbner anlæg…">
                 <td class="font-mono font-medium text-brand">
                     <?= htmlspecialchars((string) $inst['miscno2']) ?>
                     <?php if (!empty($inst['in_service']) && empty($showServiceInfo)): ?>
@@ -63,7 +64,7 @@ $sortColumns = ['miscno2', 'name', 'city', 'service'];
 
 <div class="sm:hidden space-y-3">
     <?php foreach ($installations as $inst): ?>
-        <a href="<?= abas_url('installation.php?id=' . (int) $inst['id']) ?>" class="abas-mobile-card">
+        <a href="<?= abas_url('installation.php?id=' . (int) $inst['id']) ?>" class="abas-mobile-card" data-abas-loading="Åbner anlæg…">
             <div class="flex flex-wrap items-center gap-2">
                 <div class="abas-mobile-card-title"><?= htmlspecialchars((string) $inst['miscno2']) ?></div>
                 <?php if (!empty($inst['in_service']) && empty($showServiceInfo)): ?>

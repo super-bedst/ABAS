@@ -37,7 +37,7 @@ function abas_installers_sort_columns(): array
     return ['company', 'montor_count'];
 }
 
-function abas_admin_installers_list_url(?string $sort = null, ?string $dir = null, ?string $search = null): string
+function abas_admin_installers_list_url(?string $sort = null, ?string $dir = null, ?string $search = null, ?int $page = null): string
 {
     require_once __DIR__ . '/table_list.php';
 
@@ -45,7 +45,121 @@ function abas_admin_installers_list_url(?string $sort = null, ?string $dir = nul
         'sort' => $sort,
         'dir' => $dir,
         'q' => $search,
+        'page' => ($page !== null && $page > 1) ? $page : null,
     ]);
+}
+
+/**
+ * @return array{searchSql:string, types:string, params:list<mixed>}
+ */
+function abas_installers_search_parts(string $search): array
+{
+    $search = trim($search);
+    if ($search === '') {
+        return ['searchSql' => '', 'types' => '', 'params' => []];
+    }
+
+    $like = '%' . $search . '%';
+
+    return [
+        'searchSql' => ' AND (
+            ai.company_name LIKE ?
+            OR EXISTS (
+                SELECT 1 FROM approved_installer_domains aid
+                WHERE aid.installer_id = ai.id AND aid.email_domain LIKE ?
+            )
+        )',
+        'types' => 'ss',
+        'params' => [$like, $like],
+    ];
+}
+
+function abas_installers_order_sql(string $sort, string $sortDir): string
+{
+    $dir = strtolower($sortDir) === 'desc' ? 'DESC' : 'ASC';
+
+    return $sort === 'montor_count'
+        ? "montor_count $dir, ai.company_name ASC"
+        : "ai.company_name $dir";
+}
+
+/**
+ * @return array{rows:list<array<string, mixed>>, total:int, page:int, totalPages:int}
+ */
+function abas_list_installers_page(
+    mysqli $conn,
+    string $search = '',
+    string $sort = 'company',
+    string $sortDir = 'asc',
+    int $page = 1,
+    int $perPage = 50
+): array {
+    require_once __DIR__ . '/table_list.php';
+
+    $searchParts = abas_installers_search_parts($search);
+    $countSql = 'SELECT COUNT(*) AS c FROM approved_installers ai WHERE 1=1' . $searchParts['searchSql'];
+    $countStmt = $conn->prepare($countSql);
+    if ($searchParts['types'] !== '') {
+        $countStmt->bind_param($searchParts['types'], ...$searchParts['params']);
+    }
+    $countStmt->execute();
+    $total = (int) ($countStmt->get_result()->fetch_assoc()['c'] ?? 0);
+    $countStmt->close();
+
+    $pagination = abas_table_pagination_state($total, $page, $perPage);
+    $orderSql = abas_installers_order_sql($sort, $sortDir);
+    $listSql = 'SELECT ai.*, COUNT(u.id) AS montor_count
+         FROM approved_installers ai
+         LEFT JOIN users u ON u.installer_id = ai.id AND u.role IN ("montor", "virksomhedsadmin")
+         WHERE 1=1' . $searchParts['searchSql'] . '
+         GROUP BY ai.id
+         ORDER BY ' . $orderSql . '
+         LIMIT ? OFFSET ?';
+
+    $types = $searchParts['types'] . 'ii';
+    $params = array_merge($searchParts['params'], [$pagination['perPage'], $pagination['offset']]);
+    $listStmt = $conn->prepare($listSql);
+    $listStmt->bind_param($types, ...$params);
+    $listStmt->execute();
+    $installers = $listStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $listStmt->close();
+
+    if ($installers === []) {
+        return [
+            'rows' => [],
+            'total' => $total,
+            'page' => $pagination['page'],
+            'totalPages' => $pagination['totalPages'],
+        ];
+    }
+
+    $ids = array_map(static fn (array $row): int => (int) $row['id'], $installers);
+    $placeholders = implode(',', array_fill(0, count($ids), '?'));
+    $domainTypes = str_repeat('i', count($ids));
+    $domainStmt = $conn->prepare(
+        "SELECT installer_id, email_domain FROM approved_installer_domains WHERE installer_id IN ($placeholders) ORDER BY email_domain"
+    );
+    $domainStmt->bind_param($domainTypes, ...$ids);
+    $domainStmt->execute();
+    $domainRows = $domainStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $domainStmt->close();
+
+    $domainsByInstaller = [];
+    foreach ($domainRows as $row) {
+        $domainsByInstaller[(int) $row['installer_id']][] = (string) $row['email_domain'];
+    }
+
+    foreach ($installers as &$installer) {
+        $installer['domains'] = $domainsByInstaller[(int) $installer['id']] ?? [];
+    }
+    unset($installer);
+
+    return [
+        'rows' => $installers,
+        'total' => $total,
+        'page' => $pagination['page'],
+        'totalPages' => $pagination['totalPages'],
+    ];
 }
 
 /**
@@ -53,18 +167,9 @@ function abas_admin_installers_list_url(?string $sort = null, ?string $dir = nul
  */
 function abas_list_installers(mysqli $conn, string $search = '', string $sort = 'company', string $sortDir = 'asc'): array
 {
-    require_once __DIR__ . '/table_list.php';
+    $result = abas_list_installers_page($conn, $search, $sort, $sortDir, 1, 10000);
 
-    $rows = abas_installers_with_domains($conn);
-    $rows = abas_table_filter_rows($rows, $search, [
-        static fn (array $row): string => (string) ($row['company_name'] ?? ''),
-        static fn (array $row): string => implode(' ', $row['domains'] ?? []),
-    ]);
-
-    return abas_table_sort_rows($rows, $sort, $sortDir, [
-        'company' => static fn (array $row): string => (string) ($row['company_name'] ?? ''),
-        'montor_count' => static fn (array $row): string => sprintf('%010d', (int) ($row['montor_count'] ?? 0)),
-    ]);
+    return $result['rows'];
 }
 
 /**

@@ -54,7 +54,9 @@ $navItems = array_map(
 <div class="abas-admin-shell">
     <aside class="abas-admin-rail" aria-label="Admin navigation">
         <a href="<?= abas_url('dashboard.php') ?>" class="abas-admin-rail-logo" title="Tilbage til app">
-            <img src="<?= htmlspecialchars(abas_asset_url('assets/images/trekantbrand-logo.svg')) ?>" alt="TrekantBrand" class="h-8 w-auto brightness-0 invert">
+            <span class="abas-admin-rail-logo-mark">
+                <img src="<?= htmlspecialchars(abas_asset_url('assets/images/trekantbrand-logo.svg')) ?>" alt="TrekantBrand">
+            </span>
         </a>
         <nav class="abas-admin-rail-nav">
             <?php foreach ($navItems as $item): ?>

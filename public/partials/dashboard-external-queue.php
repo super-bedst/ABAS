@@ -32,7 +32,8 @@ $sortColumns = ['miscno2', 'name', 'city', 'expires', 'comment'];
             <tbody>
             <?php foreach ($externalInQueue as $ext): ?>
                 <tr class="abas-table-row-link" role="link" tabindex="0"
-                    data-href="<?= htmlspecialchars(abas_url('installation.php?id=' . (int) $ext['installation_id'])) ?>">
+                    data-href="<?= htmlspecialchars(abas_url('installation.php?id=' . (int) $ext['installation_id'])) ?>"
+                    data-abas-loading="Åbner anlæg…">
                     <td class="font-mono font-medium text-sky-800"><?= htmlspecialchars((string) $ext['miscno2']) ?></td>
                     <td><?= htmlspecialchars((string) $ext['name']) ?></td>
                     <td><?= htmlspecialchars((string) $ext['city']) ?></td>

@@ -549,26 +549,20 @@ function abas_admin_users_matching_roles(string $search): array
 
 /**
  * @param list<string> $rolesInFilter
- * @return list<array<string, mixed>>
+ * @return array{where:string, types:string, params:list<mixed>}
  */
-function abas_admin_users_list_rows(
-    mysqli $conn,
-    array $rolesInFilter,
-    string $sort,
-    string $sortDir,
-    string $search = ''
-): array {
+function abas_admin_users_list_query_parts(array $rolesInFilter, string $search): array
+{
     if ($rolesInFilter === []) {
-        return [];
+        return ['where' => '0=1', 'types' => '', 'params' => []];
     }
 
     $placeholders = implode(',', array_fill(0, count($rolesInFilter), '?'));
-    $orderSql = abas_admin_users_order_sql($sort, $sortDir);
-    $search = trim($search);
-    $searchSql = '';
-    $searchParams = [];
-    $searchTypes = '';
+    $where = "u.role IN ($placeholders)";
+    $types = str_repeat('s', count($rolesInFilter));
+    $params = $rolesInFilter;
 
+    $search = trim($search);
     if ($search !== '') {
         $like = '%' . $search . '%';
         $roleMatches = abas_admin_users_matching_roles($search);
@@ -576,11 +570,11 @@ function abas_admin_users_list_rows(
         if ($roleMatches !== []) {
             $rolePlaceholders = implode(',', array_fill(0, count($roleMatches), '?'));
             $roleInSql = ' OR u.role IN (' . $rolePlaceholders . ')';
-            $searchTypes .= str_repeat('s', count($roleMatches));
-            $searchParams = array_merge($searchParams, $roleMatches);
+            $types .= str_repeat('s', count($roleMatches));
+            $params = array_merge($params, $roleMatches);
         }
 
-        $searchSql = ' AND (
+        $where .= ' AND (
             u.username LIKE ?
             OR u.email LIKE ?
             OR u.phone LIKE ?
@@ -595,19 +589,104 @@ function abas_admin_users_list_rows(
                 WHERE ui.user_id = u.id AND (i.miscno2 LIKE ? OR i.name LIKE ?)
             )' . $roleInSql . '
         )';
-        $searchTypes = str_repeat('s', 10) . $searchTypes;
-        $searchParams = array_merge(array_fill(0, 10, $like), $searchParams);
+        $types .= str_repeat('s', 10);
+        $params = array_merge($params, array_fill(0, 10, $like));
     }
 
+    return ['where' => $where, 'types' => $types, 'params' => $params];
+}
+
+/**
+ * @param list<string> $rolesInFilter
+ */
+function abas_admin_users_list_count(mysqli $conn, array $rolesInFilter, string $search = ''): int
+{
+    $parts = abas_admin_users_list_query_parts($rolesInFilter, $search);
+    if ($parts['where'] === '0=1') {
+        return 0;
+    }
+
+    $sql = 'SELECT COUNT(*) AS c FROM users u
+         LEFT JOIN approved_installers ai ON ai.id = u.installer_id
+         WHERE ' . $parts['where'];
+    $stmt = $conn->prepare($sql);
+    if ($parts['types'] !== '') {
+        $stmt->bind_param($parts['types'], ...$parts['params']);
+    }
+    $stmt->execute();
+    $count = (int) ($stmt->get_result()->fetch_assoc()['c'] ?? 0);
+    $stmt->close();
+
+    return $count;
+}
+
+/**
+ * @param list<string> $rolesInFilter
+ * @return array{rows:list<array<string, mixed>>, total:int}
+ */
+function abas_admin_users_list_page(
+    mysqli $conn,
+    array $rolesInFilter,
+    string $sort,
+    string $sortDir,
+    string $search,
+    int $page,
+    int $perPage = 50
+): array {
+    require_once __DIR__ . '/table_list.php';
+
+    $total = abas_admin_users_list_count($conn, $rolesInFilter, $search);
+    $pagination = abas_table_pagination_state($total, $page, $perPage);
+    $rows = abas_admin_users_list_rows(
+        $conn,
+        $rolesInFilter,
+        $sort,
+        $sortDir,
+        $search,
+        $pagination['perPage'],
+        $pagination['offset']
+    );
+
+    return ['rows' => $rows, 'total' => $total, 'page' => $pagination['page'], 'totalPages' => $pagination['totalPages']];
+}
+
+/**
+ * @param list<string> $rolesInFilter
+ * @return list<array<string, mixed>>
+ */
+function abas_admin_users_list_rows(
+    mysqli $conn,
+    array $rolesInFilter,
+    string $sort,
+    string $sortDir,
+    string $search = '',
+    int $limit = 0,
+    int $offset = 0
+): array {
+    $parts = abas_admin_users_list_query_parts($rolesInFilter, $search);
+    if ($parts['where'] === '0=1') {
+        return [];
+    }
+
+    $orderSql = abas_admin_users_order_sql($sort, $sortDir);
     $sql = "SELECT u.id, u.email, u.username, u.role, u.active, u.phone, u.sms_secret_hash, u.sms_service_allowed,
             u.registration_status, u.registration_display_name, u.last_login_at, ai.company_name
      FROM users u
      LEFT JOIN approved_installers ai ON ai.id = u.installer_id
-     WHERE u.role IN ($placeholders) $searchSql
+     WHERE {$parts['where']}
      ORDER BY $orderSql";
 
-    $types = str_repeat('s', count($rolesInFilter)) . $searchTypes;
-    $params = array_merge($rolesInFilter, $searchParams);
+    if ($limit > 0) {
+        $sql .= ' LIMIT ? OFFSET ?';
+    }
+
+    $types = $parts['types'];
+    $params = $parts['params'];
+    if ($limit > 0) {
+        $types .= 'ii';
+        $params[] = $limit;
+        $params[] = $offset;
+    }
 
     $stmt = $conn->prepare($sql);
     $stmt->bind_param($types, ...$params);
@@ -618,7 +697,7 @@ function abas_admin_users_list_rows(
     return $rows;
 }
 
-function abas_admin_users_list_url(string $filter = 'alle', ?string $sort = null, ?string $dir = null, ?string $search = null): string
+function abas_admin_users_list_url(string $filter = 'alle', ?string $sort = null, ?string $dir = null, ?string $search = null, ?int $page = null): string
 {
     $params = [];
     if ($filter !== 'alle') {
@@ -630,6 +709,9 @@ function abas_admin_users_list_url(string $filter = 'alle', ?string $sort = null
     }
     if ($search !== null && trim($search) !== '') {
         $params['q'] = trim($search);
+    }
+    if ($page !== null && $page > 1) {
+        $params['page'] = $page;
     }
 
     $path = 'admin/users.php';

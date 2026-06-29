@@ -64,7 +64,7 @@ require __DIR__ . '/../partials/header.php';
 <h1 class="abas-page-title">Virksomhedsbrugere</h1>
 <p class="abas-page-lead">Montører, virksomhedsadministratorer og øvrige brugere hos <?= htmlspecialchars($companyName) ?>.</p>
 
-<form method="get" class="mb-4 flex flex-wrap gap-2 items-end max-w-2xl" role="search">
+<form method="get" class="mb-4 flex flex-wrap gap-2 items-end max-w-2xl" role="search" data-abas-loading="Søger…">
     <div class="abas-field flex-1 min-w-[14rem] !mb-0">
         <label class="abas-label" for="user-search">Søg</label>
         <input id="user-search" type="search" name="q" value="<?= htmlspecialchars($search) ?>" placeholder="Navn, e-mail, telefon, rolle, status …" class="abas-input">

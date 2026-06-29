@@ -74,6 +74,46 @@ function abas_fetch_installation_details(array $installation, ?array $user): arr
     return $result;
 }
 
+/**
+ * @param list<array{name:string, phones:list<array{number:string, label:string}>, email:string}> $contacts
+ */
+function abas_render_installation_contacts_html(array $contacts, ?string $error = null): string
+{
+    if ($error !== null && $error !== '') {
+        return '<p class="text-amber-700 text-xs mb-2">Kontakter kunne ikke hentes: ' . htmlspecialchars($error) . '</p>';
+    }
+
+    if ($contacts === []) {
+        return '<p class="text-gray-500 text-xs">Ingen registrerede kontakter.</p>';
+    }
+
+    ob_start();
+    ?>
+    <ul class="space-y-2">
+        <?php foreach ($contacts as $contact): ?>
+            <li class="border-t pt-2 first:border-t-0 first:pt-0">
+                <div class="font-medium"><?= htmlspecialchars($contact['name']) ?></div>
+                <?php foreach ($contact['phones'] as $phone): ?>
+                    <div class="text-gray-600">
+                        <?php if ($phone['label'] !== 'Tlf.'): ?>
+                            <span class="text-gray-400 text-xs"><?= htmlspecialchars($phone['label']) ?>:</span>
+                        <?php endif; ?>
+                        <a href="tel:<?= htmlspecialchars(preg_replace('/\s+/', '', $phone['number']) ?? $phone['number']) ?>" class="text-brand underline"><?= htmlspecialchars($phone['number']) ?></a>
+                    </div>
+                <?php endforeach; ?>
+                <?php if ($contact['email'] !== '' && $contact['email'] !== ' '): ?>
+                    <div class="text-gray-600">
+                        <a href="mailto:<?= htmlspecialchars(trim($contact['email'])) ?>" class="text-brand underline"><?= htmlspecialchars(trim($contact['email'])) ?></a>
+                    </div>
+                <?php endif; ?>
+            </li>
+        <?php endforeach; ?>
+    </ul>
+    <?php
+
+    return (string) ob_get_clean();
+}
+
 function abas_installation_alid(array $row): string
 {
     foreach (['alaid', 'primary_cid', 'alid'] as $field) {

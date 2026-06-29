@@ -57,7 +57,7 @@ $currentUser = $user;
 require __DIR__ . '/../partials/admin_shell_start.php';
 ?>
 
-<form method="get" class="abas-card mb-4">
+<form method="get" class="abas-card mb-4" data-abas-loading="Søger i log…">
     <div class="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
         <div class="abas-field sm:col-span-2 lg:col-span-1">
             <label class="abas-label" for="q">Søg</label>

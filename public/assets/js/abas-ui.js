@@ -1,76 +1,171 @@
-document.addEventListener('DOMContentLoaded', function () {
-    document.addEventListener('click', function (event) {
-        var row = event.target.closest('.abas-table-row-link');
-        if (!row || !row.dataset.href) {
+(function () {
+    'use strict';
+
+    var loaderEl = null;
+    var loaderText = null;
+
+    function ensurePageLoader() {
+        if (loaderEl) {
             return;
         }
-        window.location.href = row.dataset.href;
-    });
-    document.addEventListener('keydown', function (event) {
-        if (event.key !== 'Enter' && event.key !== ' ') {
+        loaderEl = document.createElement('div');
+        loaderEl.id = 'abas-page-loader';
+        loaderEl.className = 'abas-page-loader hidden';
+        loaderEl.setAttribute('role', 'status');
+        loaderEl.setAttribute('aria-live', 'polite');
+        loaderEl.setAttribute('aria-busy', 'true');
+        loaderEl.innerHTML =
+            '<div class="abas-page-loader__panel">' +
+            '<span class="abas-spinner" aria-hidden="true"></span>' +
+            '<span class="abas-page-loader__text">Arbejder…</span>' +
+            '</div>';
+        document.body.appendChild(loaderEl);
+        loaderText = loaderEl.querySelector('.abas-page-loader__text');
+    }
+
+    function showPageLoading(message) {
+        ensurePageLoader();
+        if (loaderText) {
+            loaderText.textContent = message || 'Arbejder…';
+        }
+        loaderEl.classList.remove('hidden');
+        document.body.classList.add('overflow-hidden');
+    }
+
+    function hidePageLoading() {
+        if (!loaderEl) {
             return;
         }
-        var row = event.target.closest('.abas-table-row-link');
-        if (!row || !row.dataset.href) {
-            return;
+        loaderEl.classList.add('hidden');
+        document.body.classList.remove('overflow-hidden');
+    }
+
+    window.abasShowPageLoading = showPageLoading;
+    window.abasHidePageLoading = hidePageLoading;
+
+    window.addEventListener('pageshow', function (event) {
+        if (event.persisted) {
+            hidePageLoading();
         }
-        event.preventDefault();
-        window.location.href = row.dataset.href;
     });
 
-    document.querySelectorAll('.abas-ack-checkbox').forEach(function (ack) {
-        var form = ack.closest('form');
-        if (!form) {
-            return;
+    function loadingMessageForNav(el) {
+        var msg = el.getAttribute('data-abas-loading');
+        if (msg) {
+            return msg;
         }
-        var btn = form.querySelector('.abas-ack-submit');
-        if (!btn) {
-            return;
+        if (el.classList.contains('abas-table-row-link') || el.classList.contains('abas-mobile-card')) {
+            return 'Åbner anlæg…';
         }
-        function syncAckButton() {
-            btn.disabled = !ack.checked;
-        }
-        ack.addEventListener('change', syncAckButton);
-        syncAckButton();
-    });
+        return null;
+    }
 
-    document.querySelectorAll('form[data-abas-loading]').forEach(function (form) {
-        form.addEventListener('submit', function () {
-            var msg = form.getAttribute('data-abas-loading') || 'Arbejder…';
-            var btn = form.querySelector('button[type="submit"], input[type="submit"]');
-            if (btn) {
-                btn.disabled = true;
-                btn.classList.add('abas-btn-loading');
-                if (!btn.dataset.originalText) {
-                    btn.dataset.originalText = btn.textContent;
+    function shouldShowNavLoading(event, el, href) {
+        if (!href || href === '#' || href.startsWith('javascript:')) {
+            return false;
+        }
+        if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+            return false;
+        }
+        if (el.target === '_blank' || el.hasAttribute('download')) {
+            return false;
+        }
+        return loadingMessageForNav(el) !== null;
+    }
+
+    function bindLoadingForms() {
+        document.querySelectorAll('form[data-abas-loading]').forEach(function (form) {
+            form.addEventListener('submit', function () {
+                var msg = form.getAttribute('data-abas-loading') || 'Arbejder…';
+                showPageLoading(msg);
+
+                var btn = form.querySelector('button[type="submit"], input[type="submit"]');
+                if (btn) {
+                    btn.disabled = true;
+                    btn.classList.add('abas-btn-loading');
+                    if (!btn.dataset.originalText) {
+                        btn.dataset.originalText = btn.textContent;
+                    }
+                    btn.textContent = msg;
                 }
-                btn.textContent = msg;
+
+                var overlay = form.closest('.abas-card, .abas-portal-form');
+                if (overlay) {
+                    overlay.classList.add('abas-loading-overlay');
+                }
+            });
+        });
+    }
+
+    function bindLoadingNavigation() {
+        document.addEventListener('click', function (event) {
+            var row = event.target.closest('.abas-table-row-link');
+            if (row && row.dataset.href) {
+                if (shouldShowNavLoading(event, row, row.dataset.href)) {
+                    showPageLoading(loadingMessageForNav(row));
+                }
+                window.location.href = row.dataset.href;
+                return;
             }
-            var overlay = form.closest('.abas-card, .abas-portal-form');
-            if (overlay) {
-                overlay.classList.add('abas-loading-overlay');
+
+            var link = event.target.closest('a[href]');
+            if (!link) {
+                return;
             }
+            var msg = loadingMessageForNav(link);
+            if (!msg || !shouldShowNavLoading(event, link, link.getAttribute('href'))) {
+                return;
+            }
+            showPageLoading(msg);
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        bindLoadingNavigation();
+
+        document.addEventListener('keydown', function (event) {
+            if (event.key !== 'Enter' && event.key !== ' ') {
+                return;
+            }
+            var row = event.target.closest('.abas-table-row-link');
+            if (!row || !row.dataset.href) {
+                return;
+            }
+            event.preventDefault();
+            if (shouldShowNavLoading(event, row, row.dataset.href)) {
+                showPageLoading(loadingMessageForNav(row));
+            }
+            window.location.href = row.dataset.href;
+        });
+
+        document.querySelectorAll('.abas-ack-checkbox').forEach(function (ack) {
+            var form = ack.closest('form');
+            if (!form) {
+                return;
+            }
+            var btn = form.querySelector('.abas-ack-submit');
+            if (!btn) {
+                return;
+            }
+            function syncAckButton() {
+                btn.disabled = !ack.checked;
+            }
+            ack.addEventListener('change', syncAckButton);
+            syncAckButton();
+        });
+
+        bindLoadingForms();
+
+        document.querySelectorAll('.abas-table[data-abas-client-sort]').forEach(function (table) {
+            abasInitClientTableSort(table);
         });
     });
-
-    document.querySelectorAll('.abas-table[data-abas-client-sort]').forEach(function (table) {
-        abasInitClientTableSort(table);
-    });
-
-    var logSpinner = document.getElementById('inst-log-spinner');
-    if (logSpinner && typeof window.instLogRefreshFetch === 'function') {
-        var orig = window.instLogRefreshFetch;
-        window.instLogRefreshFetch = function () {
-            logSpinner.classList.remove('hidden');
-            return orig().finally(function () {
-                logSpinner.classList.add('hidden');
-            });
-        };
-    }
-});
+})();
 
 function abasSetFormLoading(form, message) {
-    if (!form) return;
+    if (!form) {
+        return;
+    }
     form.setAttribute('data-abas-loading', message || 'Arbejder…');
     form.dispatchEvent(new Event('submit', { cancelable: true }));
 }

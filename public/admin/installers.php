@@ -16,15 +16,18 @@ abas_require_role(['admin']);
 $sort = abas_table_resolve_sort((string) ($_GET['sort'] ?? ''), abas_installers_sort_columns(), 'company');
 $sortDir = abas_table_normalize_sort_dir((string) ($_GET['dir'] ?? 'asc'));
 $search = trim((string) ($_GET['q'] ?? ''));
+$page = max(1, (int) ($_GET['page'] ?? 1));
 $listQuery = array_filter([
     'q' => $search !== '' ? $search : null,
     'sort' => $sort !== 'company' ? $sort : null,
     'dir' => $sortDir !== 'asc' ? $sortDir : null,
 ]);
+$listQueryBase = $listQuery;
 $redirectUrl = abas_admin_installers_list_url(
     $sort !== 'company' ? $sort : null,
     $sortDir !== 'asc' ? $sortDir : null,
-    $search !== '' ? $search : null
+    $search !== '' ? $search : null,
+    $page > 1 ? $page : null
 );
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -49,7 +52,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     abas_redirect($redirectUrl);
 }
 
-$rows = abas_list_installers($conn, $search, $sort, $sortDir);
+$listResult = abas_list_installers_page($conn, $search, $sort, $sortDir, $page);
+$rows = $listResult['rows'];
+$totalInstallers = $listResult['total'];
+$totalPages = $listResult['totalPages'];
+$page = $listResult['page'];
 $pageTitle = 'Installatører';
 $currentUser = $user;
 require __DIR__ . '/../partials/header.php';
@@ -72,7 +79,7 @@ require __DIR__ . '/../partials/header.php';
     <button class="abas-btn-primary">Opret firma</button>
 </form>
 
-<form method="get" class="mb-4 flex flex-wrap gap-2 items-end max-w-2xl" role="search">
+<form method="get" class="mb-4 flex flex-wrap gap-2 items-end max-w-2xl" role="search" data-abas-loading="Søger…">
     <div class="abas-field flex-1 min-w-[14rem] !mb-0">
         <label class="abas-label" for="installer-search">Søg</label>
         <input id="installer-search" type="search" name="q" value="<?= htmlspecialchars($search) ?>" placeholder="Firmanavn eller e-mail-domæne …" class="abas-input">
@@ -84,8 +91,11 @@ require __DIR__ . '/../partials/header.php';
         <a href="<?= htmlspecialchars(abas_admin_installers_list_url($sort !== 'company' ? $sort : null, $sortDir !== 'asc' ? $sortDir : null)) ?>" class="abas-btn-secondary">Ryd</a>
     <?php endif; ?>
 </form>
-<?php if ($search !== ''): ?>
-    <p class="text-sm text-gray-600 mb-4"><?= count($rows) ?> resultat<?= count($rows) === 1 ? '' : 'er' ?> for «<?= htmlspecialchars($search) ?>»</p>
+<?php if ($search !== '' || $totalInstallers > count($rows)): ?>
+    <p class="text-sm text-gray-600 mb-4">
+        <?= $totalInstallers ?> firma<?= $totalInstallers === 1 ? '' : 'er' ?><?= $search !== '' ? ' matcher «' . htmlspecialchars($search) . '»' : '' ?>
+        <?php if ($totalPages > 1): ?> · side <?= (int) $page ?> af <?= (int) $totalPages ?><?php endif; ?>
+    </p>
 <?php endif; ?>
 
 <?php if ($rows === []): ?>
@@ -164,5 +174,6 @@ require __DIR__ . '/../partials/header.php';
         </tbody>
     </table>
 </div>
+<?php abas_render_table_pagination('admin/installers.php', $listQueryBase, $page, $totalPages); ?>
 <?php endif; ?>
 <?php require __DIR__ . '/../partials/footer.php';

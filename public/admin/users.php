@@ -10,6 +10,7 @@ require_once __DIR__ . '/../../includes/password_flow.php';
 require_once __DIR__ . '/../../includes/users.php';
 require_once __DIR__ . '/../../includes/installation_sync.php';
 require_once __DIR__ . '/../../includes/service.php';
+require_once __DIR__ . '/../../includes/table_list.php';
 
 $conn = abas_db();
 $user = abas_require_login();
@@ -48,8 +49,15 @@ if (!in_array($sort, abas_admin_users_sort_columns(), true)) {
 $sortDir = strtolower((string) ($_GET['dir'] ?? 'asc')) === 'desc' ? 'desc' : 'asc';
 
 $search = trim((string) ($_GET['q'] ?? ''));
+$page = max(1, (int) ($_GET['page'] ?? 1));
 
-$redirectUrl = abas_admin_users_list_url($filter, $sort !== '' ? $sort : null, $sort !== '' ? $sortDir : null, $search !== '' ? $search : null);
+$redirectUrl = abas_admin_users_list_url(
+    $filter,
+    $sort !== '' ? $sort : null,
+    $sort !== '' ? $sortDir : null,
+    $search !== '' ? $search : null,
+    $page > 1 ? $page : null
+);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? 'create';
@@ -65,6 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $email = strtolower(trim($_POST['email'] ?? ''));
     $username = abas_resolve_username_for_email($conn, $email, (string) ($_POST['username'] ?? ''));
+    $displayName = trim($_POST['registration_display_name'] ?? '');
     $phone = abas_normalize_phone(trim($_POST['phone'] ?? ''));
     $role = $_POST['role'] ?? 'montor';
     $miscno2 = strtolower(trim($_POST['miscno2'] ?? ''));
@@ -106,11 +115,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         $adminId = (int) $user['id'];
         if ($installerId !== null) {
-            $stmt = $conn->prepare('INSERT INTO users (email, username, role, phone, installer_id, active, sms_service_allowed, registration_status, created_by_user_id) VALUES (?, ?, ?, ?, ?, 1, ?, "approved", ?)');
-            $stmt->bind_param('ssssiii', $email, $username, $role, $phone, $installerId, $smsAllowed, $adminId);
+            $stmt = $conn->prepare('INSERT INTO users (email, username, role, phone, installer_id, active, sms_service_allowed, registration_status, registration_display_name, created_by_user_id) VALUES (?, ?, ?, ?, ?, 1, ?, "approved", ?, ?)');
+            $stmt->bind_param('ssssiisi', $email, $username, $role, $phone, $installerId, $smsAllowed, $displayName, $adminId);
         } else {
-            $stmt = $conn->prepare('INSERT INTO users (email, username, role, phone, active, sms_service_allowed, registration_status, created_by_user_id) VALUES (?, ?, ?, ?, 1, ?, "approved", ?)');
-            $stmt->bind_param('ssssii', $email, $username, $role, $phone, $smsAllowed, $adminId);
+            $stmt = $conn->prepare('INSERT INTO users (email, username, role, phone, active, sms_service_allowed, registration_status, registration_display_name, created_by_user_id) VALUES (?, ?, ?, ?, 1, ?, "approved", ?, ?)');
+            $stmt->bind_param('ssssisi', $email, $username, $role, $phone, $smsAllowed, $displayName, $adminId);
         }
         $stmt->execute();
         $uid = (int) $stmt->insert_id;
@@ -159,9 +168,20 @@ $filterCount = static function (string $key) use ($filterGroups, $roleCounts): i
     return $total;
 };
 
-$rows = abas_admin_users_list_rows($conn, $rolesInFilter, $sort, $sortDir, $search);
+$listResult = abas_admin_users_list_page($conn, $rolesInFilter, $sort, $sortDir, $search, $page);
+$rows = $listResult['rows'];
+$totalUsers = $listResult['total'];
+$totalPages = $listResult['totalPages'];
+$page = $listResult['page'];
+$listQueryBase = array_filter([
+    'filter' => $filter !== 'alle' ? $filter : null,
+    'q' => $search !== '' ? $search : null,
+    'sort' => $sort !== '' ? $sort : null,
+    'dir' => $sort !== '' ? $sortDir : null,
+]);
 
-$ownerInstallations = abas_user_installations_with_service_status($conn);
+$userIdsOnPage = array_map(static fn (array $row): int => (int) $row['id'], $rows);
+$ownerInstallations = abas_user_installations_with_service_status_for_users($conn, $userIdsOnPage);
 
 /** @param array{href: string, active: bool, indicator: string} $link */
 $renderSortTh = static function (string $label, string $column) use ($sort, $sortDir, $filter, $search): void {
@@ -219,6 +239,7 @@ require __DIR__ . '/../partials/header.php';
         <form method="post" class="space-y-0" data-abas-loading="Opretter bruger…">
             <input type="hidden" name="action" value="create">
             <div class="abas-field"><label class="abas-label" for="create-email">E-mail</label><input id="create-email" name="email" type="email" required class="abas-input" autocomplete="off"></div>
+            <div class="abas-field"><label class="abas-label" for="create-display-name">Navn</label><input id="create-display-name" name="registration_display_name" maxlength="255" class="abas-input" placeholder="Fulde navn eller kontaktperson"></div>
             <div class="abas-field"><label class="abas-label" for="create-username">Brugernavn</label><input id="create-username" name="username" maxlength="255" class="abas-input" placeholder="Samme som e-mail hvis tom"></div>
             <div class="abas-field"><label class="abas-label" for="create-phone">Telefon</label><input id="create-phone" name="phone" required placeholder="+45..." class="abas-input"></div>
             <div class="abas-field">
@@ -256,7 +277,7 @@ require __DIR__ . '/../partials/header.php';
     </div>
 </div>
 
-<form method="get" class="mb-4 flex flex-wrap gap-2 items-end max-w-2xl" role="search">
+<form method="get" class="mb-4 flex flex-wrap gap-2 items-end max-w-2xl" role="search" data-abas-loading="Søger…">
     <?php if ($filter !== 'alle'): ?>
         <input type="hidden" name="filter" value="<?= htmlspecialchars($filter) ?>">
     <?php endif; ?>
@@ -280,8 +301,11 @@ require __DIR__ . '/../partials/header.php';
         <a href="<?= htmlspecialchars(abas_admin_users_list_url($filter, $sort !== '' ? $sort : null, $sort !== '' ? $sortDir : null)) ?>" class="abas-btn-secondary">Ryd</a>
     <?php endif; ?>
 </form>
-<?php if ($search !== ''): ?>
-<p class="text-sm text-gray-600 mb-4"><?= count($rows) ?> resultat<?= count($rows) === 1 ? '' : 'er' ?> for «<?= htmlspecialchars($search) ?>»</p>
+<?php if ($search !== '' || $totalUsers > count($rows)): ?>
+<p class="text-sm text-gray-600 mb-4">
+    <?= $totalUsers ?> bruger<?= $totalUsers === 1 ? '' : 'e' ?><?= $search !== '' ? ' matcher «' . htmlspecialchars($search) . '»' : '' ?>
+    <?php if ($totalPages > 1): ?> · side <?= (int) $page ?> af <?= (int) $totalPages ?><?php endif; ?>
+</p>
 <?php endif; ?>
 
 <div class="abas-table-wrap">
@@ -364,6 +388,7 @@ require __DIR__ . '/../partials/header.php';
     </tbody>
 </table>
 </div>
+<?php abas_render_table_pagination('admin/users.php', $listQueryBase, $page, $totalPages); ?>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     if (typeof window.abasInitModal === 'function') {

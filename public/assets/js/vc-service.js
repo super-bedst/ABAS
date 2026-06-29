@@ -76,6 +76,11 @@
             return;
         }
 
+        this.list.innerHTML =
+            '<li class="abas-combobox-empty"><span class="abas-loading-panel justify-center">' +
+            '<span class="abas-spinner" aria-hidden="true"></span><span>Søger…</span></span></li>';
+        this.open();
+
         var url = searchUrl + '?type=' + encodeURIComponent(this.type) + '&q=' + encodeURIComponent(q);
         fetch(url, { credentials: 'same-origin', headers: { Accept: 'application/json' } })
             .then(function (res) { return res.json(); })

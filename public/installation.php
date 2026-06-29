@@ -14,6 +14,7 @@ require_once __DIR__ . '/../includes/installation_details.php';
 require_once __DIR__ . '/../includes/installation_status.php';
 require_once __DIR__ . '/../includes/users.php';
 require_once __DIR__ . '/../includes/table_list.php';
+require_once __DIR__ . '/../includes/theme.php';
 
 $conn = abas_db();
 $user = abas_require_login();
@@ -28,11 +29,6 @@ if (!$installation || !abas_user_may_access_installation($conn, $user, $installa
 }
 
 $session = abas_active_session_for_installation($conn, $id);
-try {
-    abas_sync_installation_testqueue_status($conn, abas_trekant(), $installation);
-} catch (Throwable $e) {
-    error_log('ABA testqueue sync for installation ' . $id . ': ' . $e->getMessage());
-}
 $externalTest = abas_external_testqueue_for_installation($conn, $id);
 $logMode = $_GET['log'] ?? 'last20';
 $customRange = null;
@@ -44,6 +40,7 @@ if ($logMode === 'custom' && !empty($_GET['from']) && !empty($_GET['to'])) {
         'endtime' => '23:59:59',
     ];
 }
+$deferApi = $logMode === 'last20';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
@@ -67,20 +64,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     abas_redirect('installation.php?id=' . $id);
 }
 
-$log = ['rows' => [], 'code' => -1];
-try {
-    $log = abas_fetch_installation_log($installation, $logMode, $customRange, $user);
-} catch (Throwable $e) {
-    abas_flash_set('error', 'Log: ' . $e->getMessage());
+$log = ['rows' => [], 'code' => 0];
+if (!$deferApi) {
+    try {
+        $log = abas_fetch_installation_log($installation, $logMode, $customRange, $user);
+    } catch (Throwable $e) {
+        abas_flash_set('error', 'Log: ' . $e->getMessage());
+        $log = ['rows' => [], 'code' => -1];
+    }
 }
 
-$instDetails = abas_fetch_installation_details($installation, $user);
-$mapLat = $instDetails['lat'];
-$mapLon = $instDetails['lon'];
-$contacts = $instDetails['contacts'];
-$zones = $instDetails['zones'];
-$zonesError = $instDetails['zones_error'];
-$alid = trim((string) ($instDetails['alid'] ?? ''));
+$instDetails = [
+    'lat' => null,
+    'lon' => null,
+    'contacts' => [],
+    'zones' => [],
+    'zones_error' => null,
+    'error' => null,
+    'alid' => '',
+];
+$mapLat = null;
+$mapLon = null;
+$contacts = [];
+$zones = [];
+$zonesError = null;
+$alid = '';
 $canStartService = abas_installation_allows_service((string) ($installation['mon_stat'] ?? ''));
 $inAbasService = $session !== null;
 $externalService = $externalTest !== null && !$inAbasService;
@@ -89,9 +97,7 @@ $maxExtendHours = abas_service_remaining_extend_hours($session);
 
 $pageTitle = $installation['miscno2'] ?? 'Anlæg';
 $currentUser = $user;
-$extraHead = ($mapLat !== null && $mapLon !== null)
-    ? '<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">'
-    : '';
+$extraHead = '<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">';
 $extraHead .= '<script src="' . htmlspecialchars(abas_asset_url('assets/js/installation-auto-refresh.js')) . '" defer></script>';
 require __DIR__ . '/partials/header.php';
 ?>
@@ -191,77 +197,34 @@ require __DIR__ . '/partials/header.php';
     </div>
     <div class="abas-card text-sm">
         <h2 class="abas-card-title">Placering og kontakter</h2>
-        <?php if ($mapLat !== null && $mapLon !== null): ?>
-            <div id="inst-map" class="h-44 w-full rounded-xl border border-gray-200 mb-3 z-0"></div>
-        <?php else: ?>
-            <p class="text-gray-500 mb-3 text-xs">GPS-koordinater ikke tilgængelige for dette anlæg.</p>
-        <?php endif; ?>
+        <div id="inst-map-wrap" class="h-44 w-full rounded-xl border border-gray-200 mb-3 bg-gray-50 flex items-center justify-center">
+            <?= abas_loading_panel_html('Henter kort…', 'abas-loading-panel--centered') ?>
+        </div>
+        <div id="inst-map" class="h-44 w-full rounded-xl border border-gray-200 mb-3 z-0 hidden"></div>
 
-        <?php if ($instDetails['error']): ?>
-            <p class="text-amber-700 text-xs mb-2">Kontakter kunne ikke hentes: <?= htmlspecialchars($instDetails['error']) ?></p>
-        <?php endif; ?>
-
-        <?php if ($contacts === []): ?>
-            <p class="text-gray-500 text-xs">Ingen registrerede kontakter.</p>
-        <?php else: ?>
-            <ul class="space-y-2">
-                <?php foreach ($contacts as $contact): ?>
-                    <li class="border-t pt-2 first:border-t-0 first:pt-0">
-                        <div class="font-medium"><?= htmlspecialchars($contact['name']) ?></div>
-                        <?php foreach ($contact['phones'] as $phone): ?>
-                            <div class="text-gray-600">
-                                <?php if ($phone['label'] !== 'Tlf.'): ?>
-                                    <span class="text-gray-400 text-xs"><?= htmlspecialchars($phone['label']) ?>:</span>
-                                <?php endif; ?>
-                                <a href="tel:<?= htmlspecialchars(preg_replace('/\s+/', '', $phone['number']) ?? $phone['number']) ?>" class="text-brand underline"><?= htmlspecialchars($phone['number']) ?></a>
-                            </div>
-                        <?php endforeach; ?>
-                        <?php if ($contact['email'] !== '' && $contact['email'] !== ' '): ?>
-                            <div class="text-gray-600">
-                                <a href="mailto:<?= htmlspecialchars(trim($contact['email'])) ?>" class="text-brand underline"><?= htmlspecialchars(trim($contact['email'])) ?></a>
-                            </div>
-                        <?php endif; ?>
-                    </li>
-                <?php endforeach; ?>
-            </ul>
-        <?php endif; ?>
+        <div id="inst-contacts-content">
+            <?= abas_loading_panel_html('Henter kontakter…') ?>
+        </div>
 
         <dl class="grid grid-cols-2 gap-1 mt-4 pt-3 border-t text-xs">
-            <?php if ($alid !== ''): ?>
-            <dt class="text-gray-500">ALID</dt><dd class="font-mono"><?= htmlspecialchars($alid) ?></dd>
-            <?php endif; ?>
+            <span id="inst-alid-wrap" class="contents<?= $alid === '' ? ' hidden' : '' ?>">
+                <dt class="text-gray-500">ALID</dt><dd id="inst-alid" class="font-mono"><?= htmlspecialchars($alid) ?></dd>
+            </span>
             <dt class="text-gray-500">ins_no</dt><dd><?= htmlspecialchars((string) $installation['ins_no']) ?></dd>
             <dt class="text-gray-500">Driftstatus</dt><dd><?= htmlspecialchars(abas_mon_stat_label((string) $installation['mon_stat'])) ?></dd>
         </dl>
     </div>
 </div>
 
-<?php if ($mapLat !== null && $mapLon !== null): ?>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-<script>
-(function () {
-    var lat = <?= json_encode($mapLat) ?>;
-    var lon = <?= json_encode($mapLon) ?>;
-    var map = L.map('inst-map', { scrollWheelZoom: false }).setView([lat, lon], 16);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-    }).addTo(map);
-    L.marker([lat, lon]).addTo(map);
-    setTimeout(function () { map.invalidateSize(); }, 100);
-})();
-</script>
-<?php endif; ?>
-
 <div class="abas-card !p-0" id="inst-log-card">
     <div class="abas-log-toolbar">
         <h2 class="abas-card-title !mb-0 flex-1">Alarmlog</h2>
-        <span id="inst-log-spinner" class="hidden text-xs text-gray-500 animate-pulse">Opdaterer…</span>
+        <span id="inst-log-spinner" class="hidden abas-loading-panel !text-xs"><span class="abas-spinner !h-3.5 !w-3.5" aria-hidden="true"></span><span>Opdaterer…</span></span>
         <span class="text-xs text-gray-400 hidden sm:inline" title="Træk i nederste højre hjørne af loggen for at ændre højden">Justerbar højde</span>
         <a href="?id=<?= $id ?>&log=last20" class="<?= $logMode === 'last20' ? 'abas-chip-active' : 'abas-chip' ?>">Sidste 20</a>
         <a href="?id=<?= $id ?>&log=24h" class="<?= $logMode === '24h' ? 'abas-chip-active' : 'abas-chip' ?>">24 timer</a>
     </div>
-    <form method="get" class="p-4 border-b border-gray-100 flex flex-wrap gap-3 items-end bg-basbg/40">
+    <form method="get" class="p-4 border-b border-gray-100 flex flex-wrap gap-3 items-end bg-basbg/40" data-abas-loading="Henter alarmlog…">
         <input type="hidden" name="id" value="<?= $id ?>">
         <input type="hidden" name="log" value="custom">
         <div class="abas-field">
@@ -276,7 +239,17 @@ require __DIR__ . '/partials/header.php';
         </div>
         <button class="abas-btn-secondary">Vis periode</button>
     </form>
-    <?php if ($log['code'] !== 0): ?>
+    <?php if ($deferApi): ?>
+        <p class="p-4" id="inst-log-loading"><?= abas_loading_panel_html('Henter alarmlog…') ?></p>
+        <p class="p-4 text-amber-800 hidden" id="inst-log-error"></p>
+        <p class="p-4 text-gray-500 hidden" id="inst-log-empty">Ingen loglinjer.</p>
+        <div class="abas-log-body hidden" id="inst-log-body">
+            <table class="abas-table abas-log-table text-xs" data-abas-client-sort>
+                <thead><tr><?php abas_render_client_table_sort_th('Tidspunkt', 0); ?><?php abas_render_client_table_sort_th('Detaljer', 1); ?></tr></thead>
+                <tbody id="inst-log-rows"></tbody>
+            </table>
+        </div>
+    <?php elseif ($log['code'] !== 0): ?>
         <p class="p-4 text-amber-800" id="inst-log-error">Log kunne ikke hentes (kode <?= (int) $log['code'] ?>).</p>
         <p class="p-4 text-gray-500 hidden" id="inst-log-empty">Ingen loglinjer.</p>
         <div class="abas-log-body hidden" id="inst-log-body">
@@ -313,7 +286,7 @@ require __DIR__ . '/partials/header.php';
         <span class="abas-card-title !mb-0">Zonestatus<?php if ($zones !== []): ?> (<?= count($zones) ?>)<?php endif; ?></span>
     </summary>
     <div id="inst-zones-content" class="abas-collapsible-body">
-        <?= abas_render_installation_zones_html($zones, $zonesError) ?>
+        <?= abas_loading_panel_html('Henter zonestatus…') ?>
     </div>
 </details>
 <script>
@@ -327,6 +300,8 @@ document.addEventListener('DOMContentLoaded', function () {
             sessionActive: <?= $session ? 'true' : 'false' ?>,
             externalActive: <?= $externalService ? 'true' : 'false' ?>,
             intervalMs: 5000,
+            deferInitial: <?= $deferApi ? 'true' : 'false' ?>,
+            leafletScript: 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
         });
     }
 });

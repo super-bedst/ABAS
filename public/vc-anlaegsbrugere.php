@@ -102,7 +102,7 @@ require __DIR__ . '/partials/header.php';
 </p>
 <?php endif; ?>
 
-<form method="get" class="mb-4 flex flex-wrap gap-2 items-end max-w-2xl" role="search">
+<form method="get" class="mb-4 flex flex-wrap gap-2 items-end max-w-2xl" role="search" data-abas-loading="Søger…">
     <div class="abas-field flex-1 min-w-[14rem] !mb-0">
         <label class="abas-label" for="user-search">Søg</label>
         <input id="user-search" type="search" name="q" value="<?= htmlspecialchars($search) ?>" placeholder="Navn, e-mail, telefon, rolle, anlæg …" class="abas-input">
@@ -153,6 +153,7 @@ require __DIR__ . '/partials/header.php';
                             <?php foreach ($linked as $inst): ?>
                                 <a
                                     href="<?= abas_url('installation.php?id=' . (int) $inst['installation_id']) ?>"
+                                    data-abas-loading="Åbner anlæg…"
                                     class="<?= $inst['in_service'] ? 'abas-badge-in-service' : 'abas-badge-ok' ?> hover:opacity-90"
                                     title="<?= $inst['in_service'] ? 'I service' : 'Normal drift' ?>"
                                 ><?= htmlspecialchars($inst['miscno2']) ?></a>

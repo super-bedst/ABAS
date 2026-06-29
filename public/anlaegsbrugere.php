@@ -97,7 +97,7 @@ require __DIR__ . '/partials/header.php';
     </div>
 <?php endif; ?>
 
-<form method="get" class="mb-4 flex flex-wrap gap-2 items-end max-w-2xl mt-4" role="search">
+<form method="get" class="mb-4 flex flex-wrap gap-2 items-end max-w-2xl mt-4" role="search" data-abas-loading="Søger…">
     <div class="abas-field flex-1 min-w-[14rem] !mb-0">
         <label class="abas-label" for="user-search">Søg</label>
         <input

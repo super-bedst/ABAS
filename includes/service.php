@@ -599,6 +599,48 @@ function abas_flag_installations_in_service(mysqli $conn, array $installations):
 /**
  * @return array<int, list<array{installation_id:int, miscno2:string, in_service:bool}>>
  */
+function abas_user_installations_with_service_status_for_users(mysqli $conn, array $userIds): array
+{
+    $userIds = array_values(array_filter(array_map('intval', $userIds), static fn (int $id): bool => $id > 0));
+    if ($userIds === []) {
+        return [];
+    }
+
+    $placeholders = implode(',', array_fill(0, count($userIds), '?'));
+    $types = str_repeat('i', count($userIds));
+    $stmt = $conn->prepare(
+        "SELECT ui.user_id, i.id AS installation_id, i.miscno2,
+                EXISTS(
+                    SELECT 1 FROM service_sessions ss
+                    WHERE ss.installation_id = i.id AND ss.status = 'active'
+                    LIMIT 1
+                ) AS in_service
+         FROM user_installations ui
+         JOIN installations i ON i.id = ui.installation_id
+         WHERE ui.user_id IN ($placeholders)
+         ORDER BY ui.user_id, i.miscno2"
+    );
+    $stmt->bind_param($types, ...$userIds);
+    $stmt->execute();
+    $result = $stmt->get_result();
+
+    $grouped = [];
+    while ($row = $result->fetch_assoc()) {
+        $userId = (int) $row['user_id'];
+        $grouped[$userId][] = [
+            'installation_id' => (int) $row['installation_id'],
+            'miscno2' => (string) $row['miscno2'],
+            'in_service' => (bool) $row['in_service'],
+        ];
+    }
+    $stmt->close();
+
+    return $grouped;
+}
+
+/**
+ * @return array<int, list<array{installation_id:int, miscno2:string, in_service:bool}>>
+ */
 function abas_user_installations_with_service_status(mysqli $conn): array
 {
     $result = $conn->query(
