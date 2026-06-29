@@ -7,7 +7,7 @@ require_once __DIR__ . '/../../includes/bas_sso_client.php';
 
 if (!abas_bas_sso_enabled()) {
     abas_flash_set('error', 'BAS SSO er ikke konfigureret.');
-    abas_redirect('login.php');
+    abas_redirect('/login.php');
 }
 
 if (!empty($_SESSION['user_id'])) {

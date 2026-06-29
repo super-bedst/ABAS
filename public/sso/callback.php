@@ -6,7 +6,7 @@ require_once __DIR__ . '/../../includes/bootstrap.php';
 require_once __DIR__ . '/../../includes/db.php';
 require_once __DIR__ . '/../../includes/bas_sso_auth.php';
 
-$loginUrl = abas_url('login.php');
+$loginUrl = '/login.php';
 
 if (!abas_bas_sso_enabled()) {
     abas_flash_set('error', 'BAS SSO er ikke konfigureret.');
