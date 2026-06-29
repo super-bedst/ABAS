@@ -502,6 +502,95 @@ function abas_bas_sso_state_signing_key(): string
     return hash('sha256', 'abas-oauth-state|' . (abas_env('APP_URL') ?? 'abas'), true);
 }
 
+function abas_bas_sso_oauth_states_table_ready(mysqli $conn): bool
+{
+    static $ready = null;
+    if ($ready !== null) {
+        return $ready;
+    }
+
+    $result = $conn->query("SHOW TABLES LIKE 'bas_sso_oauth_states'");
+    $ready = $result instanceof mysqli_result && $result->num_rows > 0;
+
+    return $ready;
+}
+
+function abas_bas_sso_store_oauth_state_row(mysqli $conn, string $state, string $redirectUri): bool
+{
+    if (!abas_bas_sso_oauth_states_table_ready($conn)) {
+        return false;
+    }
+
+    $conn->query('DELETE FROM bas_sso_oauth_states WHERE expires_at < NOW()');
+    $stmt = $conn->prepare(
+        'INSERT INTO bas_sso_oauth_states (state, redirect_uri, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 10 MINUTE))'
+    );
+    if ($stmt === false) {
+        return false;
+    }
+    $stmt->bind_param('ss', $state, $redirectUri);
+    $ok = $stmt->execute();
+    $stmt->close();
+
+    return $ok;
+}
+
+function abas_bas_sso_consume_oauth_state_row(mysqli $conn, string $state): ?string
+{
+    if (!abas_bas_sso_oauth_states_table_ready($conn)) {
+        return null;
+    }
+
+    $stmt = $conn->prepare(
+        'SELECT redirect_uri FROM bas_sso_oauth_states WHERE state = ? AND expires_at >= NOW() LIMIT 1'
+    );
+    if ($stmt === false) {
+        return null;
+    }
+    $stmt->bind_param('s', $state);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $row = $result ? $result->fetch_assoc() : null;
+    $stmt->close();
+    if (!$row) {
+        return null;
+    }
+
+    $redirectUri = trim((string) ($row['redirect_uri'] ?? ''));
+    $delete = $conn->prepare('DELETE FROM bas_sso_oauth_states WHERE state = ? LIMIT 1');
+    if ($delete !== false) {
+        $delete->bind_param('s', $state);
+        $delete->execute();
+        $delete->close();
+    }
+
+    return $redirectUri !== '' ? $redirectUri : null;
+}
+
+/** Kort hex-state (32 tegn) — BAS accepterer den gennem passkey-flow. */
+function abas_bas_sso_issue_oauth_state(string $redirectUri): string
+{
+    $state = bin2hex(random_bytes(16));
+
+    $stored = false;
+    if (function_exists('abas_db')) {
+        try {
+            require_once __DIR__ . '/db.php';
+            $stored = abas_bas_sso_store_oauth_state_row(abas_db(), $state, $redirectUri);
+        } catch (Throwable $e) {
+            if (function_exists('abas_log_error')) {
+                abas_log_error('bas_sso', 'OAuth state DB store failed', ['message' => $e->getMessage()]);
+            }
+        }
+    }
+
+    if (!$stored) {
+        abas_bas_sso_store_oauth_context($state, $redirectUri);
+    }
+
+    return $state;
+}
+
 function abas_bas_sso_make_oauth_state(string $redirectUri): string
 {
     $payload = [
@@ -584,14 +673,26 @@ function abas_bas_sso_clear_oauth_context(): void
 /** @return array{redirect_uri: string}|null */
 function abas_bas_sso_verify_oauth_callback(string $state): ?array
 {
-    $signed = abas_bas_sso_verify_signed_oauth_state($state);
-    if ($signed !== null) {
-        return $signed;
-    }
-
     $state = trim($state);
     if ($state === '') {
         return null;
+    }
+
+    if (function_exists('abas_db')) {
+        try {
+            require_once __DIR__ . '/db.php';
+            $redirectUri = abas_bas_sso_consume_oauth_state_row(abas_db(), $state);
+            if ($redirectUri !== null) {
+                return ['redirect_uri' => $redirectUri];
+            }
+        } catch (Throwable) {
+            // fall through to legacy validators
+        }
+    }
+
+    $signed = abas_bas_sso_verify_signed_oauth_state($state);
+    if ($signed !== null) {
+        return $signed;
     }
 
     $defaultRedirect = abas_bas_sso_login_redirect_uri();
@@ -630,6 +731,14 @@ function abas_bas_sso_verify_oauth_callback(string $state): ?array
         ];
     }
 
+    if (function_exists('abas_log_error')) {
+        abas_log_error('bas_sso', 'OAuth state verification failed', [
+            'state_len' => strlen($state),
+            'state_has_dot' => str_contains($state, '.'),
+            'state_is_hex' => (bool) preg_match('/^[a-f0-9]{32}$/i', $state),
+        ]);
+    }
+
     return null;
 }
 
@@ -637,7 +746,7 @@ function abas_bas_sso_build_authorize_url(string $redirectUri, string $scope = '
 {
     abas_bas_sso_clear_oauth_context();
     unset($_SESSION['abas_bas_sso_pkce_verifier']);
-    $state = abas_bas_sso_make_oauth_state($redirectUri);
+    $state = abas_bas_sso_issue_oauth_state($redirectUri);
 
     $authorizeUrl = abas_bas_sso_authorize_url();
 

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../../includes/bootstrap.php';
+require_once __DIR__ . '/../../includes/db.php';
 require_once __DIR__ . '/../../includes/bas_sso_client.php';
 
 if (($reason = abas_bas_sso_disabled_reason()) !== null) {
