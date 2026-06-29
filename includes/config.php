@@ -105,7 +105,7 @@ function abas_config(): array
         'sms' => [
             'enabled' => abas_env('SMS_ENABLED', '1') !== '0',
             'gateway' => abas_env('SMS_GATEWAY', 'bas'),
-            'bas_url' => rtrim((string) abas_env('BAS_SMS_API_URL', ''), '/'),
+            'bas_url' => trim((string) abas_env('BAS_SMS_API_URL', '')),
             'bas_token' => (string) abas_env('BAS_SMS_API_TOKEN', ''),
             'bas_system' => (string) abas_env('BAS_SMS_SYSTEM', 'PMS'),
             'sender' => (string) abas_env('BAS_SMS_SENDER', '+4541140602'),

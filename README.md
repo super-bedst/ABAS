@@ -153,7 +153,11 @@ Opret tokens under **Admin → API-tokens**.
 ## SMS-format
 
 Outbound SMS sendes via **BAS** `Api/V2/Sms/sendSms.php` (samme Inmobile-integration som PMS/ISM).
-Sæt `BAS_SMS_API_URL` og `BAS_SMS_API_TOKEN` i `env.local` — brug PMS-token til test (`BAS_SMS_SYSTEM=PMS`).
+Sæt den **fulde endpoint-URL** i `BAS_SMS_API_URL` og `BAS_SMS_API_TOKEN` i `env.local` — brug PMS-token til test (`BAS_SMS_SYSTEM=PMS`).
+
+```ini
+BAS_SMS_API_URL=https://beredskabsalarmering.dk/Api/V2/Sms/SendSms.php
+```
 
 Inbound webhook (uden API Bearer-token):
 

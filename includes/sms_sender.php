@@ -42,8 +42,28 @@ function abas_sms_gateway_enabled(): bool
 
     return $cfg['enabled']
         && $cfg['gateway'] === 'bas'
-        && $cfg['bas_url'] !== ''
+        && abas_sms_send_endpoint_url($cfg) !== ''
         && $cfg['bas_token'] !== '';
+}
+
+/**
+ * Fuld POST-URL til BAS SMS (BAS_SMS_API_URL i env.local).
+ * Bagudkompatibilitet: hvis kun basis-URL er sat, tilføjes /Api/V2/Sms/sendSms.php.
+ *
+ * @param array<string, mixed> $cfg
+ */
+function abas_sms_send_endpoint_url(array $cfg): string
+{
+    $url = trim((string) ($cfg['bas_url'] ?? ''));
+    if ($url === '') {
+        return '';
+    }
+    $url = rtrim($url, '/');
+    if (preg_match('#/Api/V2/Sms/[^/]+\.php$#i', $url)) {
+        return $url;
+    }
+
+    return $url . '/Api/V2/Sms/sendSms.php';
 }
 
 /**
@@ -63,7 +83,10 @@ function abas_sms_send_via_bas(string $to, string $body, string $trigger = 'abas
         return ['ok' => false, 'error' => 'Tom modtager eller besked'];
     }
 
-    $url = rtrim($cfg['bas_url'], '/') . '/Api/V2/Sms/sendSms.php';
+    $url = abas_sms_send_endpoint_url($cfg);
+    if ($url === '') {
+        return ['ok' => false, 'error' => 'BAS_SMS_API_URL mangler'];
+    }
     $payload = [
         'system' => $cfg['bas_system'],
         'sender' => $cfg['sender'],
