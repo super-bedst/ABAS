@@ -42,9 +42,17 @@ if (!hash_equals($expectedState, $state)) {
     abas_redirect($loginUrl);
 }
 
+$codeKey = 'abas_sso_code_' . hash('sha256', $code);
+if (isset($_SESSION[$codeKey])) {
+    abas_flash_set('error', 'SSO-koden er allerede brugt. Klik «Log ind via BAS» igen.');
+    abas_redirect($loginUrl);
+}
+$_SESSION[$codeKey] = 'pending';
+
 try {
     $tokenPayload = abas_bas_sso_exchange_authorization_code($code, $redirectUri, $verifier);
     if ($tokenPayload === null) {
+        unset($_SESSION[$codeKey]);
         $detail = abas_bas_sso_last_exchange_error();
         throw new RuntimeException(
             $detail ?? ('Kunne ikke hente SSO-token. Tjek redirect URI: ' . $redirectUri)
@@ -54,11 +62,16 @@ try {
     $conn = abas_db();
     $user = abas_bas_sso_find_user($conn, $claims);
     if ($user === null) {
+        unset($_SESSION[$codeKey]);
         throw new RuntimeException('Ingen ABA-bruger matcher din BAS-konto. Kontakt administrator.');
     }
     abas_bas_sso_complete_login($conn, $user, $claims, false);
+    $_SESSION[$codeKey] = 'done';
     abas_redirect('dashboard.php');
 } catch (Throwable $e) {
+    if (($_SESSION[$codeKey] ?? '') === 'pending') {
+        unset($_SESSION[$codeKey]);
+    }
     abas_flash_set('error', $e->getMessage());
     abas_redirect($loginUrl);
 }

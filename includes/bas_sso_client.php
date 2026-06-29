@@ -336,44 +336,46 @@ function abas_bas_sso_exchange_authorization_code(
 
     $tokenUrl = abas_bas_sso_token_url();
     $secret = abas_bas_sso_client_secret();
-    $coreFields = [
+    $fields = [
         'grant_type' => 'authorization_code',
         'code' => $code,
         'redirect_uri' => $redirectUri,
+        'client_id' => abas_bas_sso_client_id(),
     ];
     if ($codeVerifier !== '') {
-        $coreFields['code_verifier'] = $codeVerifier;
+        $fields['code_verifier'] = $codeVerifier;
     }
-
-    $attempts = [];
     if ($secret !== '') {
-        $attempts[] = [
-            'mode' => 'basic',
-            'fields' => $coreFields,
-            'auth' => base64_encode(abas_bas_sso_client_id() . ':' . $secret),
-        ];
-        $attempts[] = [
-            'mode' => 'post',
-            'fields' => $coreFields + [
-                'client_id' => abas_bas_sso_client_id(),
-                'client_secret' => $secret,
-            ],
-        ];
-    } else {
-        $attempts[] = [
-            'mode' => 'post',
-            'fields' => $coreFields + ['client_id' => abas_bas_sso_client_id()],
-        ];
+        $fields['client_secret'] = $secret;
     }
 
-    foreach ($attempts as $attempt) {
-        $result = abas_bas_sso_token_request($tokenUrl, $attempt['fields'], $attempt['mode'], $attempt['auth'] ?? null);
-        if ($result !== null) {
-            return $result;
+    return abas_bas_sso_token_request($tokenUrl, $fields, 'post');
+}
+
+function abas_bas_sso_format_token_error(string $body, int $httpCode): string
+{
+    $decoded = json_decode($body, true);
+    if (is_array($decoded)) {
+        $desc = trim((string) ($decoded['error_description'] ?? ''));
+        $err = trim((string) ($decoded['error'] ?? ''));
+        if ($desc !== '') {
+            return 'BAS afviste token (HTTP ' . $httpCode . '): ' . $desc;
+        }
+        if ($err !== '') {
+            return 'BAS afviste token (HTTP ' . $httpCode . '): ' . $err;
         }
     }
 
-    return null;
+    $plain = trim(preg_replace('/\s+/', ' ', strip_tags($body)) ?? '');
+    if ($plain !== '') {
+        if (strlen($plain) > 180) {
+            $plain = substr($plain, 0, 180) . '…';
+        }
+
+        return 'BAS afviste token (HTTP ' . $httpCode . '): ' . $plain;
+    }
+
+    return 'BAS token-endpoint returnerede HTTP ' . $httpCode . '.';
 }
 
 /**
@@ -390,9 +392,6 @@ function abas_bas_sso_token_request(string $tokenUrl, array $fields, string $aut
     }
 
     $headers = ['Accept: application/json', 'Content-Type: application/x-www-form-urlencoded'];
-    if ($authMode === 'basic' && $basicAuth !== null) {
-        $headers[] = 'Authorization: Basic ' . $basicAuth;
-    }
 
     curl_setopt_array($ch, abas_bas_sso_curl_options([
         CURLOPT_POST => true,
@@ -424,26 +423,14 @@ function abas_bas_sso_token_request(string $tokenUrl, array $fields, string $aut
     }
 
     if ($httpCode < 200 || $httpCode >= 300) {
-        $decoded = json_decode($body, true);
-        $idpError = is_array($decoded)
-            ? trim((string) ($decoded['error_description'] ?? $decoded['error'] ?? ''))
-            : '';
-        if ($idpError === '') {
-            $idpError = trim(preg_replace('/\s+/', ' ', strip_tags($body)) ?? '');
-            if (strlen($idpError) > 180) {
-                $idpError = substr($idpError, 0, 180) . '…';
-            }
-        }
-        $msg = $idpError !== ''
-            ? 'BAS afviste token (HTTP ' . $httpCode . '): ' . $idpError
-            : 'BAS token-endpoint returnerede HTTP ' . $httpCode . '.';
+        $msg = abas_bas_sso_format_token_error($body, $httpCode);
         abas_bas_sso_set_last_exchange_error($msg);
         if (function_exists('abas_log_error')) {
+            $decoded = json_decode($body, true);
             abas_log_error('bas_sso', 'Token exchange failed', [
                 'http' => $httpCode,
-                'idp_error' => $idpError !== '' ? $idpError : null,
+                'oauth_error' => is_array($decoded) ? ($decoded['error'] ?? null) : null,
                 'body' => substr($body, 0, 300),
-                'auth_mode' => $authMode,
                 'redirect_uri' => $fields['redirect_uri'] ?? null,
             ]);
         }
