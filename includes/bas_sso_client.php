@@ -4,12 +4,24 @@ declare(strict_types=1);
 
 function abas_bas_sso_enabled(): bool
 {
+    return abas_bas_sso_disabled_reason() === null;
+}
+
+/** @return non-empty-string|null */
+function abas_bas_sso_disabled_reason(): ?string
+{
     $flag = abas_env('BAS_SSO_ENABLED', '1');
     if ($flag === '0' || strtolower($flag) === 'false') {
-        return false;
+        return 'BAS SSO er slået fra (BAS_SSO_ENABLED=0).';
+    }
+    if (abas_bas_sso_issuer() === '') {
+        return 'BAS SSO mangler BAS_SSO_ISSUER i env.local.';
+    }
+    if (abas_bas_sso_client_id() === '') {
+        return 'BAS SSO mangler BAS_SSO_CLIENT_ID i env.local.';
     }
 
-    return abas_bas_sso_issuer() !== '' && abas_bas_sso_client_id() !== '';
+    return null;
 }
 
 function abas_bas_sso_issuer(): string

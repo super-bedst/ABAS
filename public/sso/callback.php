@@ -8,8 +8,8 @@ require_once __DIR__ . '/../../includes/bas_sso_auth.php';
 
 $loginUrl = '/login.php';
 
-if (!abas_bas_sso_enabled()) {
-    abas_flash_set('error', 'BAS SSO er ikke konfigureret.');
+if (($reason = abas_bas_sso_disabled_reason()) !== null) {
+    abas_flash_set('error', $reason);
     abas_redirect($loginUrl);
 }
 

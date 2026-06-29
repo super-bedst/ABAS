@@ -5,8 +5,8 @@ declare(strict_types=1);
 require_once __DIR__ . '/../../includes/bootstrap.php';
 require_once __DIR__ . '/../../includes/bas_sso_client.php';
 
-if (!abas_bas_sso_enabled()) {
-    abas_flash_set('error', 'BAS SSO er ikke konfigureret.');
+if (($reason = abas_bas_sso_disabled_reason()) !== null) {
+    abas_flash_set('error', $reason);
     abas_redirect('/login.php');
 }
 
