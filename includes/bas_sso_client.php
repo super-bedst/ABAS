@@ -109,7 +109,16 @@ function abas_bas_sso_base64url_decode(string $data): string
 
 function abas_bas_sso_random_token(int $bytes = 32): string
 {
-    return abas_bas_sso_base64url(random_bytes($bytes));
+    try {
+        return abas_bas_sso_base64url(random_bytes($bytes));
+    } catch (Throwable) {
+        $fallback = openssl_random_pseudo_bytes($bytes);
+        if ($fallback === false) {
+            throw new RuntimeException('Kunne ikke generere SSO-sikkerhedstoken.');
+        }
+
+        return abas_bas_sso_base64url($fallback);
+    }
 }
 
 function abas_bas_sso_authorize_url(): string

@@ -15,18 +15,21 @@ if (!empty($_SESSION['user_id'])) {
 }
 
 try {
-    $url = abas_bas_sso_build_authorize_url(abas_bas_sso_login_redirect_uri());
+    $redirectUri = abas_bas_sso_login_redirect_uri();
+    $url = abas_bas_sso_build_authorize_url($redirectUri);
 } catch (Throwable $e) {
     if (function_exists('abas_log_error')) {
         abas_log_error('bas_sso', 'Authorize redirect failed', [
             'message' => $e->getMessage(),
             'file' => $e->getFile(),
             'line' => $e->getLine(),
+            'redirect_uri' => abas_bas_sso_login_redirect_uri(),
         ]);
     }
     abas_flash_set('error', 'SSO kunne ikke startes: ' . $e->getMessage());
     abas_redirect('/login.php');
 }
 
+abas_session_release();
 header('Location: ' . $url, true, 302);
 exit;
