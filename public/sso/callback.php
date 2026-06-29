@@ -21,26 +21,22 @@ if ($error !== '') {
 
 $code = trim((string) ($_GET['code'] ?? ''));
 $state = trim((string) ($_GET['state'] ?? ''));
-$expectedState = (string) ($_SESSION['abas_bas_sso_oauth_state'] ?? '');
-$redirectUri = trim((string) ($_SESSION['abas_bas_sso_redirect_uri'] ?? ''));
-if ($redirectUri === '') {
-    $redirectUri = abas_bas_sso_login_redirect_uri();
-}
-unset($_SESSION['abas_bas_sso_oauth_state'], $_SESSION['abas_bas_sso_redirect_uri'], $_SESSION['abas_bas_sso_pkce_verifier']);
-$verifier = '';
 
 if ($code === '' || $state === '') {
     abas_flash_set('error', 'Ugyldigt SSO-svar (mangler code/state).');
     abas_redirect($loginUrl);
 }
-if ($expectedState === '') {
-    abas_flash_set('error', 'SSO-session udløbet — prøv igen (slet evt. cookies for siden).');
+
+$oauthContext = abas_bas_sso_verify_oauth_callback($state);
+if ($oauthContext === null) {
+    abas_bas_sso_clear_oauth_context();
+    abas_flash_set('error', 'Ugyldigt SSO-svar (state). Prøv igen — klik kun én gang på «Log ind via BAS».');
     abas_redirect($loginUrl);
 }
-if (!hash_equals($expectedState, $state)) {
-    abas_flash_set('error', 'Ugyldigt SSO-svar (state). Prøv igen.');
-    abas_redirect($loginUrl);
-}
+
+$redirectUri = $oauthContext['redirect_uri'];
+abas_bas_sso_clear_oauth_context();
+$verifier = '';
 
 $codeKey = 'abas_sso_code_' . hash('sha256', $code);
 if (isset($_SESSION[$codeKey])) {

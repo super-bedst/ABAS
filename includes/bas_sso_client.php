@@ -480,12 +480,164 @@ function abas_bas_sso_token_request(string $tokenUrl, array $fields, string $aut
     return $decoded;
 }
 
-function abas_bas_sso_build_authorize_url(string $redirectUri, string $scope = 'openid profile email'): string
+/** @return array<string, mixed> */
+function abas_bas_sso_oauth_cookie_params(int $ttlSeconds = 600): array
 {
-    $state = abas_bas_sso_random_token(16);
+    return [
+        'expires' => time() + $ttlSeconds,
+        'path' => abas_session_cookie_path(),
+        'secure' => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
+        'httponly' => true,
+        'samesite' => 'Lax',
+    ];
+}
+
+function abas_bas_sso_state_signing_key(): string
+{
+    $secret = abas_bas_sso_client_secret();
+    if ($secret !== '') {
+        return $secret;
+    }
+
+    return hash('sha256', 'abas-oauth-state|' . (abas_env('APP_URL') ?? 'abas'), true);
+}
+
+function abas_bas_sso_make_oauth_state(string $redirectUri): string
+{
+    $payload = [
+        'n' => abas_bas_sso_random_token(12),
+        'r' => $redirectUri,
+        'e' => time() + 600,
+    ];
+    $json = (string) json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+    $mac = hash_hmac('sha256', $json, abas_bas_sso_state_signing_key(), true);
+
+    return abas_bas_sso_base64url($json) . '.' . abas_bas_sso_base64url($mac);
+}
+
+/** @return array{redirect_uri: string}|null */
+function abas_bas_sso_verify_signed_oauth_state(string $state): ?array
+{
+    $state = trim($state);
+    $dot = strrpos($state, '.');
+    if ($dot === false || $dot <= 0) {
+        return null;
+    }
+
+    $json = abas_bas_sso_base64url_decode(substr($state, 0, $dot));
+    $mac = abas_bas_sso_base64url_decode(substr($state, $dot + 1));
+    if ($json === '' || $mac === '') {
+        return null;
+    }
+
+    $expected = hash_hmac('sha256', $json, abas_bas_sso_state_signing_key(), true);
+    if (!hash_equals($expected, $mac)) {
+        return null;
+    }
+
+    try {
+        $payload = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
+    } catch (Throwable) {
+        return null;
+    }
+
+    if (!is_array($payload)) {
+        return null;
+    }
+    if ((int) ($payload['e'] ?? 0) < time()) {
+        return null;
+    }
+
+    $redirectUri = trim((string) ($payload['r'] ?? ''));
+    if ($redirectUri === '') {
+        return null;
+    }
+
+    return ['redirect_uri' => $redirectUri];
+}
+
+function abas_bas_sso_store_oauth_context(string $state, string $redirectUri): void
+{
     $_SESSION['abas_bas_sso_oauth_state'] = $state;
     $_SESSION['abas_bas_sso_redirect_uri'] = $redirectUri;
+    $payload = abas_bas_sso_base64url((string) json_encode([
+        's' => $state,
+        'r' => $redirectUri,
+        'e' => time() + 600,
+    ], JSON_THROW_ON_ERROR));
+    $cookie = abas_bas_sso_oauth_cookie_params();
+    setcookie('abas_oauth_ctx', $payload, $cookie);
+    setcookie('abas_oauth_state', $state, $cookie);
+    setcookie('abas_oauth_redirect', $redirectUri, $cookie);
+}
+
+function abas_bas_sso_clear_oauth_context(): void
+{
+    unset($_SESSION['abas_bas_sso_oauth_state'], $_SESSION['abas_bas_sso_redirect_uri'], $_SESSION['abas_bas_sso_pkce_verifier']);
+    $cookie = abas_bas_sso_oauth_cookie_params();
+    $cookie['expires'] = time() - 3600;
+    setcookie('abas_oauth_ctx', '', $cookie);
+    setcookie('abas_oauth_state', '', $cookie);
+    setcookie('abas_oauth_redirect', '', $cookie);
+}
+
+/** @return array{redirect_uri: string}|null */
+function abas_bas_sso_verify_oauth_callback(string $state): ?array
+{
+    $signed = abas_bas_sso_verify_signed_oauth_state($state);
+    if ($signed !== null) {
+        return $signed;
+    }
+
+    $state = trim($state);
+    if ($state === '') {
+        return null;
+    }
+
+    $defaultRedirect = abas_bas_sso_login_redirect_uri();
+    $sessionState = trim((string) ($_SESSION['abas_bas_sso_oauth_state'] ?? ''));
+    $sessionRedirect = trim((string) ($_SESSION['abas_bas_sso_redirect_uri'] ?? ''));
+    if ($sessionState !== '' && hash_equals($sessionState, $state)) {
+        return [
+            'redirect_uri' => $sessionRedirect !== '' ? $sessionRedirect : $defaultRedirect,
+        ];
+    }
+
+    $ctxRaw = trim((string) ($_COOKIE['abas_oauth_ctx'] ?? ''));
+    if ($ctxRaw !== '') {
+        try {
+            $decoded = json_decode(abas_bas_sso_base64url_decode($ctxRaw), true, 512, JSON_THROW_ON_ERROR);
+            if (is_array($decoded)) {
+                $ctxState = trim((string) ($decoded['s'] ?? ''));
+                $ctxRedirect = trim((string) ($decoded['r'] ?? ''));
+                $ctxExpiry = (int) ($decoded['e'] ?? 0);
+                if ($ctxState !== '' && $ctxExpiry >= time() && hash_equals($ctxState, $state)) {
+                    return [
+                        'redirect_uri' => $ctxRedirect !== '' ? $ctxRedirect : $defaultRedirect,
+                    ];
+                }
+            }
+        } catch (Throwable) {
+            // ignore malformed backup cookie
+        }
+    }
+
+    $cookieState = trim((string) ($_COOKIE['abas_oauth_state'] ?? ''));
+    $cookieRedirect = trim((string) ($_COOKIE['abas_oauth_redirect'] ?? ''));
+    if ($cookieState !== '' && hash_equals($cookieState, $state)) {
+        return [
+            'redirect_uri' => $cookieRedirect !== '' ? $cookieRedirect : $defaultRedirect,
+        ];
+    }
+
+    return null;
+}
+
+function abas_bas_sso_build_authorize_url(string $redirectUri, string $scope = 'openid profile email'): string
+{
+    abas_bas_sso_clear_oauth_context();
     unset($_SESSION['abas_bas_sso_pkce_verifier']);
+    $state = abas_bas_sso_make_oauth_state($redirectUri);
 
     $authorizeUrl = abas_bas_sso_authorize_url();
 
