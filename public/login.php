@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../includes/bootstrap.php';
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/bas_sso_client.php';
 require_once __DIR__ . '/../includes/password_flow.php';
 require_once __DIR__ . '/../includes/roles.php';
 require_once __DIR__ . '/../includes/mfa.php';
@@ -62,6 +63,13 @@ require __DIR__ . '/partials/public-header.php';
             </div>
             <button type="submit" class="abas-btn-primary abas-btn-block">Log ind</button>
         </form>
+        <?php if (abas_bas_sso_enabled()): ?>
+        <div class="mt-4 pt-4 border-t border-gray-200">
+            <a href="<?= htmlspecialchars(abas_url('sso/login.php')) ?>" class="abas-btn-secondary abas-btn-block text-center no-underline">
+                Log ind via BAS
+            </a>
+        </div>
+        <?php endif; ?>
         <p class="mt-5 text-sm text-center text-gray-600">
             <a href="<?= abas_url('forgot-password.php') ?>" class="abas-link">Glemt adgangskode</a>
             <span class="mx-1">·</span>

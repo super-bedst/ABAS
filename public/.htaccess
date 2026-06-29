@@ -1,6 +1,9 @@
 RewriteEngine On
 DirectorySlash Off
 
+# BAS SSO embed callback (redirect_uri for OIDC token exchange)
+RewriteRule ^embed\.php/callback/?$ embed.php [QSA,L]
+
 # SMS inbound webhook (BAS)
 RewriteRule ^api/v1/sms/inbound/?$ api/v1/index.php?route=sms/inbound [QSA,L]
 

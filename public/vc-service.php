@@ -5,14 +5,22 @@ declare(strict_types=1);
 require_once __DIR__ . '/../includes/bootstrap.php';
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/bas_sso_auth.php';
 require_once __DIR__ . '/../includes/roles.php';
 require_once __DIR__ . '/../includes/service.php';
 require_once __DIR__ . '/../includes/installation_sync.php';
 require_once __DIR__ . '/../includes/users.php';
 
+if (!empty($_GET['embed'])) {
+    abas_set_embed_session(true);
+}
+
 $conn = abas_db();
 $user = abas_require_login();
 abas_require_role(['vagtcentral', 'admin']);
+
+$embed = abas_is_embed_session();
+$vcUrl = abas_embed_url('vc-service.php');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $misc = strtolower(trim($_POST['miscno2'] ?? ''));
@@ -27,12 +35,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($misc === '') {
         abas_flash_set('error', 'Vælg et anlæg fra listen.');
-        abas_redirect('vc-service.php');
+        abas_redirect($vcUrl);
     }
 
     if ($montorId <= 0 && $manualPhone !== '' && !abas_validate_phone($manualPhone)) {
         abas_flash_set('error', 'Angiv et gyldigt telefonnummer til montøren.');
-        abas_redirect('vc-service.php');
+        abas_redirect($vcUrl);
     }
 
     $installation = abas_find_installation_by_miscno2($conn, $misc);
@@ -46,13 +54,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $installation = abas_find_installation_by_miscno2($conn, $misc);
         } catch (Throwable $e) {
             abas_flash_set('error', $e->getMessage());
-            abas_redirect('vc-service.php');
+            abas_redirect($vcUrl);
         }
     }
 
     if (!$installation) {
         abas_flash_set('error', 'Anlæg ikke fundet.');
-        abas_redirect('vc-service.php');
+        abas_redirect($vcUrl);
     }
 
     $onBehalf = null;
@@ -84,18 +92,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $r = abas_start_service_session($conn, $user, $installation, $hours, $onBehalf, $comment, 'web', false, $manualActor);
     abas_flash_set($r['ok'] ? 'success' : 'error', $r['ok'] ? 'Service startet på vegne af montør.' : ($r['message'] ?? 'Fejl'));
-    if ($r['ok']) {
+    if ($r['ok'] && !$embed) {
         abas_redirect('installation.php?id=' . (int) $installation['id']);
     }
-    abas_redirect('vc-service.php');
+    abas_redirect($vcUrl);
 }
 
 $searchUrl = abas_url('vc-service-search.php');
+if ($embed) {
+    $sep = str_contains($searchUrl, '?') ? '&' : '?';
+    $searchUrl .= $sep . 'embed=1';
+}
 
 $pageTitle = 'VC — Hurtig service';
 $currentUser = $user;
 $extraHead = '<script src="' . htmlspecialchars(abas_asset_url('assets/js/vc-service.js'), ENT_QUOTES) . '" defer></script>';
-require __DIR__ . '/partials/header.php';
+
+if ($embed) {
+    require __DIR__ . '/partials/embed_shell_start.php';
+} else {
+    require __DIR__ . '/partials/header.php';
+}
 ?>
 <h1 class="abas-page-title">Vagtcentral — service på vegne af montør</h1>
 <p class="abas-page-lead">Søg anlæg og montør, eller angiv montør manuelt hvis vedkommende ikke er i systemet.</p>
@@ -164,4 +181,9 @@ require __DIR__ . '/partials/header.php';
 <script>
 window.abasVcService = <?= json_encode(['searchUrl' => $searchUrl], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
 </script>
-<?php require __DIR__ . '/partials/footer.php';
+<?php
+if ($embed) {
+    require __DIR__ . '/partials/embed_shell_end.php';
+} else {
+    require __DIR__ . '/partials/footer.php';
+}

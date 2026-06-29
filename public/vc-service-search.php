@@ -5,11 +5,16 @@ declare(strict_types=1);
 require_once __DIR__ . '/../includes/bootstrap.php';
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/bas_sso_auth.php';
 require_once __DIR__ . '/../includes/roles.php';
 require_once __DIR__ . '/../includes/installation_sync.php';
 require_once __DIR__ . '/../includes/users.php';
 
 header('Content-Type: application/json; charset=utf-8');
+
+if (!empty($_GET['embed'])) {
+    abas_set_embed_session(true);
+}
 
 $user = abas_require_login();
 abas_require_role(['vagtcentral', 'admin']);
