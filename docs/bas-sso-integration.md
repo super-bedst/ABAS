@@ -41,7 +41,9 @@ I BAS miljøvariabler (se `includes/include.php`):
 OIDC-klient i BAS (`sso_oidc_clients`) skal have:
 
 - **client_id:** `abas-web` (eller miljøspecifik variant)
-- **redirect_uris:** `{BAS_ABAS_EMBED_URL uden query}/callback` — fx `https://teknikweb2.trekantbrand.dk/embed.php/callback`
+- **redirect_uris:** begge skal være registreret:
+  - `https://teknikweb2.trekantbrand.dk/embed.php/callback` (VC iframe)
+  - `https://teknikweb2.trekantbrand.dk/sso/callback.php` («Log ind via BAS»)
 - **required_permission_ids:** `[60]` (ABA Service-menu i vagtcentral)
 - **require_pkce:** kan være `0` for embed-grant (BAS udsteder kode uden PKCE)
 

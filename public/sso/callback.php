@@ -25,19 +25,26 @@ $expectedState = (string) ($_SESSION['abas_bas_sso_oauth_state'] ?? '');
 $verifier = (string) ($_SESSION['abas_bas_sso_pkce_verifier'] ?? '');
 unset($_SESSION['abas_bas_sso_oauth_state'], $_SESSION['abas_bas_sso_pkce_verifier']);
 
-if ($code === '' || $state === '' || $expectedState === '' || !hash_equals($expectedState, $state)) {
-    abas_flash_set('error', 'Ugyldigt SSO-svar (state).');
+if ($code === '' || $state === '') {
+    abas_flash_set('error', 'Ugyldigt SSO-svar (mangler code/state).');
+    abas_redirect($loginUrl);
+}
+if ($expectedState === '') {
+    abas_flash_set('error', 'SSO-session udløbet — prøv igen (slet evt. cookies for siden).');
+    abas_redirect($loginUrl);
+}
+if (!hash_equals($expectedState, $state)) {
+    abas_flash_set('error', 'Ugyldigt SSO-svar (state). Prøv igen.');
     abas_redirect($loginUrl);
 }
 
 try {
-    $tokenPayload = abas_bas_sso_exchange_authorization_code(
-        $code,
-        abas_bas_sso_login_redirect_uri(),
-        $verifier
-    );
+    $redirectUri = abas_bas_sso_login_redirect_uri();
+    $tokenPayload = abas_bas_sso_exchange_authorization_code($code, $redirectUri, $verifier);
     if ($tokenPayload === null) {
-        throw new RuntimeException('Kunne ikke hente SSO-token.');
+        throw new RuntimeException(
+            'Kunne ikke hente SSO-token. Tjek at BAS OIDC-klienten har redirect URI: ' . $redirectUri
+        );
     }
     $claims = abas_bas_sso_claims_from_token_response($tokenPayload);
     $conn = abas_db();

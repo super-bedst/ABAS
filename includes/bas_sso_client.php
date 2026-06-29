@@ -311,6 +311,17 @@ function abas_bas_sso_exchange_authorization_code(
     $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
     if (!is_string($body) || $httpCode < 200 || $httpCode >= 300) {
+        if (function_exists('abas_log_error')) {
+            $decoded = is_string($body) ? json_decode($body, true) : null;
+            $idpError = is_array($decoded) ? (string) ($decoded['error_description'] ?? $decoded['error'] ?? '') : '';
+            abas_log_error('bas_sso', 'Token exchange failed', [
+                'http' => $httpCode,
+                'redirect_uri' => $redirectUri,
+                'idp_error' => $idpError !== '' ? $idpError : null,
+                'body' => is_string($body) ? substr($body, 0, 300) : null,
+            ]);
+        }
+
         return null;
     }
     $decoded = json_decode($body, true);

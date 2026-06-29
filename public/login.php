@@ -16,6 +16,10 @@ if (!empty($_SESSION['user_id']) && !empty($_SESSION['mfa_verified'])) {
 }
 
 $error = '';
+$flash = abas_flash_get();
+if ($flash && ($flash['type'] ?? '') === 'error') {
+    $error = (string) ($flash['message'] ?? '');
+}
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $login = trim($_POST['login'] ?? '');
     $pass = $_POST['password'] ?? '';

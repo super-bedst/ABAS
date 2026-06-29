@@ -2,6 +2,16 @@
 
 declare(strict_types=1);
 
+function abas_session_cookie_path(): string
+{
+    $override = abas_env('APP_BASE_PATH');
+    if ($override !== null && $override !== '') {
+        return abas_normalize_public_base('/' . trim(str_replace('\\', '/', $override), '/'));
+    }
+
+    return '/';
+}
+
 function abas_session_start(): void
 {
     if (session_status() === PHP_SESSION_ACTIVE) {
@@ -9,7 +19,7 @@ function abas_session_start(): void
     }
     session_set_cookie_params([
         'lifetime' => 86400,
-        'path' => abas_public_base() ?: '/',
+        'path' => abas_session_cookie_path(),
         'secure' => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
         'httponly' => true,
         'samesite' => 'Lax',
