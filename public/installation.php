@@ -67,7 +67,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $log = ['rows' => [], 'code' => 0];
 if (!$deferApi) {
     try {
-        $log = abas_fetch_installation_log($installation, $logMode, $customRange, $user);
+        $log = abas_fetch_installation_log($installation, $logMode, $customRange, $user, $conn);
     } catch (Throwable $e) {
         abas_flash_set('error', 'Log: ' . $e->getMessage());
         $log = ['rows' => [], 'code' => -1];

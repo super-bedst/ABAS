@@ -5,7 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/trekant_client.php';
 require_once __DIR__ . '/roles.php';
 
-function abas_fetch_installation_details(array $installation, ?array $user): array
+function abas_fetch_installation_details(array $installation, ?array $user, ?mysqli $conn = null): array
 {
     $result = [
         'lat' => null,
@@ -26,7 +26,7 @@ function abas_fetch_installation_details(array $installation, ?array $user): arr
 
     try {
         $client = abas_trekant();
-        $userid = abas_trekant_userid($user);
+        $userid = abas_trekant_userid($user, $conn);
 
         $detailResp = $client->getInstallationDetails($sIns, $dealId);
         if (abas_trekant_return_code($detailResp) === 0) {

@@ -47,11 +47,11 @@ try {
     exit;
 }
 $externalTest = abas_external_testqueue_for_installation($conn, $id);
-$instDetails = abas_fetch_installation_details($installation, $user);
+$instDetails = abas_fetch_installation_details($installation, $user, $conn);
 $log = ['rows' => [], 'code' => -1];
 
 try {
-    $log = abas_fetch_installation_log($installation, $logMode, $customRange, $user);
+    $log = abas_fetch_installation_log($installation, $logMode, $customRange, $user, $conn);
 } catch (Throwable $e) {
     echo json_encode(['error' => 'Log: ' . $e->getMessage()]);
     exit;

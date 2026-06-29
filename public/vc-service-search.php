@@ -9,6 +9,7 @@ require_once __DIR__ . '/../includes/bas_sso_auth.php';
 require_once __DIR__ . '/../includes/roles.php';
 require_once __DIR__ . '/../includes/installation_sync.php';
 require_once __DIR__ . '/../includes/users.php';
+require_once __DIR__ . '/../includes/threecx_calls.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -24,18 +25,47 @@ $type = (string) ($_GET['type'] ?? '');
 $q = trim((string) ($_GET['q'] ?? ''));
 
 if ($type === 'installations') {
-    if (mb_strlen($q) < 2) {
-        echo json_encode(['items' => []], JSON_UNESCAPED_UNICODE);
-        exit;
+    $callerUserId = (int) ($_GET['caller_user_id'] ?? 0);
+    $filterToOwner = false;
+    if ($callerUserId > 0) {
+        $ownerStmt = $conn->prepare(
+            'SELECT id, role FROM users WHERE id = ? AND active = 1 AND role IN ("anlaegsejer", "anlaegsafprover") LIMIT 1'
+        );
+        $ownerStmt->bind_param('i', $callerUserId);
+        $ownerStmt->execute();
+        $ownerRow = $ownerStmt->get_result()->fetch_assoc();
+        $ownerStmt->close();
+        $filterToOwner = (bool) $ownerRow;
     }
 
-    $items = abas_search_installations_local($conn, $q, true, 0);
-    if ($items === [] && abas_is_miscno2_query($q)) {
-        try {
-            $items = abas_search_installations_from_api($conn, $user, $q);
-        } catch (Throwable $e) {
-            echo json_encode(['items' => [], 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+    if ($filterToOwner) {
+        $linked = abas_user_linked_installations($conn, $callerUserId);
+        if ($q !== '') {
+            $qLower = mb_strtolower($q, 'UTF-8');
+            $linked = array_values(array_filter($linked, static function (array $row) use ($qLower): bool {
+                $hay = mb_strtolower(
+                    (string) ($row['miscno2'] ?? '') . ' ' . (string) ($row['name'] ?? '') . ' ' . (string) ($row['city'] ?? ''),
+                    'UTF-8'
+                );
+
+                return str_contains($hay, $qLower);
+            }));
+        }
+        $items = array_slice($linked, 0, 50);
+    } else {
+        if (mb_strlen($q) < 2) {
+            echo json_encode(['items' => []], JSON_UNESCAPED_UNICODE);
             exit;
+        }
+
+        $items = abas_search_installations_local($conn, $q, true, 0);
+        if ($items === [] && abas_is_miscno2_query($q)) {
+            try {
+                $items = abas_search_installations_from_api($conn, $user, $q);
+            } catch (Throwable $e) {
+                echo json_encode(['items' => [], 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
         }
     }
 
@@ -66,6 +96,11 @@ if ($type === 'montors') {
     }
 
     echo json_encode(['items' => $out], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+if ($type === 'calls') {
+    echo json_encode(['items' => abas_threecx_list_active_calls($conn)], JSON_UNESCAPED_UNICODE);
     exit;
 }
 

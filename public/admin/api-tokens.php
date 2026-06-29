@@ -48,7 +48,7 @@ require __DIR__ . '/../partials/header.php';
 <div class="mb-4 p-3 bg-amber-50 border border-amber-300 rounded font-mono text-sm break-all"><?= htmlspecialchars($newToken) ?></div>
 <?php endif; ?>
 <form method="post" class="bg-white border rounded p-4 mb-4 flex flex-wrap gap-2 items-end">
-    <input name="name" required placeholder="Navn (fx telefonsystem)" class="border rounded px-3 py-2">
+    <input name="name" required placeholder="Navn (fx 3CX vagtcentral)" class="border rounded px-3 py-2">
     <select name="role" class="border rounded px-3 py-2">
         <option value="vagtcentral">Vagtcentral</option>
         <option value="montor">Montør</option>
@@ -56,6 +56,7 @@ require __DIR__ . '/../partials/header.php';
     </select>
     <button class="bg-brand text-white px-4 py-2 rounded">Opret token</button>
 </form>
+<p class="abas-hint mb-4">Brug token som <code>Authorization: Bearer …</code> i 3CX CFD webhook til <code>/api/v1/3cx/call</code>. Vælg rolle <strong>vagtcentral</strong> til 3CX.</p>
 <div class="abas-table-wrap">
 <table class="abas-table">
     <thead><tr>

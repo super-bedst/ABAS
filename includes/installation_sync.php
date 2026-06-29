@@ -95,7 +95,7 @@ function abas_search_installations_from_api(mysqli $conn, ?array $user, string $
 
     $client = abas_trekant();
     $misc = strtolower(trim($q));
-    $resp = $client->searchInstallations(abas_trekant_userid($user), $misc);
+    $resp = $client->searchInstallations(abas_trekant_userid($user, $conn), $misc);
     $code = abas_trekant_return_code($resp);
     if ($code !== 0) {
         $hint = abas_trekant_response_hint($resp);

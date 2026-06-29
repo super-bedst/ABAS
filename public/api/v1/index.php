@@ -44,6 +44,11 @@ if ($path === 'cron/sms-expiry-warnings' && in_array($method, ['GET', 'POST'], t
     abas_handle_sms_expiry_cron_webhook($conn);
 }
 
+if ($path === '3cx/call' && in_array($method, ['POST', 'PUT', 'GET'], true)) {
+    require_once dirname(__DIR__, 3) . '/includes/threecx_calls.php';
+    abas_threecx_handle_webhook($conn);
+}
+
 $token = abas_api_authenticate($conn);
 $apiUser = abas_api_user_from_token($conn, $token);
 $GLOBALS['_abas_api_token'] = $token;
@@ -89,7 +94,7 @@ if (preg_match('#^installations/([^/]+)/log$#', $path, $m) && $method === 'GET')
     }
     $mode = $_GET['mode'] ?? 'last20';
     $GLOBALS['_abas_api_audit_extra'] = ['log_mode' => $mode];
-    $log = abas_fetch_installation_log($installation, $mode, null, $apiUser);
+    $log = abas_fetch_installation_log($installation, $mode, null, $apiUser, $conn);
     abas_api_json(200, ['code' => $log['code'], 'items' => $log['rows']]);
 }
 

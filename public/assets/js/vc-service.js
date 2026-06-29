@@ -1,6 +1,7 @@
 (function () {
     var cfg = window.abasVcService || {};
     var searchUrl = cfg.searchUrl || 'vc-service-search.php';
+    var pollMs = cfg.pollMs || 3000;
 
     function debounce(fn, ms) {
         var timer;
@@ -29,10 +30,22 @@
         this.onSelect = options.onSelect || function () {};
         this.onClear = options.onClear || function () {};
         this.minChars = options.minChars || 2;
+        this.callerUserId = 0;
         this.activeIndex = -1;
         this.items = [];
         this.bind();
     }
+
+    Combobox.prototype.setCallerUserId = function (userId) {
+        this.callerUserId = userId > 0 ? userId : 0;
+        if (this.type === 'installations') {
+            this.minChars = this.callerUserId > 0 ? 0 : 2;
+        }
+    };
+
+    Combobox.prototype.clearCallerUserId = function () {
+        this.setCallerUserId(0);
+    };
 
     Combobox.prototype.bind = function () {
         var self = this;
@@ -42,6 +55,8 @@
         this.input.addEventListener('focus', function () {
             if (self.type === 'montors' && self.input.value.trim() === '' && !self.hidden.value) {
                 self.search('');
+            } else if (self.type === 'installations' && self.callerUserId > 0) {
+                self.search(self.input.value.trim());
             } else if (self.input.value.trim().length >= self.minChars) {
                 self.search(self.input.value.trim());
             }
@@ -69,11 +84,21 @@
         });
     };
 
+    Combobox.prototype.buildSearchUrl = function (q) {
+        var url = searchUrl + '?type=' + encodeURIComponent(this.type) + '&q=' + encodeURIComponent(q);
+        if (this.type === 'installations' && this.callerUserId > 0) {
+            url += '&caller_user_id=' + encodeURIComponent(String(this.callerUserId));
+        }
+        return url;
+    };
+
     Combobox.prototype.search = function (q) {
         var self = this;
         if (this.type === 'installations' && q.length < this.minChars) {
-            this.close();
-            return;
+            if (this.callerUserId <= 0) {
+                this.close();
+                return;
+            }
         }
 
         this.list.innerHTML =
@@ -81,8 +106,7 @@
             '<span class="abas-spinner" aria-hidden="true"></span><span>Søger…</span></span></li>';
         this.open();
 
-        var url = searchUrl + '?type=' + encodeURIComponent(this.type) + '&q=' + encodeURIComponent(q);
-        fetch(url, { credentials: 'same-origin', headers: { Accept: 'application/json' } })
+        fetch(this.buildSearchUrl(q), { credentials: 'same-origin', headers: { Accept: 'application/json' } })
             .then(function (res) { return res.json(); })
             .then(function (data) {
                 self.items = data.items || [];
@@ -118,21 +142,17 @@
                     '<span class="font-mono font-medium text-brand">' + escapeHtml(item.miscno2) + '</span>' +
                     '<span class="text-sm text-gray-600">' + escapeHtml(item.name || '—') +
                     (item.city ? ' · ' + escapeHtml(item.city) : '') + '</span>';
-                li.addEventListener('mousedown', function (e) {
-                    e.preventDefault();
-                    self.pick(item);
-                });
             } else {
                 li.innerHTML =
                     '<span class="font-medium">' + escapeHtml(item.username) + '</span>' +
                     '<span class="text-sm text-gray-600">' +
                     (item.company_name ? escapeHtml(item.company_name) + ' · ' : '') +
                     escapeHtml(item.phone || '—') + '</span>';
-                li.addEventListener('mousedown', function (e) {
-                    e.preventDefault();
-                    self.pick(item);
-                });
             }
+            li.addEventListener('mousedown', function (e) {
+                e.preventDefault();
+                self.pick(item);
+            });
             li.dataset.index = String(index);
             self.list.appendChild(li);
         });
@@ -210,17 +230,29 @@
         var manualName = document.getElementById('manual_montor_name');
         var manualPhone = document.getElementById('manual_montor_phone');
         var form = document.getElementById('vc-service-form');
+        var behalfInput = document.getElementById('behalf_user_id');
+        var callList = document.getElementById('vc-call-list');
+        var callEmpty = document.getElementById('vc-call-empty');
+        var dropHint = document.getElementById('vc-drop-hint');
 
         function syncManualFields() {
             var hasMontor = document.getElementById('montor_id').value !== '0' &&
                 document.getElementById('montor_id').value !== '';
-            if (hasMontor) {
+            var hasBehalf = behalfInput && behalfInput.value !== '0' && behalfInput.value !== '';
+            if (hasMontor || hasBehalf) {
                 manualFields.classList.add('hidden');
                 manualName.value = '';
                 manualPhone.value = '';
             } else {
                 manualFields.classList.remove('hidden');
             }
+        }
+
+        function clearBehalf() {
+            if (behalfInput) {
+                behalfInput.value = '0';
+            }
+            instBox.clearCallerUserId();
         }
 
         var instBox = new Combobox({
@@ -239,8 +271,19 @@
             selected: document.getElementById('montor-selected'),
             type: 'montors',
             minChars: 0,
-            onSelect: syncManualFields,
-            onClear: syncManualFields
+            onSelect: function (item) {
+                if (behalfInput && item.role && item.role !== 'montor') {
+                    behalfInput.value = String(item.id);
+                    document.getElementById('montor_id').value = '0';
+                } else if (behalfInput) {
+                    behalfInput.value = String(item.id);
+                }
+                syncManualFields();
+            },
+            onClear: function () {
+                clearBehalf();
+                syncManualFields();
+            }
         });
 
         document.getElementById('inst-combobox').addEventListener('click', function (e) {
@@ -251,6 +294,8 @@
         document.getElementById('montor-combobox').addEventListener('click', function (e) {
             if (e.target.classList.contains('vc-clear-pick')) {
                 montorBox.clear();
+                clearBehalf();
+                syncManualFields();
             }
         });
 
@@ -258,10 +303,153 @@
             if (!document.getElementById('miscno2').value) {
                 e.preventDefault();
                 alert('Vælg et anlæg fra listen.');
-                return;
             }
         });
 
+        function applyCall(call) {
+            instBox.clear();
+            montorBox.clear();
+            clearBehalf();
+
+            var displayName = call.display_name || call.caller_name || '';
+            var phone = call.caller_number || '';
+
+            if (call.matched_user_id && call.matched_role === 'montor') {
+                montorBox.pick({
+                    id: call.matched_user_id,
+                    username: displayName || 'Montør',
+                    phone: phone,
+                    company_name: call.matched_role_label || ''
+                });
+                if (behalfInput) {
+                    behalfInput.value = String(call.matched_user_id);
+                }
+            } else if (call.matched_user_id && call.filters_installations) {
+                if (behalfInput) {
+                    behalfInput.value = String(call.matched_user_id);
+                }
+                montorBox.selected.innerHTML =
+                    '<div class="flex flex-wrap items-start justify-between gap-2">' +
+                    '<div class="text-sm space-y-0.5">' +
+                    '<div><span class="text-gray-500">Navn:</span> <span class="font-medium">' + escapeHtml(displayName) + '</span></div>' +
+                    '<div><span class="text-gray-500">Rolle:</span> ' + escapeHtml(call.matched_role_label || '') + '</div>' +
+                    '<div><span class="text-gray-500">Telefon:</span> ' + escapeHtml(phone) + '</div>' +
+                    '</div>' +
+                    '<button type="button" class="text-sm abas-link vc-clear-pick">Skift person</button></div>';
+                montorBox.selected.classList.remove('hidden');
+                montorBox.input.classList.add('hidden');
+                montorBox.input.value = displayName;
+                document.getElementById('montor_id').value = '0';
+                instBox.setCallerUserId(call.matched_user_id);
+                instBox.search('');
+                syncManualFields();
+            } else {
+                manualName.value = displayName;
+                manualPhone.value = phone;
+                syncManualFields();
+            }
+
+            form.classList.add('is-drop-target');
+            window.setTimeout(function () {
+                form.classList.remove('is-drop-target');
+            }, 1200);
+            form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        function renderCalls(items) {
+            if (!callList) {
+                return;
+            }
+            callList.innerHTML = '';
+            if (!items || items.length === 0) {
+                if (callEmpty) {
+                    callEmpty.classList.remove('hidden');
+                }
+                return;
+            }
+            if (callEmpty) {
+                callEmpty.classList.add('hidden');
+            }
+
+            items.forEach(function (call) {
+                var li = document.createElement('li');
+                li.className = 'abas-vc-call-item';
+                li.draggable = true;
+                li.dataset.call = JSON.stringify(call);
+
+                var statusLabel = 'I samtale';
+                var meta = call.matched_role_label
+                    ? '<span class="abas-vc-call-match">' + escapeHtml(call.matched_role_label) + '</span>'
+                    : '';
+
+                li.innerHTML =
+                    '<div class="abas-vc-call-item__head">' +
+                    '<span class="font-medium">' + escapeHtml(call.display_name || call.caller_number || 'Ukendt') + '</span>' +
+                    '<span class="abas-vc-call-status abas-vc-call-status--' + escapeHtml(call.status) + '">' + statusLabel + '</span>' +
+                    '</div>' +
+                    '<div class="text-sm text-gray-600 font-mono">' + escapeHtml(call.caller_number || '') + '</div>' +
+                    (call.queue_name ? '<div class="text-xs text-gray-500">' + escapeHtml(call.queue_name) + '</div>' : '') +
+                    meta;
+
+                li.addEventListener('dragstart', function (e) {
+                    e.dataTransfer.setData('application/x-abas-call', JSON.stringify(call));
+                    e.dataTransfer.effectAllowed = 'copy';
+                    li.classList.add('is-dragging');
+                });
+                li.addEventListener('dragend', function () {
+                    li.classList.remove('is-dragging');
+                });
+                li.addEventListener('click', function () {
+                    applyCall(call);
+                });
+
+                callList.appendChild(li);
+            });
+        }
+
+        function pollCalls() {
+            if (!callList) {
+                return;
+            }
+            fetch(searchUrl + '?type=calls', { credentials: 'same-origin', headers: { Accept: 'application/json' } })
+                .then(function (res) { return res.json(); })
+                .then(function (data) {
+                    renderCalls(data.items || []);
+                })
+                .catch(function () {});
+        }
+
+        if (form) {
+            ['dragenter', 'dragover'].forEach(function (eventName) {
+                form.addEventListener(eventName, function (e) {
+                    e.preventDefault();
+                    form.classList.add('is-drop-hover');
+                    if (dropHint) {
+                        dropHint.classList.add('is-visible');
+                    }
+                });
+            });
+            ['dragleave', 'drop'].forEach(function (eventName) {
+                form.addEventListener(eventName, function (e) {
+                    if (eventName === 'drop') {
+                        e.preventDefault();
+                        var raw = e.dataTransfer.getData('application/x-abas-call');
+                        if (raw) {
+                            try {
+                                applyCall(JSON.parse(raw));
+                            } catch (err) {}
+                        }
+                    }
+                    form.classList.remove('is-drop-hover');
+                    if (dropHint) {
+                        dropHint.classList.remove('is-visible');
+                    }
+                });
+            });
+        }
+
         syncManualFields();
+        pollCalls();
+        window.setInterval(pollCalls, pollMs);
     });
 })();

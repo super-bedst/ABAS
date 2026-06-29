@@ -25,6 +25,9 @@ function abas_api_audit_resolve_action(string $route, int $status): string
     if ($route === 'installations/search') {
         return 'search';
     }
+    if ($route === '3cx/call') {
+        return 'call_webhook';
+    }
     if (preg_match('#^installations/[^/]+/service$#', $route)) {
         return 'service';
     }

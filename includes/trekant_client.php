@@ -261,10 +261,20 @@ function abas_trekant(): TrekantClient
     return $client;
 }
 
-function abas_trekant_userid(?array $user): string
+function abas_trekant_userid(?array $user, ?mysqli $conn = null): string
 {
     if ($user && !empty($user['trekant_userid'])) {
         return strtoupper((string) $user['trekant_userid']);
+    }
+    if ($user && !empty($user['bas_username'])) {
+        return strtoupper((string) $user['bas_username']);
+    }
+    if ($user && $conn !== null) {
+        require_once __DIR__ . '/bas_sso_auth.php';
+        $link = abas_bas_user_link_get($conn, (int) ($user['id'] ?? 0));
+        if ($link !== null && ($link['bas_username'] ?? '') !== '') {
+            return strtoupper((string) $link['bas_username']);
+        }
     }
     $cfg = abas_config()['trekant'];
 

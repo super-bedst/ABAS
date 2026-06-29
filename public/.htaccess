@@ -1,6 +1,10 @@
 RewriteEngine On
 DirectorySlash Off
 
+# SCIM v2 (BAS bruger-provisionering)
+RewriteRule ^scim/v2/?$ scim/v2/index.php [QSA,L]
+RewriteRule ^scim/v2/(.*)$ scim/v2/index.php?path=$1 [QSA,L]
+
 # BAS SSO embed callback (redirect_uri for OIDC token exchange)
 RewriteRule ^embed\.php/callback/?$ embed.php [QSA,L]
 

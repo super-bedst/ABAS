@@ -25,6 +25,10 @@ $vcUrl = abas_embed_url('vc-service.php');
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $misc = strtolower(trim($_POST['miscno2'] ?? ''));
     $montorId = (int) ($_POST['montor_id'] ?? 0);
+    $behalfUserId = (int) ($_POST['behalf_user_id'] ?? 0);
+    if ($behalfUserId <= 0) {
+        $behalfUserId = $montorId;
+    }
     $manualName = trim($_POST['manual_montor_name'] ?? '');
     $manualPhone = abas_normalize_phone(trim($_POST['manual_montor_phone'] ?? ''));
     $hours = (float) ($_POST['hours'] ?? 2);
@@ -38,8 +42,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         abas_redirect($vcUrl);
     }
 
-    if ($montorId <= 0 && $manualPhone !== '' && !abas_validate_phone($manualPhone)) {
-        abas_flash_set('error', 'Angiv et gyldigt telefonnummer til montøren.');
+    if ($behalfUserId <= 0 && $manualPhone !== '' && !abas_validate_phone($manualPhone)) {
+        abas_flash_set('error', 'Angiv et gyldigt telefonnummer til personen.');
         abas_redirect($vcUrl);
     }
 
@@ -47,7 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$installation) {
         try {
             $client = abas_trekant();
-            $resp = $client->searchInstallations(abas_trekant_userid($user), $misc);
+            $resp = $client->searchInstallations(abas_trekant_userid($user, $conn), $misc);
             foreach (abas_trekant_rows($resp) as $row) {
                 abas_upsert_installation($conn, $row);
             }
@@ -64,20 +68,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $onBehalf = null;
-    if ($montorId > 0) {
-        $m = $conn->prepare(
-            'SELECT u.*, ai.company_name
+    if ($behalfUserId > 0) {
+        $allowedRoles = ['montor', 'anlaegsejer', 'anlaegsafprover'];
+        $placeholders = implode(',', array_fill(0, count($allowedRoles), '?'));
+        $types = 'i' . str_repeat('s', count($allowedRoles));
+        $sql = 'SELECT u.*, ai.company_name
              FROM users u
              LEFT JOIN approved_installers ai ON ai.id = u.installer_id
-             WHERE u.id = ? AND u.role = "montor" AND u.active = 1
-             LIMIT 1'
-        );
-        $m->bind_param('i', $montorId);
-        $m->execute();
-        $montorRow = $m->get_result()->fetch_assoc();
-        $m->close();
-        if ($montorRow) {
-            $onBehalf = (int) $montorRow['id'];
+             WHERE u.id = ? AND u.active = 1 AND u.role IN (' . $placeholders . ')
+             LIMIT 1';
+        $behalfStmt = $conn->prepare($sql);
+        $bindValues = array_merge([$behalfUserId], $allowedRoles);
+        $behalfStmt->bind_param($types, ...$bindValues);
+        $behalfStmt->execute();
+        $behalfRow = $behalfStmt->get_result()->fetch_assoc();
+        $behalfStmt->close();
+        if ($behalfRow) {
+            $onBehalf = (int) $behalfRow['id'];
         }
     }
 
@@ -115,9 +122,12 @@ if ($embed) {
 }
 ?>
 <h1 class="abas-page-title">Vagtcentral — service på vegne af montør</h1>
-<p class="abas-page-lead">Søg anlæg og montør, eller angiv montør manuelt hvis vedkommende ikke er i systemet.</p>
+<p class="abas-page-lead">Søg anlæg og person. Til højre vises opkald når en agent har besvaret i 3CX — træk ind i formularen.</p>
 
-<form method="post" class="abas-card max-w-xl abas-form" id="vc-service-form" data-abas-loading="Starter service…">
+<div class="abas-vc-layout">
+<form method="post" class="abas-card abas-form abas-vc-main" id="vc-service-form" data-abas-loading="Starter service…">
+    <input type="hidden" name="behalf_user_id" id="behalf_user_id" value="0">
+    <div class="abas-vc-drop-hint" id="vc-drop-hint">Slip opkald her for at udfylde person</div>
     <div class="abas-field abas-combobox" id="inst-combobox">
         <label class="abas-label" for="inst-search">Anlæg</label>
         <input
@@ -137,7 +147,7 @@ if ($embed) {
     </div>
 
     <div class="abas-field abas-combobox" id="montor-combobox">
-        <label class="abas-label" for="montor-search">Montør</label>
+        <label class="abas-label" for="montor-search">Montør / person</label>
         <input
             type="search"
             id="montor-search"
@@ -178,8 +188,19 @@ if ($embed) {
     <button type="submit" class="abas-btn-primary">Start service</button>
 </form>
 
+<aside class="abas-card abas-vc-calls" id="vc-calls-panel" aria-live="polite">
+    <h2 class="abas-card-title">Indgående opkald</h2>
+    <p class="abas-hint mb-3">Viser besvarede opkald fra 3CX — træk til formularen for auto-udfyldning.</p>
+    <ul class="abas-vc-call-list" id="vc-call-list"></ul>
+    <p class="abas-hint hidden" id="vc-call-empty">Ingen aktive opkald lige nu.</p>
+</aside>
+</div>
+
 <script>
-window.abasVcService = <?= json_encode(['searchUrl' => $searchUrl], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
+window.abasVcService = <?= json_encode([
+    'searchUrl' => $searchUrl,
+    'pollMs' => 3000,
+], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
 </script>
 <?php
 if ($embed) {

@@ -11,6 +11,7 @@ require_once __DIR__ . '/../../includes/users.php';
 require_once __DIR__ . '/../../includes/installation_sync.php';
 require_once __DIR__ . '/../../includes/service.php';
 require_once __DIR__ . '/../../includes/mfa.php';
+require_once __DIR__ . '/../../includes/bas_sso_auth.php';
 
 $conn = abas_db();
 $admin = abas_require_login();
@@ -31,6 +32,9 @@ $stmt->close();
 if (!$editUser) {
     abas_not_found('Brugeren findes ikke.', ['user_id' => $id]);
 }
+
+$basLink = abas_bas_user_link_get($conn, $id);
+$basLinked = $basLink !== null && trim((string) ($basLink['bas_username'] ?? '')) !== '';
 
 $listFilter = (string) ($_GET['filter'] ?? $_POST['filter'] ?? 'alle');
 if ($listFilter === '') {
@@ -110,8 +114,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $phone = abas_normalize_phone(trim($_POST['phone'] ?? ''));
     $role = $_POST['role'] ?? $editUser['role'];
     $active = !empty($_POST['active']) ? 1 : 0;
-    $trekantUserid = trim($_POST['trekant_userid'] ?? '');
-    $trekantUserid = $trekantUserid !== '' ? strtoupper($trekantUserid) : null;
     $smsServiceAllowed = !empty($_POST['sms_service_allowed']) ? 1 : 0;
     $mfaMethod = $_POST['mfa_method'] ?? 'passkey';
     if (!in_array($mfaMethod, ['passkey', 'sms_otp'], true)) {
@@ -172,15 +174,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($installerId !== null) {
         $displayNameDb = $displayName !== '' ? $displayName : null;
         $upd = $conn->prepare(
-            'UPDATE users SET email=?, username=?, phone=?, role=?, active=?, trekant_userid=?, installer_id=?, sms_service_allowed=?, registration_display_name=? WHERE id=?'
+            'UPDATE users SET email=?, username=?, phone=?, role=?, active=?, installer_id=?, sms_service_allowed=?, registration_display_name=? WHERE id=?'
         );
-        $upd->bind_param('ssssisiiis', $email, $username, $phone, $role, $active, $trekantUserid, $installerId, $smsServiceAllowed, $displayNameDb, $id);
+        $upd->bind_param('ssssiiisi', $email, $username, $phone, $role, $active, $installerId, $smsServiceAllowed, $displayNameDb, $id);
     } else {
         $displayNameDb = $displayName !== '' ? $displayName : null;
         $upd = $conn->prepare(
-            'UPDATE users SET email=?, username=?, phone=?, role=?, active=?, trekant_userid=?, installer_id=NULL, sms_service_allowed=?, registration_display_name=? WHERE id=?'
+            'UPDATE users SET email=?, username=?, phone=?, role=?, active=?, installer_id=NULL, sms_service_allowed=?, registration_display_name=? WHERE id=?'
         );
-        $upd->bind_param('ssssisisi', $email, $username, $phone, $role, $active, $trekantUserid, $smsServiceAllowed, $displayNameDb, $id);
+        $upd->bind_param('ssssiisi', $email, $username, $phone, $role, $active, $smsServiceAllowed, $displayNameDb, $id);
     }
     $upd->execute();
     $upd->close();
@@ -272,10 +274,13 @@ require __DIR__ . '/../partials/header.php';
             <?php endforeach; ?>
         </select>
     </div>
+    <?php if ($basLinked): ?>
     <div class="abas-field">
-        <label class="abas-label" for="trekant_userid">TrekantBrand userid</label>
-        <input id="trekant_userid" name="trekant_userid" value="<?= htmlspecialchars((string) ($editUser['trekant_userid'] ?? '')) ?>" class="abas-input font-mono" maxlength="8">
+        <label class="abas-label" for="bas_username">BAS-bruger</label>
+        <input id="bas_username" value="<?= htmlspecialchars((string) $basLink['bas_username']) ?>" class="abas-input font-mono bg-gray-100 text-gray-600" readonly disabled>
+        <p class="abas-hint">Styres via BAS/SCIM — redigeres ikke her.</p>
     </div>
+    <?php endif; ?>
     <?php if ($editUser['role'] === 'montor' || !empty($editUser['company_name'])): ?>
         <div class="abas-panel">
             <span class="text-gray-600">Firma (automatisk):</span>

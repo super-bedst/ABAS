@@ -20,7 +20,13 @@ function abas_current_user(mysqli $conn): ?array
     if ($id <= 0) {
         return null;
     }
-    $stmt = $conn->prepare('SELECT * FROM users WHERE id = ? AND active = 1 AND registration_status = "approved" LIMIT 1');
+    $stmt = $conn->prepare(
+        'SELECT u.*, b.bas_username
+         FROM users u
+         LEFT JOIN bas_user_links b ON b.aba_user_id = u.id
+         WHERE u.id = ? AND u.active = 1 AND u.registration_status = "approved"
+         LIMIT 1'
+    );
     $stmt->bind_param('i', $id);
     $stmt->execute();
     $user = $stmt->get_result()->fetch_assoc();

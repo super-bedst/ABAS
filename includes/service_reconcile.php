@@ -280,7 +280,7 @@ function abas_stop_external_testqueue(
     }
 
     if ($comm !== '' && $sInc > 0) {
-        $addResp = $client->addLogComment(abas_trekant_userid($user), (int) $installation['s_ins'], (string) $installation['deal_id'], $sInc, $comm);
+        $addResp = $client->addLogComment(abas_trekant_userid($user, $conn), (int) $installation['s_ins'], (string) $installation['deal_id'], $sInc, $comm);
         if (abas_trekant_return_code($addResp) !== 0) {
             error_log('ABA addLogComment after external stop failed s_inc=' . $sInc);
         }

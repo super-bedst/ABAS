@@ -178,7 +178,7 @@ function abas_start_service_session(
     $activeSession = $resolved['session'] ?? null;
 
     $client = abas_trekant();
-    $userid = abas_trekant_userid($user);
+    $userid = abas_trekant_userid($user, $conn);
     $sIns = (int) $installation['s_ins'];
     $dealId = (string) $installation['deal_id'];
     $testTime = abas_format_test_time_hours($hours);
@@ -190,9 +190,10 @@ function abas_start_service_session(
             $actor = $actorOverride;
         } elseif ($onBehalfUserId) {
             $actorStmt = $conn->prepare(
-                'SELECT u.*, ai.company_name
+                'SELECT u.*, ai.company_name, b.bas_username
                  FROM users u
                  LEFT JOIN approved_installers ai ON ai.id = u.installer_id
+                 LEFT JOIN bas_user_links b ON b.aba_user_id = u.id
                  WHERE u.id = ? LIMIT 1'
             );
             $actorStmt->bind_param('i', $onBehalfUserId);
@@ -403,7 +404,7 @@ function abas_stop_service_session(
         return ['ok' => false, 'code' => $code, 'message' => $resp['message']['message'] ?? 'Stop fejlede'];
     }
     if ($stopComment !== '' && $sInc > 0) {
-        $addResp = $client->addLogComment(abas_trekant_userid($user), $sIns, $dealId, $sInc, $stopComment);
+        $addResp = $client->addLogComment(abas_trekant_userid($user, $conn), $sIns, $dealId, $sInc, $stopComment);
         $addCode = abas_trekant_return_code($addResp);
         if ($addCode !== 0) {
             error_log('ABA addLogComment after stop failed: code ' . $addCode . ' s_inc=' . $sInc);
@@ -790,10 +791,10 @@ function abas_filter_alarmlog_hidden_rows(array $rows): array
     ));
 }
 
-function abas_fetch_installation_log(array $installation, string $mode, ?array $customRange = null, ?array $user = null): array
+function abas_fetch_installation_log(array $installation, string $mode, ?array $customRange = null, ?array $user = null, ?mysqli $conn = null): array
 {
     $client = abas_trekant();
-    $userid = abas_trekant_userid($user);
+    $userid = abas_trekant_userid($user, $conn);
     $sIns = (int) $installation['s_ins'];
     $dealId = (string) $installation['deal_id'];
     $range = null;
