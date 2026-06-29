@@ -242,7 +242,9 @@ function abas_bas_sso_claims_from_token_response(array $tokenPayload): array
     }
     $claims = abas_bas_sso_jwt_verify($idToken);
     if (!is_array($claims)) {
-        throw new RuntimeException('SSO-token kunne ikke verificeres.');
+        throw new RuntimeException(
+            'SSO-token kunne ikke verificeres mod BAS JWKS. Genstart Apache på teknikweb2 og prøv igen.'
+        );
     }
 
     return $claims;

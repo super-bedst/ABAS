@@ -167,7 +167,7 @@ function abas_bas_sso_fetch_discovery(): ?array
 function abas_bas_sso_fetch_jwks(): array
 {
     static $cached = null;
-    if (is_array($cached)) {
+    if (is_array($cached) && $cached !== []) {
         return $cached;
     }
     $discovery = abas_bas_sso_fetch_discovery();
@@ -186,12 +186,15 @@ function abas_bas_sso_fetch_jwks(): array
     $body = abas_curl_exec($ch);
     $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
     abas_curl_close($ch);
-    if (!is_string($body) || $code < 200 || $code >= 300) {
+    if (!is_string($body) || $body === '' || $code < 200 || $code >= 300) {
         return [];
     }
+    $body = ltrim($body, "\xEF\xBB\xBF");
     $decoded = json_decode($body, true);
     $keys = is_array($decoded) && is_array($decoded['keys'] ?? null) ? $decoded['keys'] : [];
-    $cached = $keys;
+    if ($keys !== []) {
+        $cached = $keys;
+    }
 
     return $keys;
 }
@@ -446,9 +449,35 @@ function abas_bas_sso_token_request(string $tokenUrl, array $fields, string $aut
         return null;
     }
 
+    $body = ltrim($body, "\xEF\xBB\xBF");
     $decoded = json_decode($body, true);
+    if (!is_array($decoded)) {
+        abas_bas_sso_set_last_exchange_error(
+            'BAS returnerede ugyldigt token-svar (HTTP ' . $httpCode . '). Tjek BAS log.'
+        );
+        if (function_exists('abas_log_error')) {
+            abas_log_error('bas_sso', 'Token exchange invalid JSON', [
+                'http' => $httpCode,
+                'body' => substr($body, 0, 300),
+                'redirect_uri' => $fields['redirect_uri'] ?? null,
+            ]);
+        }
 
-    return is_array($decoded) ? $decoded : null;
+        return null;
+    }
+    if (trim((string) ($decoded['id_token'] ?? '')) === '') {
+        abas_bas_sso_set_last_exchange_error('BAS token-svar mangler id_token.');
+        if (function_exists('abas_log_error')) {
+            abas_log_error('bas_sso', 'Token exchange missing id_token', [
+                'http' => $httpCode,
+                'keys' => array_keys($decoded),
+            ]);
+        }
+
+        return null;
+    }
+
+    return $decoded;
 }
 
 function abas_bas_sso_build_authorize_url(string $redirectUri, string $scope = 'openid profile email'): string
