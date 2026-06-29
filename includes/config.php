@@ -111,7 +111,6 @@ function abas_config(): array
             'sender' => (string) abas_env('BAS_SMS_SENDER', '+4541140602'),
             'dedupe_seconds' => (int) abas_env('BAS_SMS_DEDUPE_SECONDS', '120'),
             'send_replies' => abas_env('SMS_SEND_REPLIES', '1') !== '0',
-            'inbound_secret' => (string) abas_env('SMS_INBOUND_SECRET', ''),
         ],
     ];
 }

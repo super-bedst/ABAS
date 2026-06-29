@@ -188,7 +188,11 @@ function abas_close_session_ended_externally(mysqli $conn, array $sessionRow): b
             null,
             'Afsluttet uden for ABA Service (VC/Trekant)',
             'cron',
-            0
+            0,
+            false,
+            (string) ($installation['miscno2'] ?? ''),
+            (string) ($installation['name'] ?? ''),
+            'Afsluttet uden for ABA Service (VC/Trekant)'
         );
         abas_notify_service_ended_externally($conn, $user, $installation, $onBehalf, $sessionId);
     }
@@ -264,7 +268,11 @@ function abas_stop_external_testqueue(
         null,
         $comm,
         'web',
-        $code
+        $code,
+        false,
+        (string) ($installation['miscno2'] ?? ''),
+        (string) ($installation['name'] ?? ''),
+        trim($comment)
     );
 
     if ($code !== 0 && $code !== 15974) {
@@ -374,7 +382,7 @@ function abas_reconcile_watch_installations(mysqli $conn): array
 }
 
 /**
- * @return array{ok:bool, closed_abas:int, external_found:int, external_cleared:int, watched_installations:int, errors:list<string>, duration_ms:int}
+ * @return array{ok:bool, closed_abas:int, external_found:int, external_cleared:int, watched_installations:int, errors:list<string>, duration_ms:int, activity_log_purge:array{purged:int, retention_days:?int, skipped?:string}}
  */
 function abas_reconcile_service_testqueue(mysqli $conn): array
 {
@@ -418,7 +426,7 @@ function abas_reconcile_service_testqueue(mysqli $conn): array
         }
     }
 
-    return [
+    $result = [
         'ok' => $errors === [],
         'closed_abas' => $closedAbas,
         'external_found' => $externalFound,
@@ -427,6 +435,11 @@ function abas_reconcile_service_testqueue(mysqli $conn): array
         'errors' => $errors,
         'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
     ];
+
+    require_once __DIR__ . '/activity_log.php';
+    $result['activity_log_purge'] = abas_activity_purge_expired($conn);
+
+    return $result;
 }
 
 function abas_handle_reconcile_service_webhook(mysqli $conn): never

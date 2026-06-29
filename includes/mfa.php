@@ -163,6 +163,7 @@ function abas_mfa_set_method(mysqli $conn, int $userId, string $method): void
     if (!in_array($method, ['passkey', 'sms_otp'], true)) {
         return;
     }
+    $previous = abas_user_mfa_method($conn, $userId);
     $stmt = $conn->prepare(
         'INSERT INTO user_mfa (user_id, method, enrolled_at) VALUES (?, ?, NULL)
          ON DUPLICATE KEY UPDATE method = VALUES(method)'
@@ -170,9 +171,22 @@ function abas_mfa_set_method(mysqli $conn, int $userId, string $method): void
     $stmt->bind_param('is', $userId, $method);
     $stmt->execute();
     $stmt->close();
+
+    if ($previous !== $method) {
+        require_once __DIR__ . '/activity_log.php';
+        abas_log_user_target_event(
+            $conn,
+            'auth',
+            'mfa_method_set',
+            $userId,
+            null,
+            null,
+            'Metode: ' . $method
+        );
+    }
 }
 
-function abas_mfa_reset_user(mysqli $conn, int $userId): void
+function abas_mfa_reset_user(mysqli $conn, int $userId, ?int $actorUserId = null): void
 {
     $del1 = $conn->prepare('DELETE FROM webauthn_credentials WHERE user_id = ?');
     $del1->bind_param('i', $userId);
@@ -182,22 +196,36 @@ function abas_mfa_reset_user(mysqli $conn, int $userId): void
     $del2->bind_param('i', $userId);
     $del2->execute();
     $del2->close();
+
+    require_once __DIR__ . '/activity_log.php';
+    abas_log_user_target_event($conn, 'auth', 'mfa_reset', $userId, $actorUserId);
 }
 
-function abas_mfa_mark_enrolled(mysqli $conn, int $userId): void
+function abas_mfa_mark_enrolled(mysqli $conn, int $userId, string $method = 'passkey'): void
 {
     $stmt = $conn->prepare('UPDATE user_mfa SET enrolled_at = NOW() WHERE user_id = ?');
     $stmt->bind_param('i', $userId);
     $stmt->execute();
     if ($stmt->affected_rows === 0) {
         $stmt->close();
-        $ins = $conn->prepare('INSERT INTO user_mfa (user_id, method, enrolled_at) VALUES (?, "passkey", NOW())');
-        $ins->bind_param('i', $userId);
+        $ins = $conn->prepare('INSERT INTO user_mfa (user_id, method, enrolled_at) VALUES (?, ?, NOW())');
+        $ins->bind_param('is', $userId, $method);
         $ins->execute();
         $ins->close();
     } else {
         $stmt->close();
     }
+
+    require_once __DIR__ . '/activity_log.php';
+    abas_log_user_target_event(
+        $conn,
+        'auth',
+        'mfa_enrolled',
+        $userId,
+        $userId,
+        null,
+        $method === 'sms_otp' ? 'SMS-kode' : 'Passkey'
+    );
 }
 
 function abas_mfa_store_credential(mysqli $conn, int $userId, string $credentialIdB64, string $publicKeyJson, string $label = ''): void

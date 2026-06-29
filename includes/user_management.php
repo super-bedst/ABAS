@@ -260,10 +260,30 @@ function abas_update_user_phone(mysqli $conn, int $userId, string $phone): ?stri
         return 'Angiv et gyldigt telefonnummer (min. 8 cifre).';
     }
 
+    $stmt = $conn->prepare('SELECT phone FROM users WHERE id = ? LIMIT 1');
+    $stmt->bind_param('i', $userId);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    $previous = trim((string) ($row['phone'] ?? ''));
+
     $stmt = $conn->prepare('UPDATE users SET phone = ? WHERE id = ?');
     $stmt->bind_param('si', $phone, $userId);
     $stmt->execute();
     $stmt->close();
+
+    if ($previous !== $phone) {
+        require_once __DIR__ . '/activity_log.php';
+        abas_log_user_target_event(
+            $conn,
+            'user',
+            'profile_updated',
+            $userId,
+            $userId,
+            null,
+            'Telefon opdateret'
+        );
+    }
 
     return null;
 }
@@ -288,6 +308,9 @@ function abas_update_user_password_with_current(mysqli $conn, array $user, strin
     $stmt->bind_param('si', $newHash, $userId);
     $stmt->execute();
     $stmt->close();
+
+    require_once __DIR__ . '/activity_log.php';
+    abas_log_user_target_event($conn, 'auth', 'password_changed', $userId, $userId);
 
     return null;
 }
@@ -356,6 +379,17 @@ function abas_save_managed_user_contact(
     if ($smsCode !== '') {
         abas_set_user_sms_code($conn, $targetId, $smsCode);
     }
+
+    require_once __DIR__ . '/activity_log.php';
+    abas_log_user_target_event(
+        $conn,
+        'user',
+        'updated',
+        $targetId,
+        (int) ($actor['id'] ?? 0) ?: null,
+        $displayName !== '' ? $displayName : $username,
+        'Kontaktdata opdateret'
+    );
 
     return ['ok' => true];
 }

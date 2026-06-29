@@ -32,9 +32,12 @@ require __DIR__ . '/../partials/header.php';
         bruges til REST-kald med <code>Authorization: Bearer …</code> — fx søgning, service start/stop og alarmlog.
     </p>
     <p>
-        <strong>Cron-jobs og SMS-webhook</strong> bruger <em>ikke</em> API-tokens. De valideres mod hemmeligheder i
-        <code>env.local</code> (<code>SYNC_CRON_SECRET</code>, valgfri <code>SERVICE_RECONCILE_CRON_SECRET</code>,
-        <code>SMS_INBOUND_SECRET</code>) via <code>?key=…</code> eller samme værdi som Bearer.
+        <strong>Cron-jobs</strong> bruger <em>ikke</em> API-tokens. De valideres mod hemmeligheder i
+        <code>env.local</code> (<code>SYNC_CRON_SECRET</code>, valgfri <code>SERVICE_RECONCILE_CRON_SECRET</code>)
+        via <code>?key=…</code> eller samme værdi som Bearer.
+    </p>
+    <p>
+        <strong>SMS inbound webhook</strong> kræver ingen nøgle — kun <code>POST</code> med JSON-body.
     </p>
 </div>
 
@@ -60,14 +63,10 @@ require __DIR__ . '/../partials/header.php';
                     <p class="mt-2 text-xs text-gray-500">Eksempel-body: <code class="bg-gray-100 px-1 rounded"><?= htmlspecialchars($ep['example_body']) ?></code></p>
                 <?php endif; ?>
                 <?php if ($envKeys !== []): ?>
-                    <?php if ($ep['auth'] === 'sms_secret' && !abas_api_env_configured($envKeys)): ?>
-                        <p class="mt-2 text-xs text-gray-500">Webhook er åben — <code>SMS_INBOUND_SECRET</code> er ikke sat</p>
-                    <?php else: ?>
-                        <p class="mt-2 text-xs <?= abas_api_env_configured($envKeys) ? 'text-emerald-700' : 'text-amber-700' ?>">
-                            <?= abas_api_env_configured($envKeys) ? 'Nøgle er sat på serveren' : 'Nøgle mangler i env.local' ?>
-                            (<?= htmlspecialchars(implode(' / ', $envKeys)) ?>)
-                        </p>
-                    <?php endif; ?>
+                    <p class="mt-2 text-xs <?= abas_api_env_configured($envKeys) ? 'text-emerald-700' : 'text-amber-700' ?>">
+                        <?= abas_api_env_configured($envKeys) ? 'Nøgle er sat på serveren' : 'Nøgle mangler i env.local' ?>
+                        (<?= htmlspecialchars(implode(' / ', $envKeys)) ?>)
+                    </p>
                 <?php endif; ?>
                 <?php if (!empty($ep['auth_detail'])): ?>
                     <p class="mt-1 text-xs text-gray-500"><?= htmlspecialchars($ep['auth_detail']) ?></p>

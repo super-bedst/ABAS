@@ -48,7 +48,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'reset_password') {
-        abas_password_send_flow_email($conn, $targetId, 'reset');
+        abas_password_send_flow_email($conn, $targetId, 'reset', (int) $actor['id']);
         abas_flash_set('success', 'Nulstillings-e-mail sendt.');
         abas_redirect('anlaegsbruger-edit.php?id=' . $targetId);
     }

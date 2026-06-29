@@ -1,14 +1,11 @@
 -- Opdater eksisterende portal-import (firmanavne m.m.)
 --
--- 1. På portalservren (UTF-8 bevares):
---    php ~/generate_portal_import_sql.php --installers-only --output=portal_migration_update_installers.sql
+-- Fil klar til brug: Database/imports/portal_migration_update.sql
+-- (genereret fra portalservren med korrekt UTF-8)
 --
---    Eller firma + brugere (uden audit_logs):
---    php ~/generate_portal_import_sql.php --output=portal_migration_update.sql
+-- Gen-generer ved behov (fra projektroden, kræver VPN + PuTTY):
+--   .\scripts\fetch_portal_update_sql.ps1
+--   .\scripts\fetch_portal_update_sql.ps1 -InstallersOnly
 --
--- 2. Kør den genererede fil mod ABAS:
---    mysql ... abas < portal_migration_update_installers.sql
---
--- Scriptet opdaterer approved_installers.company_name via ON DUPLICATE KEY UPDATE,
--- erstatter import-*.trekantbrand-import.local med rigtige domæner hvor muligt,
--- og opdaterer brugernes display-navne.
+-- Kør mod ABAS efter backup:
+--   mysql ... abas < Database/imports/portal_migration_update.sql

@@ -389,7 +389,7 @@ function abas_approve_registration(
         abas_set_user_sms_code($conn, $userId, $smsCode);
     }
 
-    abas_password_send_flow_email($conn, $userId, 'welcome');
+    abas_password_send_flow_email($conn, $userId, 'welcome', $adminId);
 
     require_once __DIR__ . '/activity_log.php';
     abas_log_activity(

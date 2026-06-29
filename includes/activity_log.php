@@ -6,9 +6,21 @@ require_once __DIR__ . '/db.php';
 
 function abas_activity_client_ip(): ?string
 {
-    $ip = $_SERVER['REMOTE_ADDR'] ?? null;
+    $headers = ['HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'REMOTE_ADDR'];
+    foreach ($headers as $header) {
+        if (empty($_SERVER[$header])) {
+            continue;
+        }
+        $value = (string) $_SERVER[$header];
+        if ($header === 'HTTP_X_FORWARDED_FOR') {
+            $value = trim(explode(',', $value)[0]);
+        }
+        if (filter_var($value, FILTER_VALIDATE_IP)) {
+            return $value;
+        }
+    }
 
-    return is_string($ip) && $ip !== '' ? $ip : null;
+    return null;
 }
 
 /**
@@ -78,6 +90,50 @@ function abas_log_activity(
     $stmt->close();
 }
 
+function abas_activity_installation_object(?string $miscno2, ?string $installationName, int $sIns, string $dealId): array
+{
+    $misc = strtolower(trim((string) $miscno2));
+    $name = trim((string) $installationName);
+    if ($misc !== '') {
+        return [
+            'id' => $misc,
+            'label' => strtoupper($misc) . ($name !== '' ? ' · ' . $name : ''),
+        ];
+    }
+
+    return [
+        'id' => (string) $sIns,
+        'label' => 'Anlæg ' . $sIns . ' · ' . $dealId,
+    ];
+}
+
+function abas_log_user_target_event(
+    mysqli $conn,
+    string $category,
+    string $action,
+    int $targetUserId,
+    ?int $actorUserId = null,
+    ?string $targetLabel = null,
+    ?string $details = null,
+    ?string $source = 'web'
+): void {
+    abas_log_activity(
+        $conn,
+        $category,
+        $action,
+        $actorUserId,
+        null,
+        'user',
+        (string) $targetUserId,
+        $targetLabel,
+        $details,
+        null,
+        null,
+        $source,
+        abas_activity_client_ip()
+    );
+}
+
 function abas_activity_action_label(string $category, string $action): string
 {
     $key = $category . '/' . $action;
@@ -89,8 +145,16 @@ function abas_activity_action_label(string $category, string $action): string
         'service/add_comment' => 'Servicekommentar',
         'auth/login' => 'Login',
         'auth/logout' => 'Logout',
+        'auth/mfa_enrolled' => '2FA oprettet',
+        'auth/mfa_reset' => '2FA nulstillet',
+        'auth/mfa_method_set' => '2FA-metode ændret',
+        'auth/password_reset_sent' => 'Nulstillingslink sendt',
+        'auth/welcome_sent' => 'Velkomstlink sendt',
+        'auth/password_set' => 'Adgangskode sat',
+        'auth/password_changed' => 'Adgangskode ændret',
         'user/created' => 'Bruger oprettet',
         'user/updated' => 'Bruger opdateret',
+        'user/profile_updated' => 'Profil opdateret',
         'user/deactivated' => 'Bruger deaktiveret',
         'user/deleted' => 'Bruger slettet',
         'registration/submitted' => 'Ansøgning modtaget',
@@ -98,6 +162,12 @@ function abas_activity_action_label(string $category, string $action): string
         'registration/rejected' => 'Ansøgning afvist',
         'installer/created' => 'Installatør oprettet',
         'installer/updated' => 'Installatør opdateret',
+        'api/health' => 'API health',
+        'api/search' => 'API søgning',
+        'api/service' => 'API service',
+        'api/fetch_log' => 'API alarmlog',
+        'api/error' => 'API fejl',
+        'api/request' => 'API kald',
         default => str_replace('_', ' ', $action),
     };
 }
@@ -105,7 +175,7 @@ function abas_activity_action_label(string $category, string $action): string
 /** @return list<string> */
 function abas_activity_categories(): array
 {
-    return ['service', 'auth', 'user', 'registration', 'installer', 'sms', 'system'];
+    return ['service', 'auth', 'user', 'registration', 'installer', 'sms', 'system', 'api'];
 }
 
 /** @return list<string> */
@@ -192,11 +262,19 @@ function abas_activity_search(mysqli $conn, array $filters, int $limit = 50, int
         $params[] = $userId;
     }
 
-    $sIns = (int) ($filters['s_ins'] ?? 0);
-    if ($sIns > 0) {
-        $where[] = 'ae.related_s_ins = ?';
-        $types .= 'i';
-        $params[] = $sIns;
+    $sInsFilter = trim((string) ($filters['s_ins'] ?? ''));
+    if ($sInsFilter !== '' && $sInsFilter !== '0') {
+        if (ctype_digit($sInsFilter)) {
+            $where[] = 'ae.related_s_ins = ?';
+            $types .= 'i';
+            $params[] = (int) $sInsFilter;
+        } else {
+            $misc = strtolower($sInsFilter);
+            $where[] = '(LOWER(ae.object_id) = ? OR ae.object_label LIKE ?)';
+            $types .= 'ss';
+            $params[] = $misc;
+            $params[] = '%' . strtoupper($misc) . '%';
+        }
     }
 
     $dateFrom = trim((string) ($filters['date_from'] ?? ''));
@@ -335,4 +413,58 @@ function abas_activity_recent(mysqli $conn, int $limit = 15): array
     $result = abas_activity_search($conn, [], $limit, 0);
 
     return $result['rows'];
+}
+
+function abas_activity_log_retention_days(): ?int
+{
+    require_once __DIR__ . '/config.php';
+    $raw = abas_env('ACTIVITY_LOG_RETENTION_DAYS');
+    if ($raw === null || $raw === '' || $raw === '0') {
+        return null;
+    }
+    $days = (int) $raw;
+
+    return $days > 0 ? $days : null;
+}
+
+/**
+ * @return array{purged: int, retention_days: ?int, skipped?: string}
+ */
+function abas_activity_purge_expired(mysqli $conn, bool $force = false): array
+{
+    $days = abas_activity_log_retention_days();
+    if ($days === null) {
+        return ['purged' => 0, 'retention_days' => null];
+    }
+
+    static $tableChecked = false;
+    if (!$tableChecked) {
+        $tableChecked = true;
+        $chk = $conn->query("SHOW TABLES LIKE 'activity_events'");
+        if (!$chk || $chk->num_rows === 0) {
+            return ['purged' => 0, 'retention_days' => $days, 'skipped' => 'no_table'];
+        }
+        $chk->close();
+    }
+
+    if (!$force) {
+        require_once __DIR__ . '/config.php';
+        $last = abas_setting($conn, 'activity_log_last_purge', '');
+        if ($last === date('Y-m-d')) {
+            return ['purged' => 0, 'retention_days' => $days, 'skipped' => 'already_today'];
+        }
+    }
+
+    $stmt = $conn->prepare('DELETE FROM activity_events WHERE created_at < DATE_SUB(NOW(), INTERVAL ? DAY)');
+    if (!$stmt) {
+        return ['purged' => 0, 'retention_days' => $days, 'skipped' => 'prepare_failed'];
+    }
+    $stmt->bind_param('i', $days);
+    $stmt->execute();
+    $purged = $stmt->affected_rows;
+    $stmt->close();
+
+    abas_set_setting($conn, 'activity_log_last_purge', date('Y-m-d'));
+
+    return ['purged' => max(0, $purged), 'retention_days' => $days];
 }

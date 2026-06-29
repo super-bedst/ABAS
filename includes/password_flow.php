@@ -49,7 +49,7 @@ function abas_password_consume_token(mysqli $conn, string $rawToken): void
     $stmt->close();
 }
 
-function abas_password_send_flow_email(mysqli $conn, int $userId, string $kind): bool
+function abas_password_send_flow_email(mysqli $conn, int $userId, string $kind, ?int $actorUserId = null): bool
 {
     $stmt = $conn->prepare('SELECT email, username, registration_display_name FROM users WHERE id = ?');
     $stmt->bind_param('i', $userId);
@@ -66,7 +66,7 @@ function abas_password_send_flow_email(mysqli $conn, int $userId, string $kind):
         $displayName = (string) $user['username'];
     }
 
-    return abas_mail_password_link(
+    $sent = abas_mail_password_link(
         (string) $user['email'],
         (string) $user['username'],
         $displayName,
@@ -74,6 +74,22 @@ function abas_password_send_flow_email(mysqli $conn, int $userId, string $kind):
         $mailKind,
         $issued['expires_at']
     );
+
+    if ($sent) {
+        require_once __DIR__ . '/activity_log.php';
+        $action = in_array($kind, ['welcome', 'vc_invite'], true) ? 'welcome_sent' : 'password_reset_sent';
+        abas_log_user_target_event(
+            $conn,
+            'auth',
+            $action,
+            $userId,
+            $actorUserId,
+            $displayName,
+            (string) $user['email']
+        );
+    }
+
+    return $sent;
 }
 
 function abas_access_confirm_months(mysqli $conn): int

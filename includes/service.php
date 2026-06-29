@@ -20,7 +20,10 @@ function abas_log_service_action(
     ?string $comm,
     string $source,
     ?int $returnCode,
-    bool $responsibilityAck = false
+    bool $responsibilityAck = false,
+    ?string $miscno2 = null,
+    ?string $installationName = null,
+    ?string $userComment = null
 ): void {
     $ackAt = $responsibilityAck ? date('Y-m-d H:i:s') : null;
     $stmt = $conn->prepare(
@@ -31,6 +34,12 @@ function abas_log_service_action(
     $stmt->execute();
     $stmt->close();
 
+    $object = abas_activity_installation_object($miscno2, $installationName, $sIns, $dealId);
+    $activityDetails = trim((string) $userComment);
+    if ($activityDetails === '') {
+        $activityDetails = null;
+    }
+
     abas_log_activity(
         $conn,
         'service',
@@ -38,12 +47,13 @@ function abas_log_service_action(
         $userId > 0 ? $userId : null,
         null,
         'installation',
-        (string) $sIns,
-        'Anlæg ' . $sIns . ' · ' . $dealId,
-        $comm,
+        $object['id'],
+        $object['label'],
+        $activityDetails,
         $sIns,
         $dealId,
-        $source
+        $source,
+        abas_activity_client_ip()
     );
 }
 
@@ -243,7 +253,23 @@ function abas_start_service_session(
     $userId = (int) $user['id'];
     $action = $isExtend ? 'extend_service' : 'start_service';
     $sessionIdForLog = $activeSession ? (int) $activeSession['id'] : null;
-    abas_log_service_action($conn, $userId, $onBehalfUserId, $sessionIdForLog, $sIns, $dealId, $action, $testTime, $comm, $source, $code, $responsibilityAck);
+    abas_log_service_action(
+        $conn,
+        $userId,
+        $onBehalfUserId,
+        $sessionIdForLog,
+        $sIns,
+        $dealId,
+        $action,
+        $testTime,
+        $comm,
+        $source,
+        $code,
+        $responsibilityAck,
+        (string) ($installation['miscno2'] ?? ''),
+        (string) ($installation['name'] ?? ''),
+        trim($comment)
+    );
     if ($isExtend) {
         if ($code !== 0) {
             return ['ok' => false, 'code' => $code, 'message' => abas_trekant_response_hint($resp) ?: 'Forlængelse fejlede'];
@@ -356,7 +382,23 @@ function abas_stop_service_session(
     $resp = $client->stopService($sIns, $dealId, $sInc > 0 ? $sInc : null, $stopComment);
     $code = abas_trekant_return_code($resp);
     $userId = (int) $user['id'];
-    abas_log_service_action($conn, $userId, $onBehalfUserId, $notifySessionId, $sIns, $dealId, 'stop_service', null, $stopComment, $source, $code);
+    abas_log_service_action(
+        $conn,
+        $userId,
+        $onBehalfUserId,
+        $notifySessionId,
+        $sIns,
+        $dealId,
+        'stop_service',
+        null,
+        $stopComment,
+        $source,
+        $code,
+        false,
+        (string) ($installation['miscno2'] ?? ''),
+        (string) ($installation['name'] ?? ''),
+        trim($comment)
+    );
     if ($code !== 0 && $code !== 15974) {
         return ['ok' => false, 'code' => $code, 'message' => $resp['message']['message'] ?? 'Stop fejlede'];
     }

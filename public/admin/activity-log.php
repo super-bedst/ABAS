@@ -18,7 +18,7 @@ $filters = [
     'category' => trim((string) ($_GET['category'] ?? '')),
     'action' => trim((string) ($_GET['action'] ?? '')),
     'user_id' => (int) ($_GET['user_id'] ?? 0),
-    's_ins' => (int) ($_GET['s_ins'] ?? 0),
+    's_ins' => trim((string) ($_GET['s_ins'] ?? '')),
     'date_from' => trim((string) ($_GET['date_from'] ?? '')),
     'date_to' => trim((string) ($_GET['date_to'] ?? '')),
 ];
@@ -48,7 +48,11 @@ $queryBase = array_filter($filters, static fn ($v): bool => $v !== null && $v !=
 
 $pageTitle = 'Aktivitetslog';
 $adminSectionTitle = 'Aktivitetslog';
-$adminSectionLead = 'Alle hændelser inkl. service start/stop, login og brugerændringer.';
+$retentionDays = abas_activity_log_retention_days();
+$retentionNote = $retentionDays === null
+    ? 'Aktivitetslog bevares uden automatisk sletning.'
+    : 'Hændelser ældre end ' . $retentionDays . ' dage slettes automatisk (én gang dagligt via service-reconcile cron).';
+$adminSectionLead = 'Alle hændelser inkl. service, login, brugerændringer og API-kald. ' . $retentionNote . ' Fejllogfil viser kun de seneste 50 linjer.';
 $currentUser = $user;
 require __DIR__ . '/../partials/admin_shell_start.php';
 ?>
@@ -91,8 +95,8 @@ require __DIR__ . '/../partials/admin_shell_start.php';
             </select>
         </div>
         <div class="abas-field">
-            <label class="abas-label" for="s_ins">Anlæg (s_ins)</label>
-            <input id="s_ins" name="s_ins" type="number" min="0" class="abas-input" value="<?= $filters['s_ins'] > 0 ? (int) $filters['s_ins'] : '' ?>">
+            <label class="abas-label" for="s_ins">Anlæg (s_ins / ABA-nr.)</label>
+            <input id="s_ins" name="s_ins" type="text" class="abas-input" value="<?= htmlspecialchars($filters['s_ins']) ?>" placeholder="s_ins eller fab0100">
         </div>
         <div class="abas-field">
             <label class="abas-label" for="date_from">Fra dato</label>

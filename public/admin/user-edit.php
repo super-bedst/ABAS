@@ -79,13 +79,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'reset_mfa') {
-        abas_mfa_reset_user($conn, $id);
+        abas_mfa_reset_user($conn, $id, (int) $admin['id']);
         abas_flash_set('success', '2FA nulstillet — brugeren skal opsætte igen ved næste login.');
         abas_redirect($selfUrl);
     }
 
     if ($action === 'send_welcome') {
-        $sent = abas_password_send_flow_email($conn, $id, 'welcome');
+        $sent = abas_password_send_flow_email($conn, $id, 'welcome', (int) $admin['id']);
         abas_flash_set($sent ? 'success' : 'error', $sent
             ? 'Velkomst-e-mail sendt til ' . ($editUser['email'] ?? '') . '.'
             : 'Kunne ikke sende velkomst-e-mail — tjek mail-konfiguration.');
@@ -93,7 +93,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'send_reset') {
-        $sent = abas_password_send_flow_email($conn, $id, 'reset');
+        $sent = abas_password_send_flow_email($conn, $id, 'reset', (int) $admin['id']);
         abas_flash_set($sent ? 'success' : 'error', $sent
             ? 'Nulstillings-e-mail sendt til ' . ($editUser['email'] ?? '') . '.'
             : 'Kunne ikke sende nulstillings-e-mail — tjek mail-konfiguration.');
@@ -190,6 +190,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($smsCode !== '') {
         abas_set_user_sms_code($conn, $id, $smsCode);
     }
+
+    require_once __DIR__ . '/../../includes/activity_log.php';
+    abas_log_user_target_event(
+        $conn,
+        'user',
+        'updated',
+        $id,
+        (int) $admin['id'],
+        $displayName !== '' ? $displayName : $username,
+        'Brugerdata opdateret i admin'
+    );
 
     abas_flash_set('success', 'Bruger opdateret.');
     abas_redirect($selfUrl);

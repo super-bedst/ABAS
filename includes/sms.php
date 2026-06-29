@@ -141,10 +141,6 @@ function abas_handle_sms_inbound_webhook(mysqli $conn): never
     $raw = (string) file_get_contents('php://input');
     abas_sms_log_inbound_webhook($raw);
 
-    if (!abas_sms_verify_inbound_request()) {
-        abas_sms_inbound_respond(['ok' => false, 'reply' => 'Ugyldig webhook-nøgle']);
-    }
-
     $body = json_decode($raw, true);
     if (!is_array($body)) {
         abas_sms_inbound_respond(['ok' => false, 'reply' => 'Ugyldig JSON']);
@@ -161,23 +157,6 @@ function abas_handle_sms_inbound_webhook(mysqli $conn): never
     } catch (Throwable $e) {
         abas_sms_inbound_respond(['ok' => false, 'reply' => 'Intern fejl']);
     }
-}
-
-function abas_sms_verify_inbound_request(): bool
-{
-    $secret = abas_config()['sms']['inbound_secret'];
-    if ($secret === '') {
-        return true;
-    }
-
-    $hdr = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
-    $bearer = null;
-    if (preg_match('/Bearer\s+(\S+)/i', $hdr, $m)) {
-        $bearer = $m[1];
-    }
-    $key = trim((string) ($_GET['key'] ?? $_POST['key'] ?? ''));
-
-    return $bearer === $secret || $key === $secret;
 }
 
 /**

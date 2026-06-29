@@ -16,13 +16,19 @@ $path = $_GET['route'] ?? '';
 if ($path === '' && isset($_SERVER['PATH_INFO'])) {
     $path = trim((string) $_SERVER['PATH_INFO'], '/');
 }
+$GLOBALS['_abas_api_route'] = $path;
+$GLOBALS['_abas_api_method'] = $method;
+unset($GLOBALS['_abas_api_token'], $GLOBALS['_abas_api_installation'], $GLOBALS['_abas_api_audit_extra'], $GLOBALS['_abas_api_search_q']);
 
 if ($path === 'health' && $method === 'GET') {
     abas_api_json(200, ['status' => 'ok', 'app' => abas_config()['app_name']]);
 }
 
-if ($path === 'sms/inbound' && $method === 'POST') {
-    abas_handle_sms_inbound_webhook($conn);
+if ($path === 'sms/inbound') {
+    if ($method === 'POST') {
+        abas_handle_sms_inbound_webhook($conn);
+    }
+    abas_api_json(405, ['error' => 'Kun POST understøttes']);
 }
 
 if ($path === 'cron/sync-installations' && in_array($method, ['GET', 'POST'], true)) {
@@ -40,9 +46,11 @@ if ($path === 'cron/sms-expiry-warnings' && in_array($method, ['GET', 'POST'], t
 
 $token = abas_api_authenticate($conn);
 $apiUser = abas_api_user_from_token($conn, $token);
+$GLOBALS['_abas_api_token'] = $token;
 
 if ($path === 'installations/search' && $method === 'GET') {
     $q = trim($_GET['q'] ?? '');
+    $GLOBALS['_abas_api_search_q'] = $q;
     $like = '%' . $q . '%';
     $stmt = $conn->prepare('SELECT id, miscno2, name, city, s_ins, deal_id FROM installations WHERE miscno2 LIKE ? OR name LIKE ? LIMIT 20');
     $stmt->bind_param('ss', $like, $like);
@@ -57,10 +65,12 @@ if (preg_match('#^installations/([^/]+)/service$#', $path, $m) && $method === 'P
     $misc = strtolower($m[1]);
     $body = json_decode((string) file_get_contents('php://input'), true) ?: [];
     $installation = abas_find_installation_by_miscno2($conn, $misc);
+    $GLOBALS['_abas_api_installation'] = $installation;
     if (!$installation) {
         abas_api_json(404, ['error' => 'Anlæg ikke fundet']);
     }
     $action = $body['action'] ?? 'start';
+    $GLOBALS['_abas_api_audit_extra'] = ['service_action' => $action];
     if ($action === 'start') {
         $hours = (float) ($body['hours'] ?? 2);
         $r = abas_start_service_session($conn, $apiUser, $installation, $hours, null, (string) ($body['comment'] ?? 'API'), 'api');
@@ -73,10 +83,12 @@ if (preg_match('#^installations/([^/]+)/service$#', $path, $m) && $method === 'P
 
 if (preg_match('#^installations/([^/]+)/log$#', $path, $m) && $method === 'GET') {
     $installation = abas_find_installation_by_miscno2($conn, strtolower($m[1]));
+    $GLOBALS['_abas_api_installation'] = $installation;
     if (!$installation) {
         abas_api_json(404, ['error' => 'Anlæg ikke fundet']);
     }
     $mode = $_GET['mode'] ?? 'last20';
+    $GLOBALS['_abas_api_audit_extra'] = ['log_mode' => $mode];
     $log = abas_fetch_installation_log($installation, $mode, null, $apiUser);
     abas_api_json(200, ['code' => $log['code'], 'items' => $log['rows']]);
 }

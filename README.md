@@ -159,18 +159,16 @@ Sæt den **fulde endpoint-URL** i `BAS_SMS_API_URL` og `BAS_SMS_API_TOKEN` i `en
 BAS_SMS_API_URL=https://beredskabsalarmering.dk/Api/V2/Sms/SendSms.php
 ```
 
-Inbound webhook (uden API Bearer-token):
+Inbound webhook (åben — ingen nøgle, kun POST):
 
 ```
 POST /api/v1/sms/inbound
 {"from":"+4520123456","body":"secret123 fab0100 START 2"}
 ```
 
-Fuld URL (BAS): `https://tkb.teamscreen.dk/Sandbox/ABAS/public/api/v1/sms/inbound`
+Fuld URL: `https://teknikweb2.trekantbrand.dk/api/v1/sms/inbound`
 
 Kræver `mod_rewrite` og `AllowOverride` for `.htaccess` i `public/`.
-
-Valgfrit: `SMS_INBOUND_SECRET` — gateway sender `?key=` eller `Authorization: Bearer`.
 
 Eksempler på SMS-kommandoer:
 

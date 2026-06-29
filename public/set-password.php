@@ -6,6 +6,7 @@ require_once __DIR__ . '/../includes/bootstrap.php';
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/password_flow.php';
 require_once __DIR__ . '/../includes/password_policy.php';
+require_once __DIR__ . '/../includes/activity_log.php';
 
 $conn = abas_db();
 $token = trim($_GET['token'] ?? $_POST['token'] ?? '');
@@ -34,6 +35,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $row) {
             $stmt->close();
             abas_password_consume_token($conn, $token);
             abas_access_set_due($conn, $uid);
+            abas_log_user_target_event(
+                $conn,
+                'auth',
+                'password_set',
+                $uid,
+                $uid,
+                (string) ($row['username'] ?? ''),
+                $flowKind === 'welcome' ? 'Velkomst / første adgangskode' : 'Nulstilling via e-mail'
+            );
             abas_flash_set('success', 'Adgangskode gemt. Du kan nu logge ind.');
             abas_redirect('login.php');
         }

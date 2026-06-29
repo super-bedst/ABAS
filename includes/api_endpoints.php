@@ -87,10 +87,8 @@ function abas_api_endpoint_registry(): array
             'methods' => ['POST'],
             'path' => 'sms/inbound',
             'title' => 'SMS inbound webhook',
-            'description' => 'Modtag SMS fra BAS/Inmobile-gateway. JSON med from og body.',
-            'auth' => 'sms_secret',
-            'env_keys' => ['SMS_INBOUND_SECRET'],
-            'auth_detail' => 'Kun påkrævet hvis SMS_INBOUND_SECRET er sat i env.local.',
+            'description' => 'Modtag SMS fra BAS/Inmobile-gateway. JSON med from og body. Ingen nøgle påkrævet.',
+            'auth' => 'none',
             'example_body' => '{"from":"+4512345678","body":"STATUS FAB0100"}',
         ],
     ];
