@@ -8,6 +8,9 @@ function abas_load_env(string $root): void
     if ($loaded) {
         return;
     }
+    if (!isset($GLOBALS['_abas_env_file']) || !is_array($GLOBALS['_abas_env_file'])) {
+        $GLOBALS['_abas_env_file'] = [];
+    }
     foreach (['.env', '.env.local', 'env.local'] as $file) {
         $path = $root . DIRECTORY_SEPARATOR . $file;
         if (!is_readable($path)) {
@@ -28,10 +31,15 @@ function abas_load_env(string $root): void
             [$key, $value] = explode('=', $line, 2);
             $key = trim($key);
             $value = trim($value, " \t\"'");
-            if ($key !== '' && getenv($key) === false) {
-                putenv("$key=$value");
-                $_ENV[$key] = $value;
+            if ($key === '') {
+                continue;
             }
+            // env.local vinder altid over tomme/forældede system-variabler (Apache/WAMP).
+            $GLOBALS['_abas_env_file'][$key] = $value;
+            if (getenv($key) === false) {
+                putenv("$key=$value");
+            }
+            $_ENV[$key] = $value;
         }
     }
     $loaded = true;
@@ -41,8 +49,18 @@ function abas_load_env(string $root): void
 
 function abas_env(string $key, ?string $default = null): ?string
 {
+    if (isset($GLOBALS['_abas_env_file']) && is_array($GLOBALS['_abas_env_file']) && array_key_exists($key, $GLOBALS['_abas_env_file'])) {
+        $fromFile = $GLOBALS['_abas_env_file'][$key];
+
+        return $fromFile !== '' ? $fromFile : $default;
+    }
+
     $v = getenv($key);
     if ($v === false || $v === '') {
+        if (isset($_ENV[$key]) && $_ENV[$key] !== '') {
+            return (string) $_ENV[$key];
+        }
+
         return $default;
     }
 
