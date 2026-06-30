@@ -137,7 +137,7 @@ $canApprove = !$approveLocked;
             <?php if ($isMontor): ?>
             <label class="abas-reg-request-option">
                 <input type="checkbox" name="as_virksomhedsadmin" value="1" class="abas-checkbox" data-reg-role-virksomhedsadmin>
-                <span>Godkend som virksomhedsadministrator</span>
+                <span>Godkend som installatøradministrator</span>
             </label>
             <?php endif; ?>
 
@@ -162,7 +162,7 @@ $canApprove = !$approveLocked;
             <div class="abas-reg-request-scope-body">
                 <label class="flex items-start gap-2 text-sm mb-3">
                     <input type="checkbox" name="montor_scoped_access" value="1" class="abas-checkbox mt-0.5" data-reg-scoped-toggle>
-                    <span>Aktivér begrænsning — montøren ser kun valgte grupper (fuld adgang som standard).</span>
+                    <span>Aktivér begrænsning — brugeren ser kun valgte grupper (fuld adgang som standard).</span>
                 </label>
                 <?php if ($installationGroups === []): ?>
                     <p class="text-sm text-gray-500">Ingen anlægsgrupper oprettet endnu.</p>

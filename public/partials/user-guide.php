@@ -177,7 +177,7 @@ require_once dirname(__DIR__, 2) . '/includes/user_guide_mocks.php';
         <?php if ($ctx['show_virksomhed_users']): ?>
         <section id="guide-virksomhed" class="abas-guide-section">
             <h3 class="abas-guide-section-title">Virksomhedsbrugere</h3>
-            <p class="text-sm text-gray-600 mb-4">Som virksomhedsadministrator administrerer du montører og andre brugere i dit godkendte installatørfirma.</p>
+            <p class="text-sm text-gray-600 mb-4">Som installatøradministrator administrerer du montører og andre brugere i dit godkendte installatørfirma.</p>
             <?= abas_guide_mock_virksomhed_users() ?>
         </section>
         <?php endif; ?>

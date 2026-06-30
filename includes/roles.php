@@ -17,9 +17,15 @@ function abas_role_label(string $role): string
         'montor' => 'Montør',
         'anlaegsejer' => 'Anlægsejer',
         'anlaegsafprover' => 'Anlægsafprøver',
-        'virksomhedsadmin' => 'Virksomhedsadministrator',
+        'virksomhedsadmin' => 'Installatøradministrator',
         default => $role,
     };
+}
+
+/** Montør og installatøradministrator kan have valgfri adgangsbegrænsning via montor_scoped_access. */
+function abas_user_role_supports_optional_installation_scope(string $role): bool
+{
+    return in_array($role, ['montor', 'virksomhedsadmin'], true);
 }
 
 function abas_user_can_access_all_installations(string $role): bool
@@ -27,14 +33,14 @@ function abas_user_can_access_all_installations(string $role): bool
     return in_array($role, ['admin', 'vagtcentral', 'montor'], true);
 }
 
-/** Ful adgang til alle anlæg (montør med montor_scoped_access=0 har stadig fuld adgang). */
+/** Ful adgang til alle anlæg (montør/installatøradmin uden montor_scoped_access har stadig fuld adgang). */
 function abas_user_has_full_installation_access(array $user): bool
 {
     $role = (string) ($user['role'] ?? '');
     if (in_array($role, ['admin', 'vagtcentral'], true)) {
         return true;
     }
-    if ($role === 'montor') {
+    if (abas_user_role_supports_optional_installation_scope($role)) {
         return empty($user['montor_scoped_access']);
     }
 

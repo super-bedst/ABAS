@@ -218,7 +218,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         abas_set_user_sms_code($conn, $id, $smsCode);
     }
 
-    abas_set_user_montor_scoped_access($conn, $id, $role === 'montor' && !empty($_POST['montor_scoped_access']));
+    abas_set_user_montor_scoped_access(
+        $conn,
+        $id,
+        abas_user_role_supports_optional_installation_scope($role) && !empty($_POST['montor_scoped_access'])
+    );
 
     if (!abas_user_role_uses_installation_groups($role)) {
         abas_user_set_installation_groups($conn, $id, []);
@@ -242,8 +246,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $linkedInstallations = abas_user_installation_links($conn, $id);
 $userInstallationGroups = abas_user_installation_group_links($conn, $id);
 $userInstallationGroupIds = array_map(static fn (array $row): int => (int) $row['id'], $userInstallationGroups);
-$showInstallationAccess = in_array($editUser['role'], ['anlaegsejer', 'anlaegsafprover', 'montor'], true);
-$isMontorUser = ($editUser['role'] ?? '') === 'montor';
+$showInstallationAccess = in_array($editUser['role'], ['anlaegsejer', 'anlaegsafprover', 'montor', 'virksomhedsadmin'], true);
+$isOptionalScopeInstaller = abas_user_role_supports_optional_installation_scope((string) ($editUser['role'] ?? ''));
 $totalInstallationGroupCount = abas_count_installation_groups($conn);
 $groupPickerUsesSearch = $totalInstallationGroupCount > abas_installation_groups_user_picker_threshold();
 $groupSearchQ = trim((string) ($_GET['group_q'] ?? ''));
@@ -347,11 +351,11 @@ require __DIR__ . '/../partials/admin_shell_start.php';
         <p class="abas-hint">Styres via BAS/SCIM — redigeres ikke her.</p>
     </div>
     <?php endif; ?>
-    <?php if ($editUser['role'] === 'montor' || !empty($editUser['company_name'])): ?>
+    <?php if ($editUser['role'] === 'montor' || $editUser['role'] === 'virksomhedsadmin' || !empty($editUser['company_name'])): ?>
         <div class="abas-panel">
             <span class="text-gray-600">Firma (automatisk):</span>
             <span class="font-medium"><?= htmlspecialchars((string) ($editUser['company_name'] ?? 'Ikke tildelt')) ?></span>
-            <p class="abas-hint !mt-2">Sættes automatisk ud fra e-mail-domænet ved montører.</p>
+            <p class="abas-hint !mt-2">Sættes automatisk ud fra e-mail-domænet ved montører og installatøradministratorer.</p>
         </div>
     <?php endif; ?>
     <label class="flex items-center gap-2 text-sm">
@@ -362,8 +366,8 @@ require __DIR__ . '/../partials/admin_shell_start.php';
         <input type="checkbox" name="sms_service_allowed" value="1" class="abas-checkbox" <?= !empty($editUser['sms_service_allowed']) ? 'checked' : '' ?>>
         Må betjene anlæg via SMS
     </label>
-    <?php if ($isMontorUser): ?>
-    <p class="text-sm text-gray-600 border-t border-gray-100 pt-4 mt-2">Adgangsbegrænsning for montør konfigureres i kortet <strong>Begræns adgang til</strong> nedenfor.</p>
+    <?php if ($isOptionalScopeInstaller): ?>
+    <p class="text-sm text-gray-600 border-t border-gray-100 pt-4 mt-2">Adgangsbegrænsning konfigureres i kortet <strong>Begræns adgang til</strong> nedenfor.</p>
     <?php endif; ?>
     <div class="abas-field">
         <label class="abas-label" for="mfa_method">2FA-metode</label>
@@ -403,17 +407,17 @@ require __DIR__ . '/../partials/admin_shell_start.php';
 </form>
 
 <?php if ($showInstallationAccess): ?>
-<?php if ($isMontorUser): ?>
+<?php if ($isOptionalScopeInstaller): ?>
 <div class="abas-card max-w-lg mb-6">
     <h2 class="abas-card-title">Begræns adgang til</h2>
-    <p class="text-sm text-gray-600 mb-4">Montøren har som udgangspunkt adgang til alle anlæg. Aktivér begrænsning og tilknyt grupper og/eller enkeltanlæg nedenfor.</p>
+    <p class="text-sm text-gray-600 mb-4">Brugeren har som udgangspunkt adgang til alle anlæg. Aktivér begrænsning og tilknyt grupper og/eller enkeltanlæg nedenfor.</p>
     <label class="flex items-start gap-2 text-sm border border-amber-200 bg-amber-50 rounded-xl p-3 mb-6">
         <input type="checkbox" name="montor_scoped_access" value="1" form="user-main-form" class="abas-checkbox mt-0.5" <?= !empty($editUser['montor_scoped_access']) ? 'checked' : '' ?>>
-        <span><strong>Aktivér begrænsning</strong> — montøren kan kun se og betjene de grupper og direkte anlæg der er tilknyttet nedenfor. Gem med «Gem» i brugerformularen ovenfor.</span>
+        <span><strong>Aktivér begrænsning</strong> — brugeren kan kun se og betjene de grupper og direkte anlæg der er tilknyttet nedenfor. Gem med «Gem» i brugerformularen ovenfor.</span>
     </label>
 <?php endif; ?>
 
-<form method="post" class="<?= $isMontorUser ? 'abas-form' : 'abas-card max-w-lg abas-form mb-6' ?>" id="user-groups-form">
+<form method="post" class="<?= $isOptionalScopeInstaller ? 'abas-form' : 'abas-card max-w-lg abas-form mb-6' ?>" id="user-groups-form">
     <input type="hidden" name="id" value="<?= (int) $editUser['id'] ?>">
     <input type="hidden" name="action" value="save_groups">
     <?php if ($listFilter !== 'alle'): ?><input type="hidden" name="filter" value="<?= htmlspecialchars($listFilter) ?>"><?php endif; ?>
@@ -425,15 +429,15 @@ require __DIR__ . '/../partials/admin_shell_start.php';
     <input type="hidden" name="q" value="<?= htmlspecialchars($listSearch) ?>">
     <?php endif; ?>
 
-    <?php if ($isMontorUser): ?>
+    <?php if ($isOptionalScopeInstaller): ?>
     <h3 class="text-sm font-semibold text-gray-800 mb-2">Anlægsgrupper</h3>
     <?php else: ?>
     <h2 class="abas-card-title">Anlægsgrupper</h2>
     <?php endif; ?>
-    <?php if (!$isMontorUser): ?>
+    <?php if (!$isOptionalScopeInstaller): ?>
     <p class="text-sm text-gray-600 mb-4">Adgang til alle anlæg i de valgte grupper (ud over direkte tilknytning nedenfor). Gem med knappen nederst i dette afsnit.</p>
     <?php else: ?>
-    <p class="text-sm text-gray-600 mb-4">Montøren får adgang til alle anlæg i de valgte grupper.</p>
+    <p class="text-sm text-gray-600 mb-4">Brugeren får adgang til alle anlæg i de valgte grupper.</p>
     <?php endif; ?>
 
     <?php if ($totalInstallationGroupCount === 0): ?>
@@ -522,14 +526,14 @@ require __DIR__ . '/../partials/admin_shell_start.php';
     <?php endif; ?>
 </form>
 
-<div class="<?= $isMontorUser ? 'border-t border-gray-100 pt-6 mt-2' : 'abas-card max-w-lg abas-form mb-6' ?>">
-    <?php if ($isMontorUser): ?>
+<div class="<?= $isOptionalScopeInstaller ? 'border-t border-gray-100 pt-6 mt-2' : 'abas-card max-w-lg abas-form mb-6' ?>">
+    <?php if ($isOptionalScopeInstaller): ?>
     <h3 class="text-sm font-semibold text-gray-800 mb-2">Direkte tilknyttede anlæg</h3>
     <?php else: ?>
     <h2 class="abas-card-title">Direkte tilknyttede anlæg</h2>
     <?php endif; ?>
-    <?php if ($isMontorUser): ?>
-    <p class="text-sm text-gray-600 mb-4">Enkeltanlæg montøren skal have adgang til ud over grupper.</p>
+    <?php if ($isOptionalScopeInstaller): ?>
+    <p class="text-sm text-gray-600 mb-4">Enkeltanlæg brugeren skal have adgang til ud over grupper.</p>
     <?php endif; ?>
     <?php if ($linkedInstallations === []): ?>
         <p class="text-gray-500 text-sm mb-4">Ingen anlæg tilknyttet endnu.</p>
@@ -567,7 +571,7 @@ require __DIR__ . '/../partials/admin_shell_start.php';
         <button class="abas-btn-secondary">Tilknyt</button>
     </form>
 </div>
-<?php if ($isMontorUser): ?>
+<?php if ($isOptionalScopeInstaller): ?>
 </div>
 <?php endif; ?>
 <?php endif; ?>

@@ -62,7 +62,7 @@ $currentUser = $actor;
 require __DIR__ . '/../partials/header.php';
 ?>
 <h1 class="abas-page-title">Virksomhedsbrugere</h1>
-<p class="abas-page-lead">Montører, virksomhedsadministratorer og øvrige brugere hos <?= htmlspecialchars($companyName) ?>.</p>
+<p class="abas-page-lead">Montører, installatøradministratorer og øvrige brugere hos <?= htmlspecialchars($companyName) ?>.</p>
 
 <form method="get" class="mb-4 flex flex-wrap gap-2 items-end max-w-2xl" role="search" data-abas-loading="Søger…">
     <div class="abas-field flex-1 min-w-[14rem] !mb-0">

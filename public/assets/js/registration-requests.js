@@ -12,7 +12,6 @@
         var smsInput = approveForm.querySelector('[data-reg-sms-input]');
         var roleToggle = approveForm.querySelector('[data-reg-role-virksomhedsadmin]');
         var smsModule = approveForm.querySelector('[data-reg-module="sms"]');
-        var scopeDetails = approveForm.querySelector('[data-reg-scope-details]');
         var groupFilter = approveForm.querySelector('[data-reg-group-filter]');
         var groupList = approveForm.querySelector('[data-reg-group-list]');
 
@@ -49,18 +48,7 @@
             smsToggle.addEventListener('change', syncSmsPanel);
         }
         if (roleToggle) {
-            roleToggle.addEventListener('change', function () {
-                syncSmsPanel();
-                if (scopeDetails) {
-                    scopeDetails.hidden = roleToggle.checked;
-                    if (roleToggle.checked) {
-                        var scoped = scopeDetails.querySelector('[data-reg-scoped-toggle]');
-                        if (scoped) {
-                            scoped.checked = false;
-                        }
-                    }
-                }
-            });
+            roleToggle.addEventListener('change', syncSmsPanel);
         }
 
         syncSmsPanel();

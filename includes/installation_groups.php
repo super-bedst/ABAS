@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/roles.php';
 
 function abas_installation_group_public_id(): string
 {
@@ -472,7 +473,7 @@ function abas_user_set_installation_groups(mysqli $conn, int $userId, array $gro
 
 function abas_user_role_uses_installation_groups(string $role): bool
 {
-    return in_array($role, ['montor', 'anlaegsejer', 'anlaegsafprover'], true);
+    return in_array($role, ['montor', 'virksomhedsadmin', 'anlaegsejer', 'anlaegsafprover'], true);
 }
 
 function abas_user_role_always_scoped_to_installations(string $role): bool
@@ -486,7 +487,7 @@ function abas_user_uses_scoped_installation_access(array $user): bool
     if (abas_user_role_always_scoped_to_installations($role)) {
         return true;
     }
-    if ($role === 'montor') {
+    if (abas_user_role_supports_optional_installation_scope($role)) {
         return !empty($user['montor_scoped_access']);
     }
 

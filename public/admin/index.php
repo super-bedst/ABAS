@@ -38,7 +38,7 @@ require __DIR__ . '/../partials/admin_shell_start.php';
     <div class="abas-kpi-card">
         <p class="abas-kpi-label">Aktive brugere</p>
         <p class="abas-kpi-value"><?= (int) $stats['users_active'] ?></p>
-        <p class="abas-kpi-meta"><?= (int) $stats['montors'] ?> montører · <?= (int) $stats['virksomhedsadmins'] ?> virksomhedsadmins</p>
+        <p class="abas-kpi-meta"><?= (int) $stats['montors'] ?> montører · <?= (int) $stats['virksomhedsadmins'] ?> installatøradministratorer</p>
     </div>
     <div class="abas-kpi-card">
         <p class="abas-kpi-label">Afventende ansøgninger</p>

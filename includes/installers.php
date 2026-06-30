@@ -310,11 +310,11 @@ function abas_installer_user_access_summary(mysqli $conn, array $user): array
         return ['mode' => 'none', 'direct' => [], 'groups' => []];
     }
 
-    if ($role === 'montor' && empty($user['montor_scoped_access'])) {
+    if (abas_user_role_supports_optional_installation_scope($role) && empty($user['montor_scoped_access'])) {
         return ['mode' => 'full', 'direct' => [], 'groups' => []];
     }
 
-    if (!in_array($role, ['montor', 'anlaegsejer', 'anlaegsafprover'], true)) {
+    if (!in_array($role, ['montor', 'virksomhedsadmin', 'anlaegsejer', 'anlaegsafprover'], true)) {
         return ['mode' => 'none', 'direct' => [], 'groups' => []];
     }
 
@@ -549,7 +549,7 @@ function abas_installer_delete(mysqli $conn, int $installerId): array
     return [
         'ok' => true,
         'message' => 'Firmaet "' . $name . '" er slettet.'
-            . ($removedUsers > 0 ? ' ' . $removedUsers . ' montør(er)/virksomhedsadmin(s) er fjernet.' : ''),
+            . ($removedUsers > 0 ? ' ' . $removedUsers . ' montør(er)/installatøradministrator(er) er fjernet.' : ''),
         'removed_users' => $removedUsers,
     ];
 }

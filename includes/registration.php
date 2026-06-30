@@ -399,7 +399,7 @@ function abas_approve_registration(
         abas_set_user_sms_code($conn, $userId, trim($smsCode));
     }
 
-    if ($approveRole === 'montor') {
+    if (abas_user_role_supports_optional_installation_scope($approveRole)) {
         require_once __DIR__ . '/installation_groups.php';
         $scopedFlag = $montorScopedAccess ? 1 : 0;
         $scopeStmt = $conn->prepare('UPDATE users SET montor_scoped_access = ? WHERE id = ?');

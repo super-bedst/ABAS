@@ -163,7 +163,7 @@ require __DIR__ . '/../partials/admin_shell_start.php';
 
 <div class="abas-card mb-8">
     <h2 class="abas-card-title">Brugere (<?= count($installerUsers) ?>)</h2>
-    <p class="text-sm text-gray-600 mb-4">Montører og virksomhedsadministratorer tilknyttet firmaet.</p>
+    <p class="text-sm text-gray-600 mb-4">Montører og installatøradministratorer tilknyttet firmaet.</p>
     <?php if ($installerUsers === []): ?>
         <p class="text-gray-500 text-sm">Ingen brugere endnu.</p>
     <?php else: ?>
@@ -224,13 +224,13 @@ require __DIR__ . '/../partials/admin_shell_start.php';
 
 <div class="abas-card mb-8">
     <h2 class="abas-card-title">Anlægsadgange</h2>
-    <p class="text-sm text-gray-600 mb-4">Oversigt over direkte anlæg og anlægsgrupper pr. montør. Rediger adgang via brugerens profil.</p>
+    <p class="text-sm text-gray-600 mb-4">Oversigt over direkte anlæg og anlægsgrupper pr. montør og installatøradministrator. Rediger adgang via brugerens profil.</p>
     <?php if ($installerUsers === []): ?>
         <p class="text-gray-500 text-sm">Ingen brugere at vise adgang for.</p>
     <?php else: ?>
     <div class="space-y-3">
         <?php foreach ($installerUsers as $installerUser):
-            if ((string) ($installerUser['role'] ?? '') !== 'montor') {
+            if (!abas_user_role_supports_optional_installation_scope((string) ($installerUser['role'] ?? ''))) {
                 continue;
             }
             $userId = (int) $installerUser['id'];
@@ -243,6 +243,7 @@ require __DIR__ . '/../partials/admin_shell_start.php';
             <details class="abas-collapsible border border-gray-200 rounded-xl overflow-hidden">
                 <summary class="abas-collapsible-summary px-4 py-3 bg-gray-50/80 font-medium text-sm cursor-pointer">
                     <?= htmlspecialchars($displayName) ?>
+                    <span class="text-xs text-gray-500 font-normal ml-1">· <?= htmlspecialchars(abas_role_label((string) ($installerUser['role'] ?? ''))) ?></span>
                     <?php if ($access['mode'] === 'full'): ?>
                         <span class="abas-badge abas-badge-ok ml-2">Fuld adgang</span>
                     <?php elseif ($access['direct'] === [] && $access['groups'] === []): ?>
@@ -255,10 +256,10 @@ require __DIR__ . '/../partials/admin_shell_start.php';
                 </summary>
                 <div class="px-4 py-3 text-sm border-t border-gray-100">
                     <?php if ($access['mode'] === 'full'): ?>
-                        <p class="text-gray-600 mb-0">Montøren har fuld adgang til alle anlæg (begrænsning ikke aktiveret).</p>
+                        <p class="text-gray-600 mb-0">Brugeren har fuld adgang til alle anlæg (begrænsning ikke aktiveret).</p>
                     <?php else: ?>
                         <?php if (!empty($installerUser['montor_scoped_access'])): ?>
-                            <p class="text-xs text-amber-800 mb-3">Begrænset adgang er aktiveret — montøren ser kun nedenstående.</p>
+                            <p class="text-xs text-amber-800 mb-3">Begrænset adgang er aktiveret — brugeren ser kun nedenstående.</p>
                         <?php endif; ?>
                         <?php if ($access['groups'] !== []): ?>
                             <p class="font-semibold text-gray-800 mb-1">Anlægsgrupper</p>
@@ -311,7 +312,7 @@ require __DIR__ . '/../partials/admin_shell_start.php';
     <p class="text-sm text-red-900/90 mb-4">Sletter firmaet permanent og fjerner alle <?= $montorCount ?> tilknyttede bruger(e). Domæner slettes sammen med firmaet.</p>
     <?php
     $deleteConfirm = 'ADVARSEL: Slet firmaet "' . $companyName . '"?\n\n'
-        . 'Alle ' . $montorCount . ' montør(er)/virksomhedsadmin(s) tilknyttet firmaet fjernes permanent.\n\n'
+        . 'Alle ' . $montorCount . ' montør(er)/installatøradministrator(er) tilknyttet firmaet fjernes permanent.\n\n'
         . 'Domæner: ' . ($domains !== [] ? implode(', ', $domains) : '(ingen)');
     ?>
     <form method="post" class="abas-form" onsubmit="return confirm(<?= json_encode($deleteConfirm, JSON_UNESCAPED_UNICODE) ?>);">

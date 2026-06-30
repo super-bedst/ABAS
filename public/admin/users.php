@@ -33,7 +33,7 @@ $filterLabels = [
     'vagtcentral' => 'Vagtcentral',
     'montor' => 'Montører',
     'anlaegsbrugere' => 'Anlægsbrugere',
-    'virksomhedsadmin' => 'Virksomhedsadmin',
+    'virksomhedsadmin' => 'Installatøradministrator',
 ];
 
 $filter = $_GET['filter'] ?? 'alle';
@@ -102,7 +102,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $installerId = abas_assign_installer_for_montor($conn, $email);
         if ($installerId === null) {
             $msg = $role === 'virksomhedsadmin'
-                ? 'Virksomhedsadmin skal have e-mail fra et godkendt installatør-domæne.'
+                ? 'Installatøradministrator skal have e-mail fra et godkendt installatør-domæne.'
                 : 'Montør skal have e-mail fra et godkendt installatør-domæne.';
             abas_flash_set('error', $msg);
             abas_redirect($redirectUrl);
@@ -263,7 +263,7 @@ require __DIR__ . '/../partials/admin_shell_start.php';
                     <option value="<?= $r ?>" <?= in_array($r, $rolesInFilter, true) && count($rolesInFilter) === 1 ? 'selected' : '' ?>><?= abas_role_label($r) ?></option>
                 <?php endforeach; ?>
                 </select>
-                <p class="abas-hint">Montører og virksomhedsadmin får firma ud fra e-mail-domænet.</p>
+                <p class="abas-hint">Montører og installatøradministratorer får firma ud fra e-mail-domænet.</p>
             </div>
             <div class="abas-field" id="owner-misc-field">
                 <label class="abas-label" for="miscno2">Anlægsnr.</label>
