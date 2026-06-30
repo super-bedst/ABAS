@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/users.php';
 require_once __DIR__ . '/sms_sender.php';
 require_once __DIR__ . '/roles.php';
+require_once __DIR__ . '/service.php';
 
 function abas_threecx_calls_max(): int
 {
@@ -29,7 +30,28 @@ function abas_threecx_accepts_new_call(string $status): bool
 /** @return list<string> */
 function abas_threecx_caller_roles(): array
 {
-    return ['montor', 'anlaegsejer', 'anlaegsafprover'];
+    return ['montor', 'anlaegsejer', 'anlaegsafprover', 'admin'];
+}
+
+function abas_threecx_caller_name_looks_like_number(string $name, string $phone): bool
+{
+    $name = trim($name);
+    if ($name === '') {
+        return true;
+    }
+
+    $nameDigits = preg_replace('/\D/', '', $name) ?? '';
+    $phoneDigits = ltrim(preg_replace('/\D/', '', abas_normalize_phone($phone)) ?? '', '0');
+    if ($nameDigits !== '' && $phoneDigits !== '') {
+        if ($nameDigits === $phoneDigits) {
+            return true;
+        }
+        if (str_ends_with($phoneDigits, $nameDigits) || str_ends_with($nameDigits, $phoneDigits)) {
+            return true;
+        }
+    }
+
+    return str_replace(' ', '', $name) === str_replace(' ', '', trim($phone));
 }
 
 function abas_threecx_match_caller(mysqli $conn, string $phone): ?array
@@ -221,21 +243,26 @@ function abas_threecx_list_active_calls(mysqli $conn): array
     $stmt->close();
 
     $out = [];
+    $activeSessions = abas_load_active_service_sessions_with_phones($conn);
     foreach ($rows as $row) {
-        $matchedRole = (string) ($row['matched_role'] ?? '');
-        $displayName = abas_user_display_name([
-            'username' => (string) ($row['username'] ?? ''),
-            'registration_display_name' => (string) ($row['registration_display_name'] ?? ''),
-        ]);
-        if ($displayName === '' && ($row['caller_name'] ?? '') !== '') {
-            $displayName = (string) $row['caller_name'];
+        $displayName = '';
+        if ((int) ($row['matched_user_id'] ?? 0) > 0) {
+            $displayName = abas_user_display_name([
+                'username' => (string) ($row['username'] ?? ''),
+                'registration_display_name' => (string) ($row['registration_display_name'] ?? ''),
+            ]);
         }
+        $callerName = (string) ($row['caller_name'] ?? '');
+        $callerNumber = (string) ($row['caller_number'] ?? '');
+        $matchedRole = (string) ($row['matched_role'] ?? '');
 
         $out[] = [
             'call_id' => (string) ($row['call_id'] ?? ''),
-            'caller_number' => (string) ($row['caller_number'] ?? ''),
-            'caller_name' => (string) ($row['caller_name'] ?? ''),
+            'caller_number' => $callerNumber,
+            'caller_name' => $callerName,
             'display_name' => $displayName,
+            'caller_name_usable' => $callerName !== ''
+                && !abas_threecx_caller_name_looks_like_number($callerName, $callerNumber),
             'queue_name' => (string) ($row['queue_name'] ?? ''),
             'status' => (string) ($row['status'] ?? ''),
             'matched_user_id' => (int) ($row['matched_user_id'] ?? 0) ?: null,
@@ -243,6 +270,7 @@ function abas_threecx_list_active_calls(mysqli $conn): array
             'matched_role_label' => $matchedRole !== '' ? abas_role_label($matchedRole) : null,
             'filters_installations' => abas_threecx_owner_filters_installations($matchedRole),
             'last_seen_at' => (string) ($row['last_seen_at'] ?? ''),
+            'active_service_sessions' => abas_match_active_service_sessions_for_phone($activeSessions, $callerNumber),
         ];
     }
 

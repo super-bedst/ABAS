@@ -122,7 +122,7 @@ if ($embed) {
 }
 ?>
 <h1 class="abas-page-title">Vagtcentral — service på vegne af montør</h1>
-<p class="abas-page-lead">Søg anlæg og person. Til højre vises opkald når en agent har besvaret i 3CX — træk ind i formularen.</p>
+<p class="abas-page-lead">Søg anlæg og person. Til højre vises opkald når en agent har besvaret i 3CX — træk eller klik for at udfylde formularen.</p>
 
 <div class="abas-vc-layout">
 <form method="post" class="abas-card abas-form abas-vc-main" id="vc-service-form" data-abas-loading="Starter service…">
@@ -190,7 +190,7 @@ if ($embed) {
 
 <aside class="abas-card abas-vc-calls" id="vc-calls-panel" aria-live="polite">
     <h2 class="abas-card-title">Indgående opkald</h2>
-    <p class="abas-hint mb-3">Viser besvarede opkald fra 3CX — træk til formularen for auto-udfyldning.</p>
+    <p class="abas-hint mb-3">Viser besvarede opkald fra 3CX — træk eller klik for at udfylde formularen. Rød label viser igangværende service på nummeret.</p>
     <ul class="abas-vc-call-list" id="vc-call-list"></ul>
     <p class="abas-hint hidden" id="vc-call-empty">Ingen aktive opkald lige nu.</p>
 </aside>

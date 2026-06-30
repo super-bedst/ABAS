@@ -303,6 +303,22 @@ function abas_start_service_session(
         $stmt->execute();
         $sessionId = (int) $stmt->insert_id;
         $stmt->close();
+        if ($sessionId > 0) {
+            $fixStmt = $conn->prepare(
+                'UPDATE service_actions SET session_id = ?
+                 WHERE id = (
+                   SELECT id FROM (
+                     SELECT id FROM service_actions
+                     WHERE session_id IS NULL AND action = "start_service"
+                       AND user_id = ? AND s_ins = ? AND deal_id = ?
+                     ORDER BY id DESC LIMIT 1
+                   ) AS recent_start
+                 )'
+            );
+            $fixStmt->bind_param('iiis', $sessionId, $userId, $sIns, $dealId);
+            $fixStmt->execute();
+            $fixStmt->close();
+        }
     }
 
     if ($isExtend) {
@@ -436,6 +452,161 @@ function abas_active_session_for_installation(mysqli $conn, int $installationId)
     $stmt->close();
 
     return $row ?: null;
+}
+
+/** @return list<string> */
+function abas_extract_phones_from_text(string $text): array
+{
+    $text = trim($text);
+    if ($text === '') {
+        return [];
+    }
+
+    $phones = [];
+    if (preg_match_all('/\+?\d(?:[\s\-]?\d){7,}/', $text, $matches)) {
+        foreach ($matches[0] as $match) {
+            $phone = abas_normalize_phone($match);
+            if ($phone !== '' && abas_validate_phone($phone)) {
+                $phones[] = $phone;
+            }
+        }
+    }
+
+    return array_values(array_unique($phones));
+}
+
+/** @return list<string> */
+function abas_service_session_contact_phones(array $row): array
+{
+    $phones = [];
+
+    $onBehalfPhone = trim((string) ($row['on_behalf_phone'] ?? ''));
+    if ($onBehalfPhone !== '') {
+        $phones[] = $onBehalfPhone;
+    }
+
+    $userRole = (string) ($row['user_role'] ?? '');
+    $userPhone = trim((string) ($row['user_phone'] ?? ''));
+    if ($onBehalfPhone === '' && in_array($userRole, ['montor', 'anlaegsejer', 'anlaegsafprover'], true) && $userPhone !== '') {
+        $phones[] = $userPhone;
+    }
+
+    if ($onBehalfPhone === '' && in_array($userRole, ['vagtcentral', 'admin'], true)) {
+        $phones = array_merge($phones, abas_extract_phones_from_text((string) ($row['start_comm'] ?? '')));
+    }
+
+    return array_values(array_unique($phones));
+}
+
+/**
+ * @return list<array{session_id:int, installation_id:int, miscno2:string, installation_name:string, phones:list<string>}>
+ */
+function abas_load_active_service_sessions_with_phones(mysqli $conn): array
+{
+    $result = $conn->query(
+        'SELECT ss.id AS session_id, ss.installation_id,
+                i.miscno2, i.name AS installation_name,
+                su.phone AS user_phone, su.role AS user_role,
+                ou.phone AS on_behalf_phone,
+                (SELECT sa.comm FROM service_actions sa
+                 WHERE sa.action = "start_service"
+                   AND (
+                     sa.session_id = ss.id
+                     OR (
+                       sa.session_id IS NULL
+                       AND sa.s_ins = i.s_ins
+                       AND sa.deal_id = i.deal_id
+                       AND sa.created_at >= DATE_SUB(ss.started_at, INTERVAL 5 MINUTE)
+                       AND sa.created_at <= DATE_ADD(ss.started_at, INTERVAL 1 MINUTE)
+                     )
+                   )
+                 ORDER BY sa.id ASC LIMIT 1) AS start_comm
+         FROM service_sessions ss
+         INNER JOIN installations i ON i.id = ss.installation_id
+         INNER JOIN users su ON su.id = ss.user_id
+         LEFT JOIN users ou ON ou.id = ss.on_behalf_of_user_id
+         WHERE ss.status = "active"
+         ORDER BY ss.started_at DESC'
+    );
+    if (!$result) {
+        return [];
+    }
+
+    $out = [];
+    while ($row = $result->fetch_assoc()) {
+        $phones = abas_service_session_contact_phones($row);
+        if ($phones === []) {
+            continue;
+        }
+        $out[] = [
+            'session_id' => (int) ($row['session_id'] ?? 0),
+            'installation_id' => (int) ($row['installation_id'] ?? 0),
+            'miscno2' => (string) ($row['miscno2'] ?? ''),
+            'installation_name' => (string) ($row['installation_name'] ?? ''),
+            'phones' => $phones,
+        ];
+    }
+    $result->close();
+
+    return $out;
+}
+
+/**
+ * @param list<array{session_id:int, installation_id:int, miscno2:string, installation_name:string, phones:list<string>}> $sessions
+ * @return list<array{session_id:int, installation_id:int, miscno2:string, installation_name:string, label:string, url:string}>
+ */
+function abas_match_active_service_sessions_for_phone(array $sessions, string $phone): array
+{
+    require_once __DIR__ . '/sms_sender.php';
+
+    $phone = trim($phone);
+    if ($phone === '') {
+        return [];
+    }
+
+    $matched = [];
+    foreach ($sessions as $session) {
+        foreach ($session['phones'] as $sessionPhone) {
+            if (abas_sms_phones_match($sessionPhone, $phone)) {
+                $matched[] = $session;
+                break;
+            }
+        }
+    }
+
+    if ($matched === []) {
+        return [];
+    }
+
+    if (file_exists(__DIR__ . '/bas_sso_auth.php')) {
+        require_once __DIR__ . '/bas_sso_auth.php';
+    }
+
+    $out = [];
+    foreach ($matched as $session) {
+        $miscno2 = (string) ($session['miscno2'] ?? '');
+        $instName = trim((string) ($session['installation_name'] ?? ''));
+        $label = 'Aktiv service · ' . ($miscno2 !== '' ? $miscno2 : 'anlæg');
+        if ($instName !== '' && $miscno2 !== '') {
+            $label = 'Aktiv service · ' . $miscno2 . ' — ' . $instName;
+        }
+
+        $path = 'installation.php?id=' . (int) ($session['installation_id'] ?? 0);
+        $url = function_exists('abas_embed_url') && function_exists('abas_is_embed_session') && abas_is_embed_session()
+            ? abas_embed_url($path)
+            : abas_url($path);
+
+        $out[] = [
+            'session_id' => (int) ($session['session_id'] ?? 0),
+            'installation_id' => (int) ($session['installation_id'] ?? 0),
+            'miscno2' => $miscno2,
+            'installation_name' => $instName,
+            'label' => $label,
+            'url' => $url,
+        ];
+    }
+
+    return $out;
 }
 
 /**

@@ -714,7 +714,11 @@
   }
 
   .abas-vc-call-item {
-    @apply rounded-xl border border-gray-200 bg-white px-3 py-2 cursor-grab transition shadow-sm hover:border-brand/40 hover:bg-brand/5;
+    @apply rounded-xl border border-gray-200 bg-white px-3 py-2 cursor-pointer transition shadow-sm hover:border-brand/40 hover:bg-brand/5;
+  }
+
+  .abas-vc-call-item[draggable="true"] {
+    @apply cursor-grab;
   }
 
   .abas-vc-call-item.is-dragging {
@@ -739,6 +743,14 @@
 
   .abas-vc-call-match {
     @apply inline-block mt-1 rounded-full bg-brand/10 px-2 py-0.5 text-xs font-medium text-brand;
+  }
+
+  .abas-vc-call-sessions {
+    @apply mt-2 flex flex-col items-start gap-1;
+  }
+
+  .abas-vc-call-session-link {
+    @apply inline-flex rounded-full border border-red-200 bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800 hover:bg-red-200 hover:underline;
   }
 
   .abas-vc-drop-hint {

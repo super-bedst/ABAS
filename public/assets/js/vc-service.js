@@ -225,6 +225,46 @@
         this.activeIndex = -1;
     };
 
+    function phoneDigits(value) {
+        return String(value || '').replace(/\D/g, '').replace(/^0+/, '');
+    }
+
+    function callerNameLooksLikeNumber(name, number) {
+        name = String(name || '').trim();
+        if (!name) {
+            return true;
+        }
+        var nameDigits = phoneDigits(name);
+        var phone = phoneDigits(number);
+        if (nameDigits && phone && (nameDigits === phone || phone.endsWith(nameDigits) || nameDigits.endsWith(phone))) {
+            return true;
+        }
+        return name.replace(/\s/g, '') === String(number || '').replace(/\s/g, '');
+    }
+
+    function callHeading(call) {
+        if (call.display_name) {
+            return call.display_name;
+        }
+        if (call.caller_name_usable && call.caller_name) {
+            return call.caller_name;
+        }
+        return call.caller_number || 'Ukendt';
+    }
+
+    function renderServiceSessionLinks(sessions) {
+        if (!sessions || !sessions.length) {
+            return '';
+        }
+        var html = '<div class="abas-vc-call-sessions">';
+        sessions.forEach(function (session) {
+            html += '<a href="' + escapeHtml(session.url || '#') + '" class="abas-vc-call-session-link" data-abas-loading="Åbner service…">' +
+                escapeHtml(session.label || 'Aktiv service') + '</a>';
+        });
+        html += '</div>';
+        return html;
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
         var manualFields = document.getElementById('manual-montor-fields');
         var manualName = document.getElementById('manual_montor_name');
@@ -311,13 +351,13 @@
             montorBox.clear();
             clearBehalf();
 
-            var displayName = call.display_name || call.caller_name || '';
             var phone = call.caller_number || '';
+            var personName = call.matched_user_id && call.display_name ? call.display_name : '';
 
             if (call.matched_user_id && call.matched_role === 'montor') {
                 montorBox.pick({
                     id: call.matched_user_id,
-                    username: displayName || 'Montør',
+                    username: personName || 'Montør',
                     phone: phone,
                     company_name: call.matched_role_label || ''
                 });
@@ -331,20 +371,20 @@
                 montorBox.selected.innerHTML =
                     '<div class="flex flex-wrap items-start justify-between gap-2">' +
                     '<div class="text-sm space-y-0.5">' +
-                    '<div><span class="text-gray-500">Navn:</span> <span class="font-medium">' + escapeHtml(displayName) + '</span></div>' +
+                    '<div><span class="text-gray-500">Navn:</span> <span class="font-medium">' + escapeHtml(personName) + '</span></div>' +
                     '<div><span class="text-gray-500">Rolle:</span> ' + escapeHtml(call.matched_role_label || '') + '</div>' +
                     '<div><span class="text-gray-500">Telefon:</span> ' + escapeHtml(phone) + '</div>' +
                     '</div>' +
                     '<button type="button" class="text-sm abas-link vc-clear-pick">Skift person</button></div>';
                 montorBox.selected.classList.remove('hidden');
                 montorBox.input.classList.add('hidden');
-                montorBox.input.value = displayName;
+                montorBox.input.value = personName;
                 document.getElementById('montor_id').value = '0';
                 instBox.setCallerUserId(call.matched_user_id);
                 instBox.search('');
                 syncManualFields();
             } else {
-                manualName.value = displayName;
+                manualName.value = personName;
                 manualPhone.value = phone;
                 syncManualFields();
             }
@@ -375,32 +415,55 @@
                 var li = document.createElement('li');
                 li.className = 'abas-vc-call-item';
                 li.draggable = true;
-                li.dataset.call = JSON.stringify(call);
+                li.title = 'Træk eller klik for at udfylde formularen';
+                li.setAttribute('role', 'button');
+                li.setAttribute('tabindex', '0');
 
                 var statusLabel = 'I samtale';
                 var meta = call.matched_role_label
                     ? '<span class="abas-vc-call-match">' + escapeHtml(call.matched_role_label) + '</span>'
                     : '';
+                var sessionsHtml = renderServiceSessionLinks(call.active_service_sessions);
 
                 li.innerHTML =
                     '<div class="abas-vc-call-item__head">' +
-                    '<span class="font-medium">' + escapeHtml(call.display_name || call.caller_number || 'Ukendt') + '</span>' +
+                    '<span class="font-medium">' + escapeHtml(callHeading(call)) + '</span>' +
                     '<span class="abas-vc-call-status abas-vc-call-status--' + escapeHtml(call.status) + '">' + statusLabel + '</span>' +
                     '</div>' +
                     '<div class="text-sm text-gray-600 font-mono">' + escapeHtml(call.caller_number || '') + '</div>' +
                     (call.queue_name ? '<div class="text-xs text-gray-500">' + escapeHtml(call.queue_name) + '</div>' : '') +
-                    meta;
+                    meta +
+                    sessionsHtml;
+
+                li.querySelectorAll('.abas-vc-call-session-link').forEach(function (link) {
+                    link.addEventListener('click', function (e) {
+                        e.stopPropagation();
+                    });
+                });
 
                 li.addEventListener('dragstart', function (e) {
+                    li.dataset.suppressClick = '1';
                     e.dataTransfer.setData('application/x-abas-call', JSON.stringify(call));
                     e.dataTransfer.effectAllowed = 'copy';
                     li.classList.add('is-dragging');
                 });
                 li.addEventListener('dragend', function () {
                     li.classList.remove('is-dragging');
+                    window.setTimeout(function () {
+                        delete li.dataset.suppressClick;
+                    }, 0);
                 });
                 li.addEventListener('click', function () {
+                    if (li.dataset.suppressClick === '1') {
+                        return;
+                    }
                     applyCall(call);
+                });
+                li.addEventListener('keydown', function (e) {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        applyCall(call);
+                    }
                 });
 
                 callList.appendChild(li);
