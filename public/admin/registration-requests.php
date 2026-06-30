@@ -12,6 +12,7 @@ require_once __DIR__ . '/../../includes/installation_sync.php';
 require_once __DIR__ . '/../../includes/installation_status.php';
 require_once __DIR__ . '/../../includes/installers.php';
 require_once __DIR__ . '/../../includes/table_list.php';
+require_once __DIR__ . '/../../includes/installation_groups.php';
 
 $conn = abas_db();
 $admin = abas_require_login();
@@ -25,7 +26,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $smsAllowed = !empty($_POST['sms_service_allowed']);
         $smsCode = trim($_POST['sms_code'] ?? '');
         $finalRole = !empty($_POST['as_virksomhedsadmin']) ? 'virksomhedsadmin' : null;
-        $result = abas_approve_registration($conn, $userId, (int) $admin['id'], $smsAllowed, $smsCode, $finalRole);
+        $sendWelcome = !empty($_POST['send_welcome_email']);
+        $montorScoped = !empty($_POST['montor_scoped_access']);
+        $groupIds = array_values(array_unique(array_filter(
+            array_map(static fn ($v) => (int) $v, (array) ($_POST['group_ids'] ?? [])),
+            static fn (int $id): bool => $id > 0
+        )));
+        $result = abas_approve_registration(
+            $conn,
+            $userId,
+            (int) $admin['id'],
+            $smsAllowed,
+            $smsCode,
+            $finalRole,
+            $sendWelcome,
+            $montorScoped,
+            $groupIds
+        );
         abas_flash_set($result['ok'] ? 'success' : 'error', $result['message']);
     } elseif ($action === 'reject') {
         $result = abas_reject_registration($conn, $userId, (int) $admin['id']);
@@ -56,17 +73,21 @@ $pending = $conn->query(
      ORDER BY u.registration_requested_at ASC"
 )->fetch_all(MYSQLI_ASSOC);
 
+$installationGroups = abas_list_all_installation_groups($conn);
+$groupPickerUsesSearch = count($installationGroups) > abas_installation_groups_user_picker_threshold();
+
 $pageTitle = 'Registreringsanmodninger';
 $adminSectionTitle = 'Registreringsanmodninger';
-$adminSectionLead = 'Afventende ansøgninger — opret firma, synk anlæg og godkend direkte fra kortet.';
+$adminSectionLead = 'Afventende ansøgninger — godkend, afvis og tilpas adgang direkte fra kortet.';
 $currentUser = $admin;
+$extraHead = '<script src="' . htmlspecialchars(abas_asset_url('assets/js/registration-requests.js')) . '" defer></script>';
 require __DIR__ . '/../partials/admin_shell_start.php';
 ?>
 
 <?php if ($pending === []): ?>
-    <p class="text-gray-500 mt-6">Ingen afventende anmodninger.</p>
+    <p class="text-gray-500">Ingen afventende anmodninger.</p>
 <?php else: ?>
-<div class="mt-6 space-y-4">
+<div class="abas-reg-request-list">
     <?php foreach ($pending as $p):
         $userId = (int) $p['id'];
         $regType = (string) ($p['registration_type'] ?? $p['role']);
@@ -79,134 +100,9 @@ require __DIR__ . '/../partials/admin_shell_start.php';
         $emailDomain = abas_email_domain((string) $p['email']);
         $instPreview = $isOwnerType ? abas_registration_installation_preview($conn, $userId) : [];
         $allInstFound = $instPreview !== [] && !in_array(false, array_column($instPreview, 'found'), true);
-        ?>
-    <div class="abas-card">
-        <div class="flex flex-wrap justify-between gap-2 mb-3">
-            <div>
-                <div class="font-semibold text-lg"><?= htmlspecialchars((string) ($p['registration_display_name'] ?? $p['username'])) ?></div>
-                <div class="text-sm text-gray-600"><?= htmlspecialchars(abas_registration_type_label($regType)) ?></div>
-            </div>
-            <span class="text-xs text-gray-500"><?= htmlspecialchars((string) ($p['registration_requested_at'] ?? '')) ?></span>
-        </div>
-
-        <dl class="grid sm:grid-cols-2 gap-2 text-sm mb-4">
-            <div><dt class="text-gray-500">E-mail</dt><dd><?= htmlspecialchars((string) $p['email']) ?></dd></div>
-            <div><dt class="text-gray-500">Telefon</dt><dd><?= htmlspecialchars((string) $p['phone']) ?></dd></div>
-            <?php if ($hasInstaller || !empty($p['display_company_name'])): ?>
-            <div class="sm:col-span-2"><dt class="text-gray-500">Firma</dt><dd>
-                <?= htmlspecialchars((string) ($p['display_company_name'] ?? '')) ?>
-                <?php if ($hasInstaller): ?>
-                    <span class="text-emerald-700 text-xs block">Tilknyttet godkendt installatør</span>
-                <?php endif; ?>
-            </dd></div>
-            <?php endif; ?>
-        </dl>
-
-        <?php if ($needsNewCompany): ?>
-        <div class="border border-amber-200 bg-amber-50 rounded-xl p-4 mb-4 space-y-3">
-            <h3 class="font-medium text-amber-950">Ny virksomhed</h3>
-            <p class="text-sm text-amber-900">Opret firma og tilknyt ansøgeren, før du godkender. Du kan godkende som virksomhedsadministrator.</p>
-            <form method="post" class="grid sm:grid-cols-2 gap-3 items-end">
-                <input type="hidden" name="user_id" value="<?= $userId ?>">
-                <input type="hidden" name="action" value="create_company">
-                <div class="abas-field">
-                    <label class="abas-label text-xs">Firmanavn</label>
-                    <input name="company_name" required class="abas-input text-sm"
-                           value="<?= htmlspecialchars((string) ($p['registration_requested_company_name'] ?? '')) ?>">
-                </div>
-                <div class="abas-field">
-                    <label class="abas-label text-xs">E-mail-domæne</label>
-                    <input name="email_domain" required class="abas-input text-sm font-mono"
-                           value="<?= htmlspecialchars($emailDomain) ?>">
-                </div>
-                <div class="sm:col-span-2">
-                    <button type="submit" class="abas-btn-secondary text-sm">Opret firma og tilknyt ansøger</button>
-                </div>
-            </form>
-        </div>
-        <?php endif; ?>
-
-        <?php if ($isOwnerType && $instPreview !== []): ?>
-        <div class="mb-4">
-            <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
-                <h3 class="font-medium text-gray-900">Ønskede anlæg</h3>
-                <?php if (!$allInstFound): ?>
-                <form method="post" class="inline">
-                    <input type="hidden" name="user_id" value="<?= $userId ?>">
-                    <input type="hidden" name="action" value="sync_installations">
-                    <button type="submit" class="abas-btn-secondary text-xs">Hent manglende fra Trekant</button>
-                </form>
-                <?php endif; ?>
-            </div>
-            <div class="abas-table-wrap">
-                <table class="abas-table text-sm" data-abas-client-sort>
-                    <thead>
-                        <tr>
-                            <?php abas_render_client_table_sort_th('ABA-nr.', 0); ?>
-                            <?php abas_render_client_table_sort_th('Navn', 1); ?>
-                            <?php abas_render_client_table_sort_th('By', 2); ?>
-                            <?php abas_render_client_table_sort_th('Status', 3); ?>
-                            <?php abas_render_client_table_sort_th('I cache', 4); ?>
-                        </tr>
-                    </thead>
-                    <tbody>
-                    <?php foreach ($instPreview as $row): ?>
-                        <?php $inst = $row['installation']; ?>
-                        <tr>
-                            <td class="font-mono font-medium"><?= htmlspecialchars($row['miscno2']) ?></td>
-                            <?php if ($inst): ?>
-                                <td><?= htmlspecialchars((string) ($inst['name'] ?? '—')) ?></td>
-                                <td><?= htmlspecialchars((string) ($inst['city'] ?? '—')) ?></td>
-                                <td>
-                                    <span class="<?= htmlspecialchars(abas_mon_stat_badge_class((string) ($inst['mon_stat'] ?? ''))) ?> text-xs">
-                                        <?= htmlspecialchars(abas_mon_stat_label((string) ($inst['mon_stat'] ?? ''))) ?>
-                                    </span>
-                                </td>
-                                <td class="text-emerald-700">Ja</td>
-                            <?php else: ?>
-                                <td colspan="3" class="text-amber-800">Ikke i lokal cache</td>
-                                <td class="text-amber-700">Nej</td>
-                            <?php endif; ?>
-                        </tr>
-                    <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
-            <?php if (!$allInstFound): ?>
-                <p class="abas-hint mt-2">Synkronisér manglende anlæg før godkendelse, så brugeren kan tilknyttes korrekt.</p>
-            <?php endif; ?>
-        </div>
-        <?php endif; ?>
-
-        <form method="post" class="border-t pt-4 space-y-3">
-            <input type="hidden" name="user_id" value="<?= $userId ?>">
-            <?php if ($isMontor): ?>
-            <label class="flex items-center gap-2 text-sm">
-                <input type="checkbox" name="as_virksomhedsadmin" value="1" class="abas-checkbox">
-                Godkend som virksomhedsadministrator (i stedet for montør)
-            </label>
-            <?php endif; ?>
-            <label class="flex items-center gap-2 text-sm">
-                <input type="checkbox" name="sms_service_allowed" value="1" class="abas-checkbox">
-                Må betjene via SMS
-            </label>
-            <div class="abas-field max-w-xs">
-                <label class="abas-label text-xs">SMS-kode (hvis SMS tilladt)</label>
-                <input name="sms_code" class="abas-input font-mono text-sm" placeholder="Min. 6 tegn" minlength="6">
-            </div>
-            <div class="flex flex-wrap gap-2">
-                <button name="action" value="approve" class="abas-btn-primary"
-                    <?= ($isOwnerType && !$allInstFound) ? ' disabled title="Synk anlæg først"' : '' ?>>
-                    Godkend
-                </button>
-                <button name="action" value="reject" type="submit" class="abas-btn-secondary" onclick="return confirm('Afvis ansøgning?')">Afvis</button>
-            </div>
-            <?php if ($isOwnerType && !$allInstFound): ?>
-                <p class="text-xs text-gray-500">Godkend er låst indtil alle anlæg findes i cache.</p>
-            <?php endif; ?>
-        </form>
-    </div>
-    <?php endforeach; ?>
+        $approveLocked = $isOwnerType && !$allInstFound;
+        require __DIR__ . '/../partials/admin-registration-request-card.php';
+    endforeach; ?>
 </div>
 <?php endif; ?>
 <?php require __DIR__ . '/../partials/admin_shell_end.php';

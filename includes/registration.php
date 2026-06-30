@@ -318,7 +318,10 @@ function abas_approve_registration(
     int $adminId,
     bool $smsAllowed = false,
     ?string $smsCode = null,
-    ?string $finalRole = null
+    ?string $finalRole = null,
+    bool $sendWelcomeEmail = true,
+    bool $montorScopedAccess = false,
+    array $groupIds = []
 ): array {
     $stmt = $conn->prepare('SELECT * FROM users WHERE id = ? AND registration_status = "pending" LIMIT 1');
     $stmt->bind_param('i', $userId);
@@ -375,6 +378,13 @@ function abas_approve_registration(
         }
     }
 
+    if ($smsAllowed && abas_user_role_uses_sms_code($approveRole)) {
+        $code = trim((string) ($smsCode ?? ''));
+        if ($code === '' || !abas_validate_sms_code($code)) {
+            return ['ok' => false, 'message' => 'Angiv SMS-kode (min. 6 tegn) når SMS-betjening er aktiveret.'];
+        }
+    }
+
     $smsFlag = $smsAllowed ? 1 : 0;
     $loginUsername = abas_generate_username_from_email($conn, (string) $user['email'], $userId);
     $upd = $conn->prepare(
@@ -385,11 +395,25 @@ function abas_approve_registration(
     $upd->execute();
     $upd->close();
 
-    if ($smsAllowed && $smsCode !== null && $smsCode !== '' && abas_validate_sms_code($smsCode)) {
-        abas_set_user_sms_code($conn, $userId, $smsCode);
+    if ($smsAllowed && $smsCode !== null && trim($smsCode) !== '' && abas_validate_sms_code(trim($smsCode))) {
+        abas_set_user_sms_code($conn, $userId, trim($smsCode));
     }
 
-    abas_password_send_flow_email($conn, $userId, 'welcome', $adminId);
+    if ($approveRole === 'montor') {
+        require_once __DIR__ . '/installation_groups.php';
+        $scopedFlag = $montorScopedAccess ? 1 : 0;
+        $scopeStmt = $conn->prepare('UPDATE users SET montor_scoped_access = ? WHERE id = ?');
+        $scopeStmt->bind_param('ii', $scopedFlag, $userId);
+        $scopeStmt->execute();
+        $scopeStmt->close();
+        if ($groupIds !== []) {
+            abas_user_set_installation_groups($conn, $userId, $groupIds);
+        }
+    }
+
+    if ($sendWelcomeEmail) {
+        abas_password_send_flow_email($conn, $userId, 'welcome', $adminId);
+    }
 
     require_once __DIR__ . '/activity_log.php';
     abas_log_activity(
@@ -408,7 +432,12 @@ function abas_approve_registration(
         abas_activity_client_ip()
     );
 
-    return ['ok' => true, 'message' => 'Ansøgning godkendt. Velkomst-e-mail sendt.'];
+    return [
+        'ok' => true,
+        'message' => $sendWelcomeEmail
+            ? 'Ansøgning godkendt. Velkomst-e-mail sendt.'
+            : 'Ansøgning godkendt uden velkomst-e-mail.',
+    ];
 }
 
 function abas_reject_registration(mysqli $conn, int $userId, int $adminId): array
