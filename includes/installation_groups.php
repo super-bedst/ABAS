@@ -317,6 +317,96 @@ function abas_list_all_installation_groups(mysqli $conn): array
     return $rows;
 }
 
+function abas_installation_groups_user_picker_threshold(): int
+{
+    return 10;
+}
+
+function abas_count_installation_groups(mysqli $conn): int
+{
+    $res = $conn->query('SELECT COUNT(*) FROM installation_groups');
+    if (!$res) {
+        return 0;
+    }
+    $count = (int) ($res->fetch_row()[0] ?? 0);
+    $res->free();
+
+    return $count;
+}
+
+/**
+ * Grupper til bruger-vælger (ekskl. allerede tilknyttede).
+ *
+ * @param list<int> $excludeGroupIds
+ * @return list<array{id:int, public_id:string, name:string, description:string, member_count:int}>
+ */
+function abas_search_installation_groups_for_user_picker(
+    mysqli $conn,
+    string $search,
+    array $excludeGroupIds,
+    int $limit = 30
+): array {
+    $search = trim($search);
+    $limit = max(1, min($limit, 100));
+    $excludeGroupIds = array_values(array_filter(array_map(static fn ($id): int => (int) $id, $excludeGroupIds), static fn (int $id): bool => $id > 0));
+
+    $where = '';
+    $types = '';
+    $params = [];
+
+    if ($excludeGroupIds !== []) {
+        $placeholders = implode(',', array_fill(0, count($excludeGroupIds), '?'));
+        $where = ' WHERE g.id NOT IN (' . $placeholders . ')';
+        $types = str_repeat('i', count($excludeGroupIds));
+        $params = $excludeGroupIds;
+    }
+
+    if ($search !== '') {
+        $like = '%' . $search . '%';
+        $where .= $where === '' ? ' WHERE ' : ' AND ';
+        $where .= '(g.name LIKE ? OR g.public_id LIKE ? OR g.description LIKE ?)';
+        $types .= 'sss';
+        array_push($params, $like, $like, $like);
+    }
+
+    $sql = 'SELECT g.id, g.public_id, g.name, g.description,
+            (SELECT COUNT(*) FROM installation_group_members igm WHERE igm.group_id = g.id) AS member_count
+            FROM installation_groups g'
+        . $where
+        . ' ORDER BY g.name, g.id LIMIT ?';
+
+    $types .= 'i';
+    $params[] = $limit;
+
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param($types, ...$params);
+    $stmt->execute();
+    $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+
+    return $rows;
+}
+
+function abas_admin_user_edit_url_with_group_search(
+    int $userId,
+    string $groupSearch,
+    ?string $listFilter = null,
+    ?string $listSort = null,
+    ?string $listDir = null,
+    ?string $listSearch = null
+): string {
+    $params = array_filter([
+        'id' => (string) $userId,
+        'group_q' => $groupSearch !== '' ? $groupSearch : null,
+        'filter' => $listFilter !== null && $listFilter !== '' && $listFilter !== 'alle' ? $listFilter : null,
+        'sort' => $listSort,
+        'dir' => $listDir !== null && $listDir !== 'asc' ? $listDir : null,
+        'q' => $listSearch,
+    ], static fn ($v) => $v !== null && $v !== '');
+
+    return abas_url('admin/user-edit.php?' . http_build_query($params));
+}
+
 /**
  * @return list<array{id:int, public_id:string, name:string, member_count:int}>
  */

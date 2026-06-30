@@ -83,6 +83,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         abas_redirect($selfUrl);
     }
 
+    if ($action === 'save_groups') {
+        if (!abas_user_role_uses_installation_groups((string) ($editUser['role'] ?? ''))) {
+            abas_flash_set('error', 'Denne rolle kan ikke tilknyttes anlægsgrupper.');
+            abas_redirect($selfUrl);
+        }
+        $groupIds = array_values(array_unique(array_filter(
+            array_map(static fn ($v) => (int) $v, (array) ($_POST['group_ids'] ?? [])),
+            static fn (int $groupId): bool => $groupId > 0
+        )));
+        abas_user_set_installation_groups($conn, $id, $groupIds);
+        abas_flash_set('success', 'Anlægsgrupper gemt.');
+        abas_redirect($selfUrl);
+    }
+
     if ($action === 'reset_mfa') {
         abas_mfa_reset_user($conn, $id, (int) $admin['id']);
         abas_flash_set('success', '2FA nulstillet — brugeren skal opsætte igen ved næste login.');
@@ -194,13 +208,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         abas_set_user_sms_code($conn, $id, $smsCode);
     }
 
-    if (abas_user_role_uses_installation_groups($role)) {
-        $groupIds = array_map(static fn ($v) => (int) $v, (array) ($_POST['group_ids'] ?? []));
-        abas_user_set_installation_groups($conn, $id, $groupIds);
-    } else {
+    abas_set_user_montor_scoped_access($conn, $id, $role === 'montor' && !empty($_POST['montor_scoped_access']));
+
+    if (!abas_user_role_uses_installation_groups($role)) {
         abas_user_set_installation_groups($conn, $id, []);
     }
-    abas_set_user_montor_scoped_access($conn, $id, $role === 'montor' && !empty($_POST['montor_scoped_access']));
 
     require_once __DIR__ . '/../../includes/activity_log.php';
     abas_log_user_target_event(
@@ -218,10 +230,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $linkedInstallations = abas_user_installation_links($conn, $id);
-$allInstallationGroups = abas_list_all_installation_groups($conn);
 $userInstallationGroups = abas_user_installation_group_links($conn, $id);
 $userInstallationGroupIds = array_map(static fn (array $row): int => (int) $row['id'], $userInstallationGroups);
 $showInstallationAccess = in_array($editUser['role'], ['anlaegsejer', 'anlaegsafprover', 'montor'], true);
+$isMontorUser = ($editUser['role'] ?? '') === 'montor';
+$totalInstallationGroupCount = abas_count_installation_groups($conn);
+$groupPickerUsesSearch = $totalInstallationGroupCount > abas_installation_groups_user_picker_threshold();
+$groupSearchQ = trim((string) ($_GET['group_q'] ?? ''));
+$groupsAvailableToAdd = [];
+if ($showInstallationAccess && $totalInstallationGroupCount > 0) {
+    if ($groupPickerUsesSearch) {
+        if ($groupSearchQ !== '') {
+            $groupsAvailableToAdd = abas_search_installation_groups_for_user_picker(
+                $conn,
+                $groupSearchQ,
+                $userInstallationGroupIds
+            );
+        }
+    } else {
+        $groupsAvailableToAdd = abas_search_installation_groups_for_user_picker(
+            $conn,
+            '',
+            $userInstallationGroupIds,
+            100
+        );
+    }
+}
+$groupSearchUrl = abas_admin_user_edit_url_with_group_search(
+    $id,
+    '',
+    $listFilter !== 'alle' ? $listFilter : null,
+    $listSort !== '' ? $listSort : null,
+    $listSort !== '' ? $listDir : null,
+    $listSearch !== '' ? $listSearch : null
+);
 $ownerInstallStatus = abas_user_installations_with_service_status($conn);
 $linkedWithStatus = $ownerInstallStatus[$id] ?? [];
 $statusByInstId = [];
@@ -239,7 +281,7 @@ require __DIR__ . '/../partials/header.php';
 <h1 class="abas-page-title !text-xl">Rediger bruger</h1>
 <p class="abas-page-lead"><?= htmlspecialchars(abas_role_label((string) $editUser['role'])) ?> — <?= htmlspecialchars(abas_user_display_name($editUser)) ?></p>
 
-<form method="post" class="abas-card max-w-lg abas-form mb-6">
+<form method="post" class="abas-card max-w-lg abas-form mb-6" id="user-main-form">
     <input type="hidden" name="id" value="<?= (int) $editUser['id'] ?>">
     <input type="hidden" name="action" value="save">
     <?php if ($listFilter !== 'alle'): ?><input type="hidden" name="filter" value="<?= htmlspecialchars($listFilter) ?>"><?php endif; ?>
@@ -309,11 +351,8 @@ require __DIR__ . '/../partials/header.php';
         <input type="checkbox" name="sms_service_allowed" value="1" class="abas-checkbox" <?= !empty($editUser['sms_service_allowed']) ? 'checked' : '' ?>>
         Må betjene anlæg via SMS
     </label>
-    <?php if ($editUser['role'] === 'montor'): ?>
-    <label class="flex items-start gap-2 text-sm border border-amber-200 bg-amber-50 rounded-xl p-3">
-        <input type="checkbox" name="montor_scoped_access" value="1" class="abas-checkbox mt-0.5" <?= !empty($editUser['montor_scoped_access']) ? 'checked' : '' ?>>
-        <span><strong>Kun tildelte anlæg og grupper</strong> — montøren kan kun se og betjene direkte tilknyttede anlæg og anlæg i tildelte grupper. Uden afkrydsning har montøren fuld adgang som i dag.</span>
-    </label>
+    <?php if ($isMontorUser): ?>
+    <p class="text-sm text-gray-600 border-t border-gray-100 pt-4 mt-2">Adgangsbegrænsning for montør konfigureres i kortet <strong>Begræns adgang til</strong> nedenfor.</p>
     <?php endif; ?>
     <div class="abas-field">
         <label class="abas-label" for="mfa_method">2FA-metode</label>
@@ -353,30 +392,134 @@ require __DIR__ . '/../partials/header.php';
 </form>
 
 <?php if ($showInstallationAccess): ?>
-<div class="abas-card max-w-lg abas-form mb-6">
-    <h2 class="abas-card-title">Anlægsgrupper</h2>
-    <p class="text-sm text-gray-600 mb-4">Adgang til alle anlæg i de valgte grupper (ud over direkte tilknytning nedenfor).</p>
-    <?php if ($allInstallationGroups === []): ?>
-        <p class="text-gray-500 text-sm mb-2">Ingen grupper oprettet endnu. <a href="<?= abas_url('admin/installation-groups.php') ?>" class="text-brand underline">Opret anlægsgrupper</a></p>
+<?php if ($isMontorUser): ?>
+<div class="abas-card max-w-lg mb-6">
+    <h2 class="abas-card-title">Begræns adgang til</h2>
+    <p class="text-sm text-gray-600 mb-4">Montøren har som udgangspunkt adgang til alle anlæg. Aktivér begrænsning og tilknyt grupper og/eller enkeltanlæg nedenfor.</p>
+    <label class="flex items-start gap-2 text-sm border border-amber-200 bg-amber-50 rounded-xl p-3 mb-6">
+        <input type="checkbox" name="montor_scoped_access" value="1" form="user-main-form" class="abas-checkbox mt-0.5" <?= !empty($editUser['montor_scoped_access']) ? 'checked' : '' ?>>
+        <span><strong>Aktivér begrænsning</strong> — montøren kan kun se og betjene de grupper og direkte anlæg der er tilknyttet nedenfor. Gem med «Gem» i brugerformularen ovenfor.</span>
+    </label>
+<?php endif; ?>
+
+<form method="post" class="<?= $isMontorUser ? 'abas-form' : 'abas-card max-w-lg abas-form mb-6' ?>" id="user-groups-form">
+    <input type="hidden" name="id" value="<?= (int) $editUser['id'] ?>">
+    <input type="hidden" name="action" value="save_groups">
+    <?php if ($listFilter !== 'alle'): ?><input type="hidden" name="filter" value="<?= htmlspecialchars($listFilter) ?>"><?php endif; ?>
+    <?php if ($listSort !== ''): ?>
+    <input type="hidden" name="sort" value="<?= htmlspecialchars($listSort) ?>">
+    <input type="hidden" name="dir" value="<?= htmlspecialchars($listDir) ?>">
+    <?php endif; ?>
+    <?php if ($listSearch !== ''): ?>
+    <input type="hidden" name="q" value="<?= htmlspecialchars($listSearch) ?>">
+    <?php endif; ?>
+
+    <?php if ($isMontorUser): ?>
+    <h3 class="text-sm font-semibold text-gray-800 mb-2">Anlægsgrupper</h3>
     <?php else: ?>
-        <ul class="space-y-2 mb-2 max-h-64 overflow-y-auto border border-gray-100 rounded-xl p-3">
-            <?php foreach ($allInstallationGroups as $group): ?>
+    <h2 class="abas-card-title">Anlægsgrupper</h2>
+    <?php endif; ?>
+    <?php if (!$isMontorUser): ?>
+    <p class="text-sm text-gray-600 mb-4">Adgang til alle anlæg i de valgte grupper (ud over direkte tilknytning nedenfor). Gem med knappen nederst i dette afsnit.</p>
+    <?php else: ?>
+    <p class="text-sm text-gray-600 mb-4">Montøren får adgang til alle anlæg i de valgte grupper.</p>
+    <?php endif; ?>
+
+    <?php if ($totalInstallationGroupCount === 0): ?>
+        <p class="text-gray-500 text-sm mb-4">Ingen grupper oprettet endnu. <a href="<?= abas_url('admin/installation-groups.php') ?>" class="text-brand underline">Opret anlægsgrupper</a></p>
+    <?php else: ?>
+        <div class="mb-4">
+            <h3 class="text-sm font-semibold text-gray-800 mb-2">Tilknyttede grupper (<?= count($userInstallationGroups) ?>)</h3>
+            <?php if ($userInstallationGroups === []): ?>
+                <p class="text-gray-500 text-sm">Ingen grupper tilknyttet endnu.</p>
+            <?php else: ?>
+                <ul class="space-y-2 border border-gray-100 rounded-xl p-3">
+                    <?php foreach ($userInstallationGroups as $group): ?>
+                        <li>
+                            <label class="flex items-start gap-2 text-sm">
+                                <input type="checkbox" name="group_ids[]" value="<?= (int) $group['id'] ?>" class="abas-checkbox mt-0.5" checked>
+                                <span>
+                                    <span class="font-medium"><?= htmlspecialchars((string) $group['name']) ?></span>
+                                    <span class="text-gray-500 text-xs block font-mono"><?= htmlspecialchars((string) $group['public_id']) ?> · <?= (int) ($group['member_count'] ?? 0) ?> anlæg</span>
+                                </span>
+                            </label>
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
+                <p class="text-xs text-gray-500 mt-2">Fjern afkrydsning for at frakoble gruppen ved gem.</p>
+            <?php endif; ?>
+        </div>
+
+        <div class="border-t border-gray-100 pt-4">
+            <h3 class="text-sm font-semibold text-gray-800 mb-2">Tilføj grupper</h3>
+            <?php if ($groupPickerUsesSearch): ?>
+                <p class="text-xs text-gray-500 mb-3">Der er <?= (int) $totalInstallationGroupCount ?> grupper i systemet — søg for at finde flere.</p>
+            <?php endif; ?>
+        </div>
+    <?php endif; ?>
+
+    <?php if ($totalInstallationGroupCount > 0): ?>
+    <div class="flex flex-wrap gap-2 items-end mb-4">
+        <div class="abas-field flex-1 min-w-[12rem] !mb-0">
+            <label class="abas-label" for="group_q">Søg grupper</label>
+            <input id="group_q" form="user-groups-search-form" name="group_q" value="<?= htmlspecialchars($groupSearchQ) ?>" placeholder="Navn, UUID eller beskrivelse …" class="abas-input">
+        </div>
+        <button type="submit" form="user-groups-search-form" class="abas-btn-secondary">Søg</button>
+        <?php if ($groupSearchQ !== ''): ?>
+            <a href="<?= htmlspecialchars($groupSearchUrl) ?>" class="abas-btn-secondary">Ryd søgning</a>
+        <?php endif; ?>
+    </div>
+
+    <?php if ($groupPickerUsesSearch && $groupSearchQ === ''): ?>
+        <p class="text-sm text-gray-500 mb-4">Søg ovenfor for at finde grupper du vil tilføje.</p>
+    <?php elseif ($groupsAvailableToAdd === []): ?>
+        <p class="text-sm text-gray-500 mb-4"><?= $groupSearchQ !== '' ? 'Ingen flere grupper matcher søgningen.' : 'Alle grupper er allerede tilknyttet.' ?></p>
+    <?php else: ?>
+        <ul class="space-y-2 mb-4 max-h-64 overflow-y-auto border border-gray-100 rounded-xl p-3">
+            <?php foreach ($groupsAvailableToAdd as $group): ?>
                 <li>
                     <label class="flex items-start gap-2 text-sm">
-                        <input type="checkbox" name="group_ids[]" value="<?= (int) $group['id'] ?>" class="abas-checkbox mt-0.5" <?= in_array((int) $group['id'], $userInstallationGroupIds, true) ? 'checked' : '' ?>>
+                        <input type="checkbox" name="group_ids[]" value="<?= (int) $group['id'] ?>" class="abas-checkbox mt-0.5">
                         <span>
                             <span class="font-medium"><?= htmlspecialchars((string) $group['name']) ?></span>
                             <span class="text-gray-500 text-xs block font-mono"><?= htmlspecialchars((string) $group['public_id']) ?> · <?= (int) ($group['member_count'] ?? 0) ?> anlæg</span>
+                            <?php if (!empty($group['description'])): ?>
+                                <span class="text-gray-400 text-xs block"><?= htmlspecialchars((string) $group['description']) ?></span>
+                            <?php endif; ?>
                         </span>
                     </label>
                 </li>
             <?php endforeach; ?>
         </ul>
     <?php endif; ?>
-</div>
 
-<div class="abas-card max-w-lg abas-form mb-6">
+    <div class="flex flex-wrap gap-2 pt-2">
+        <button type="submit" class="abas-btn-primary">Gem grupper</button>
+    </div>
+    <?php endif; ?>
+</form>
+
+<form method="get" id="user-groups-search-form" class="hidden" aria-hidden="true">
+    <input type="hidden" name="id" value="<?= (int) $editUser['id'] ?>">
+    <?php if ($listFilter !== 'alle'): ?><input type="hidden" name="filter" value="<?= htmlspecialchars($listFilter) ?>"><?php endif; ?>
+    <?php if ($listSort !== ''): ?>
+    <input type="hidden" name="sort" value="<?= htmlspecialchars($listSort) ?>">
+    <input type="hidden" name="dir" value="<?= htmlspecialchars($listDir) ?>">
+    <?php endif; ?>
+    <?php if ($listSearch !== ''): ?>
+    <input type="hidden" name="q" value="<?= htmlspecialchars($listSearch) ?>">
+    <?php endif; ?>
+</form>
+
+<div class="<?= $isMontorUser ? 'border-t border-gray-100 pt-6 mt-2' : 'abas-card max-w-lg abas-form mb-6' ?>">
+    <?php if ($isMontorUser): ?>
+    <h3 class="text-sm font-semibold text-gray-800 mb-2">Direkte tilknyttede anlæg</h3>
+    <?php else: ?>
     <h2 class="abas-card-title">Direkte tilknyttede anlæg</h2>
+    <?php endif; ?>
+    <?php if ($isMontorUser): ?>
+    <p class="text-sm text-gray-600 mb-4">Enkeltanlæg montøren skal have adgang til ud over grupper.</p>
+    <?php endif; ?>
     <?php if ($linkedInstallations === []): ?>
         <p class="text-gray-500 text-sm mb-4">Ingen anlæg tilknyttet endnu.</p>
     <?php else: ?>
@@ -413,6 +556,9 @@ require __DIR__ . '/../partials/header.php';
         <button class="abas-btn-secondary">Tilknyt</button>
     </form>
 </div>
+<?php if ($isMontorUser): ?>
+</div>
+<?php endif; ?>
 <?php endif; ?>
 
 <?php if ((int) $editUser['id'] !== (int) $admin['id']): ?>
