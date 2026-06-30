@@ -65,11 +65,11 @@ $rows = abas_table_sort_rows($rows, $sort, $sortDir, [
     'last_sync_count' => static fn (array $row): string => (string) ($row['last_sync_count'] ?? ''),
 ]);
 $pageTitle = 'Sync';
+$adminSectionTitle = 'Anlægssynkronisering';
+$adminSectionLead = 'Synkroniserer via TrekantBrand g_search_installations i 100-blokke (fx fab50 dækker suffix 5000–5099).';
 $currentUser = $user;
-require __DIR__ . '/../partials/header.php';
+require __DIR__ . '/../partials/admin_shell_start.php';
 ?>
-<h1 class="text-xl font-semibold text-brand mb-4">Anlægssynkronisering</h1>
-<p class="text-sm text-gray-600 mb-4">Synkroniserer via TrekantBrand <code>g_search_installations</code> i 100-blokke (fx <code>fab50</code> dækker suffix 5000–5099). Angiv start for at springe tomme blokke over.</p>
 <form method="post" class="bg-white border rounded p-4 mb-4 flex flex-wrap gap-2 items-end">
     <input type="hidden" name="action" value="add">
     <div><label class="text-xs block">Prefix</label><input name="prefix" placeholder="fab" required class="border rounded px-2 py-1"></div>
@@ -120,5 +120,4 @@ require __DIR__ . '/../partials/header.php';
     </tbody>
 </table>
 </div>
-<p class="mt-4"><a href="<?= abas_url('admin/index.php') ?>" class="text-brand underline text-sm">Tilbage</a></p>
-<?php require __DIR__ . '/../partials/footer.php';
+<?php require __DIR__ . '/../partials/admin_shell_end.php';

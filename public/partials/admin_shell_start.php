@@ -2,45 +2,20 @@
 
 declare(strict_types=1);
 
+require_once dirname(__DIR__, 2) . '/includes/admin_shell.php';
+
 /** @var string $pageTitle */
 /** @var array|null $currentUser */
 /** @var string|null $adminSectionTitle */
 /** @var string|null $adminSectionLead */
+/** @var string|null $adminNavSection */
 
 $appName = abas_config()['app_name'];
 $title = ($pageTitle ?? 'Admin') . ' — ' . $appName;
 $flash = abas_flash_get();
 abas_session_release();
 
-$currentPath = basename((string) ($_SERVER['SCRIPT_NAME'] ?? ''));
-$navItems = array_map(
-    static function (array $item) use ($currentPath): array {
-        $itemPage = basename($item['path']);
-
-        return [
-            'href' => abas_url($item['path']),
-            'label' => $item['label'],
-            'icon' => $item['icon'],
-            'active' => $itemPage === $currentPath,
-        ];
-    },
-    [
-        ['path' => 'admin/index.php', 'label' => 'Dashboard', 'icon' => '⌂'],
-        ['path' => 'admin/activity-log.php', 'label' => 'Aktivitetslog', 'icon' => '☰'],
-        ['path' => 'admin/users.php', 'label' => 'Brugere', 'icon' => '👤'],
-        ['path' => 'admin/montors.php', 'label' => 'Montører', 'icon' => '🔧'],
-        ['path' => 'admin/installation-groups.php', 'label' => 'Anlægsgrupper', 'icon' => '🗂'],
-        ['path' => 'admin/installers.php', 'label' => 'Installatører', 'icon' => '🏢'],
-        ['path' => 'admin/registration-requests.php', 'label' => 'Ansøgninger', 'icon' => '📋'],
-        ['path' => 'admin/sync.php', 'label' => 'Sync', 'icon' => '↻'],
-        ['path' => 'admin/settings.php', 'label' => 'Indstillinger', 'icon' => '⚙'],
-        ['path' => 'admin/mfa-whitelist.php', 'label' => 'MFA whitelist', 'icon' => '🔐'],
-        ['path' => 'admin/api-tokens.php', 'label' => 'API-tokens', 'icon' => '🔗'],
-        ['path' => 'admin/endpoints.php', 'label' => 'API-endpoints', 'icon' => '⇄'],
-        ['path' => 'admin/sms-inbound-log.php', 'label' => 'SMS log', 'icon' => '💬'],
-        ['path' => 'admin/error-log.php', 'label' => 'Fejllog', 'icon' => '⚠'],
-    ]
-);
+$navItems = abas_admin_nav_render_items($adminNavSection ?? null);
 ?>
 <!DOCTYPE html>
 <html lang="da">

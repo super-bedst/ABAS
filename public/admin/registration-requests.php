@@ -57,12 +57,11 @@ $pending = $conn->query(
 )->fetch_all(MYSQLI_ASSOC);
 
 $pageTitle = 'Registreringsanmodninger';
+$adminSectionTitle = 'Registreringsanmodninger';
+$adminSectionLead = 'Afventende ansøgninger — opret firma, synk anlæg og godkend direkte fra kortet.';
 $currentUser = $admin;
-require __DIR__ . '/../partials/header.php';
+require __DIR__ . '/../partials/admin_shell_start.php';
 ?>
-<div class="mb-2"><a href="<?= abas_url('admin/index.php') ?>" class="abas-back-link">&larr; Admin</a></div>
-<h1 class="abas-page-title">Registreringsanmodninger</h1>
-<p class="abas-page-lead">Afventende ansøgninger — opret firma, synk anlæg og godkend direkte fra kortet.</p>
 
 <?php if ($pending === []): ?>
     <p class="text-gray-500 mt-6">Ingen afventende anmodninger.</p>
@@ -210,4 +209,4 @@ require __DIR__ . '/../partials/header.php';
     <?php endforeach; ?>
 </div>
 <?php endif; ?>
-<?php require __DIR__ . '/../partials/footer.php';
+<?php require __DIR__ . '/../partials/admin_shell_end.php';

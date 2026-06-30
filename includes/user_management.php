@@ -251,6 +251,249 @@ function abas_vc_anlaegsbrugere_page_url(array $query = []): string
     return abas_table_page_url('vc-anlaegsbrugere.php', $query);
 }
 
+function abas_vc_anlaegsbruger_edit_url(int $userId, array $listQuery = []): string
+{
+    $params = ['id' => $userId];
+    foreach (['q', 'sort', 'dir'] as $key) {
+        if (!empty($listQuery[$key])) {
+            $params[$key] = $listQuery[$key];
+        }
+    }
+
+    return abas_url('vc-anlaegsbruger-edit.php?' . http_build_query($params));
+}
+
+/**
+ * @param array<string, mixed> $actor
+ * @param array<string, string|null> $listQuery
+ */
+function abas_anlaegsbruger_edit_url_for_actor(array $actor, int $targetUserId, array $listQuery = []): string
+{
+    $role = (string) ($actor['role'] ?? '');
+    if ($role === 'admin') {
+        $params = [
+            'id' => $targetUserId,
+            'filter' => 'anlaegsbrugere',
+            'return' => 'vc-anlaegsbrugere.php' . ($listQuery !== [] ? '?' . http_build_query(array_filter($listQuery)) : ''),
+        ];
+
+        return abas_url('admin/user-edit.php?' . http_build_query($params));
+    }
+    if ($role === 'vagtcentral') {
+        return abas_vc_anlaegsbruger_edit_url($targetUserId, $listQuery);
+    }
+
+    return abas_url('anlaegsbruger-edit.php?id=' . $targetUserId);
+}
+
+function abas_vc_may_manage_anlaegsbruger(array $actor, array $target): bool
+{
+    if (($actor['role'] ?? '') !== 'vagtcentral') {
+        return false;
+    }
+
+    return in_array($target['role'] ?? '', ['anlaegsejer', 'anlaegsafprover'], true);
+}
+
+function abas_vc_anlaegsbrugere_badge_visible_limit(): int
+{
+    return 4;
+}
+
+/**
+ * @param list<array{installation_id:int, miscno2:string, in_service:bool}> $installations
+ * @return list<array{installation_id:int, miscno2:string, in_service:bool}>
+ */
+function abas_sort_installations_in_service_first(array $installations): array
+{
+    usort(
+        $installations,
+        static function (array $a, array $b): int {
+            $serviceCmp = ((int) !empty($b['in_service'])) <=> ((int) !empty($a['in_service']));
+            if ($serviceCmp !== 0) {
+                return $serviceCmp;
+            }
+
+            return strcasecmp((string) $a['miscno2'], (string) $b['miscno2']);
+        }
+    );
+
+    return $installations;
+}
+
+/**
+ * @param array<int, list<array{installation_id:int, miscno2:string, in_service:bool}>> $directByUser
+ * @param list<int> $userIds
+ * @return array<int, array{
+ *   groups: list<array{id:int, name:string, public_id:string, installations:list<array{installation_id:int, miscno2:string, in_service:bool}>}>,
+ *   direct: list<array{installation_id:int, miscno2:string, in_service:bool}>
+ * }>
+ */
+function abas_anlaegsbrugere_installation_access_for_users(mysqli $conn, array $userIds, array $directByUser = []): array
+{
+    require_once __DIR__ . '/installation_groups.php';
+
+    $userIds = array_values(array_unique(array_filter(array_map('intval', $userIds), static fn (int $id): bool => $id > 0)));
+    if ($userIds === []) {
+        return [];
+    }
+
+    $access = [];
+    foreach ($userIds as $userId) {
+        $access[$userId] = [
+            'groups' => [],
+            'direct' => abas_sort_installations_in_service_first($directByUser[$userId] ?? []),
+        ];
+    }
+
+    $placeholders = implode(',', array_fill(0, count($userIds), '?'));
+    $types = str_repeat('i', count($userIds));
+    $stmt = $conn->prepare(
+        "SELECT uig.user_id, g.id AS group_id, g.name, g.public_id,
+                i.id AS installation_id, i.miscno2,
+                (active_ss.installation_id IS NOT NULL) AS in_service
+         FROM user_installation_groups uig
+         INNER JOIN installation_groups g ON g.id = uig.group_id
+         INNER JOIN installation_group_members igm ON igm.group_id = g.id
+         INNER JOIN installations i ON i.id = igm.installation_id
+         LEFT JOIN (
+             SELECT DISTINCT installation_id
+             FROM service_sessions
+             WHERE status = 'active'
+         ) active_ss ON active_ss.installation_id = i.id
+         WHERE uig.user_id IN ($placeholders)
+         ORDER BY uig.user_id, g.name, i.miscno2"
+    );
+    $stmt->bind_param($types, ...$userIds);
+    $stmt->execute();
+    $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+
+    $groupsByUser = [];
+    foreach ($rows as $row) {
+        $userId = (int) $row['user_id'];
+        $groupId = (int) $row['group_id'];
+        if (!isset($groupsByUser[$userId][$groupId])) {
+            $groupsByUser[$userId][$groupId] = [
+                'id' => $groupId,
+                'name' => (string) $row['name'],
+                'public_id' => (string) $row['public_id'],
+                'installations' => [],
+            ];
+        }
+        $installationId = (int) $row['installation_id'];
+        $groupsByUser[$userId][$groupId]['installations'][$installationId] = [
+            'installation_id' => $installationId,
+            'miscno2' => (string) $row['miscno2'],
+            'in_service' => (bool) $row['in_service'],
+        ];
+    }
+
+    foreach ($userIds as $userId) {
+        $groupList = array_values($groupsByUser[$userId] ?? []);
+        foreach ($groupList as &$group) {
+            $group['installations'] = abas_sort_installations_in_service_first(array_values($group['installations']));
+        }
+        unset($group);
+        usort(
+            $groupList,
+            static fn (array $a, array $b): int => strcasecmp((string) $a['name'], (string) $b['name'])
+        );
+        $access[$userId]['groups'] = $groupList;
+    }
+
+    return $access;
+}
+
+/**
+ * @param list<array{installation_id:int, miscno2:string, in_service:bool}> $installations
+ */
+function abas_render_installation_badges_collapsible(array $installations, int $limit = 0): void
+{
+    if ($installations === []) {
+        return;
+    }
+    if ($limit <= 0) {
+        $limit = abas_vc_anlaegsbrugere_badge_visible_limit();
+    }
+
+    $sorted = abas_sort_installations_in_service_first($installations);
+    $visible = array_slice($sorted, 0, $limit);
+    $hidden = array_slice($sorted, $limit);
+    ?>
+    <div class="abas-installation-badges">
+        <?php foreach ($visible as $inst): ?>
+            <?php abas_render_installation_status_badge($inst); ?>
+        <?php endforeach; ?>
+    </div>
+    <?php if ($hidden !== []): ?>
+    <details class="abas-installation-badges-expand">
+        <summary class="abas-installation-badges-expand-summary">+<?= count($hidden) ?> anlæg</summary>
+        <div class="abas-installation-badges abas-installation-badges--expanded">
+            <?php foreach ($hidden as $inst): ?>
+                <?php abas_render_installation_status_badge($inst); ?>
+            <?php endforeach; ?>
+        </div>
+    </details>
+    <?php endif;
+}
+
+/**
+ * @param array{installation_id:int, miscno2:string, in_service:bool} $inst
+ */
+function abas_render_installation_status_badge(array $inst): void
+{
+    $inService = !empty($inst['in_service']);
+    ?>
+    <a
+        href="<?= abas_url('installation.php?id=' . (int) $inst['installation_id']) ?>"
+        data-abas-loading="Åbner anlæg…"
+        class="<?= $inService ? 'abas-badge-in-service' : 'abas-badge-ok' ?> hover:opacity-90"
+        title="<?= $inService ? 'I service' : 'Normal drift' ?>"
+    ><?= htmlspecialchars((string) $inst['miscno2']) ?></a>
+    <?php
+}
+
+/**
+ * @param array{groups:list<array<string, mixed>>, direct:list<array{installation_id:int, miscno2:string, in_service:bool}>} $access
+ */
+function abas_render_vc_anlaegsbruger_installation_access(array $access): void
+{
+    $groups = $access['groups'] ?? [];
+    $direct = $access['direct'] ?? [];
+    $hasGroups = $groups !== [];
+    $hasDirect = $direct !== [];
+
+    if (!$hasGroups && !$hasDirect) {
+        echo '<span class="text-gray-400 text-sm">Ingen anlæg</span>';
+
+        return;
+    }
+    ?>
+    <div class="abas-vc-installation-access" data-abas-row-ignore="1">
+        <?php foreach ($groups as $group): ?>
+            <?php if (($group['installations'] ?? []) === []) {
+                continue;
+            } ?>
+            <div class="abas-vc-access-group">
+                <p class="abas-vc-access-group-label" title="<?= htmlspecialchars((string) ($group['public_id'] ?? '')) ?>">
+                    <?= htmlspecialchars((string) ($group['name'] ?? 'Gruppe')) ?>
+                </p>
+                <?php abas_render_installation_badges_collapsible($group['installations']); ?>
+            </div>
+        <?php endforeach; ?>
+        <?php if ($hasDirect): ?>
+            <div class="abas-vc-access-direct">
+                <?php if ($hasGroups): ?>
+                    <p class="abas-vc-access-group-label">Direkte</p>
+                <?php endif; ?>
+                <?php abas_render_installation_badges_collapsible($direct); ?>
+            </div>
+        <?php endif; ?>
+    </div>
+    <?php
+}
+
 function abas_update_user_phone(mysqli $conn, int $userId, string $phone): ?string
 {
     $phone = abas_normalize_phone(trim($phone));
@@ -333,6 +576,9 @@ function abas_save_managed_user_contact(
         return ['ok' => false, 'message' => 'Ingen adgang til brugeren.'];
     }
     if ($permissionCheck === 'virksomhedsadmin' && !abas_virksomhedsadmin_may_manage_user($actor, $target)) {
+        return ['ok' => false, 'message' => 'Ingen adgang til brugeren.'];
+    }
+    if ($permissionCheck === 'vagtcentral' && !abas_vc_may_manage_anlaegsbruger($actor, $target)) {
         return ['ok' => false, 'message' => 'Ingen adgang til brugeren.'];
     }
 

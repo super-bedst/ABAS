@@ -34,29 +34,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
     if ($action === 'create') {
-        $name = trim($_POST['company_name'] ?? '');
-        $domain = trim($_POST['email_domain'] ?? '');
+        $name = trim((string) ($_POST['company_name'] ?? ''));
+        $domain = trim((string) ($_POST['email_domain'] ?? ''));
         $result = abas_installer_create($conn, $name, $domain, (int) $user['id']);
-        abas_flash_set($result['ok'] ? 'success' : 'error', $result['message'] ?? ($result['ok'] ? 'Firma oprettet.' : 'Fejl'));
-    } elseif ($action === 'update_company') {
-        $installerId = (int) ($_POST['installer_id'] ?? 0);
-        $name = trim($_POST['company_name'] ?? '');
-        $result = abas_installer_update_company($conn, $installerId, $name);
-        abas_flash_set($result['ok'] ? 'success' : 'error', $result['message'] ?? ($result['ok'] ? 'Firmanavn opdateret.' : 'Fejl'));
-    } elseif ($action === 'add_domain') {
-        $installerId = (int) ($_POST['installer_id'] ?? 0);
-        $domain = trim($_POST['email_domain'] ?? '');
-        $result = abas_installer_add_domain($conn, $installerId, $domain);
-        abas_flash_set($result['ok'] ? 'success' : 'error', $result['message'] ?? 'Domæne tilføjet.');
-    } elseif ($action === 'remove_domain') {
-        $installerId = (int) ($_POST['installer_id'] ?? 0);
-        $domain = trim($_POST['email_domain'] ?? '');
-        $result = abas_installer_remove_domain($conn, $installerId, $domain);
-        abas_flash_set($result['ok'] ? 'success' : 'error', $result['message'] ?? ($result['ok'] ? 'Domæne fjernet.' : 'Fejl'));
-    } elseif ($action === 'delete') {
-        $installerId = (int) ($_POST['installer_id'] ?? 0);
-        $result = abas_installer_delete($conn, $installerId);
-        abas_flash_set($result['ok'] ? 'success' : 'error', $result['message']);
+        if ($result['ok'] && !empty($result['id'])) {
+            abas_flash_set('success', 'Firma oprettet.');
+            abas_redirect(abas_admin_installer_edit_url((int) $result['id']));
+        }
+        abas_flash_set('error', $result['message'] ?? ($result['ok'] ? 'Firma oprettet.' : 'Fejl'));
     }
 
     abas_redirect($redirectUrl);
@@ -68,12 +53,11 @@ $totalInstallers = $listResult['total'];
 $totalPages = $listResult['totalPages'];
 $page = $listResult['page'];
 $pageTitle = 'Installatører';
+$adminSectionTitle = 'Godkendte installatører';
+$adminSectionLead = 'Et firma kan have flere e-mail-domæner. Klik på et firma for at redigere detaljer, brugere og anlægsadgange.';
 $currentUser = $user;
-require __DIR__ . '/../partials/header.php';
+require __DIR__ . '/../partials/admin_shell_start.php';
 ?>
-<div class="mb-2"><a href="<?= abas_url('admin/index.php') ?>" class="abas-back-link">&larr; Admin</a></div>
-<h1 class="abas-page-title !text-xl">Godkendte installatører</h1>
-<p class="abas-page-lead">Et firma kan have flere e-mail-domæner. Montører matches på domæne ved registrering.</p>
 
 <form method="post" class="abas-card mb-6 max-w-lg abas-form">
     <input type="hidden" name="action" value="create">
@@ -86,7 +70,7 @@ require __DIR__ . '/../partials/header.php';
         <label class="abas-label" for="new_email_domain">Første e-mail-domæne</label>
         <input id="new_email_domain" name="email_domain" required placeholder="firma.dk" class="abas-input">
     </div>
-    <button class="abas-btn-primary">Opret firma</button>
+    <button class="abas-btn-primary">Opret og åbn detaljer</button>
 </form>
 
 <form method="get" class="mb-4 flex flex-wrap gap-2 items-end max-w-2xl" role="search" data-abas-loading="Søger…">
@@ -118,82 +102,33 @@ require __DIR__ . '/../partials/header.php';
                 <?php abas_render_table_sort_th('Firma', abas_table_sort_link('admin/installers.php', $listQuery, 'company', $sort, $sortDir, abas_installers_sort_columns())); ?>
                 <th scope="col">E-mail-domæner</th>
                 <?php abas_render_table_sort_th('Brugere', abas_table_sort_link('admin/installers.php', $listQuery, 'montor_count', $sort, $sortDir, abas_installers_sort_columns())); ?>
-                <th scope="col"></th>
             </tr>
         </thead>
         <tbody>
         <?php foreach ($rows as $r):
             $installerId = (int) $r['id'];
-            $montorCount = (int) ($r['montor_count'] ?? 0);
             $companyName = (string) $r['company_name'];
             $domains = $r['domains'] ?? [];
-            $hasPlaceholderDomain = false;
-            foreach ($domains as $domain) {
-                if (str_ends_with(strtolower((string) $domain), '.trekantbrand-import.local')) {
-                    $hasPlaceholderDomain = true;
-                    break;
-                }
+            $editUrl = abas_admin_installer_edit_url(
+                $installerId,
+                $sort !== 'company' ? $sort : null,
+                $sortDir !== 'asc' ? $sortDir : null,
+                $search !== '' ? $search : null,
+                $page > 1 ? $page : null
+            );
+            $domainPreview = $domains !== [] ? implode(', ', array_slice($domains, 0, 3)) : '—';
+            if (count($domains) > 3) {
+                $domainPreview .= ' …';
             }
-            $deleteConfirm = 'ADVARSEL: Slet firmaet "' . $companyName . '"?\n\n'
-                . 'Alle ' . $montorCount . ' montør(er)/virksomhedsadmin(s) tilknyttet firmaet fjernes permanent.\n\n'
-                . 'Domæner: ' . ($domains !== [] ? implode(', ', $domains) : '(ingen)');
             ?>
-            <tr>
-                <td>
-                    <form method="post" class="flex flex-wrap gap-2 items-center max-w-xs">
-                        <input type="hidden" name="action" value="update_company">
-                        <input type="hidden" name="installer_id" value="<?= $installerId ?>">
-                        <input name="company_name" required value="<?= htmlspecialchars($companyName) ?>" class="abas-input text-sm font-semibold text-brand">
-                        <button type="submit" class="abas-btn-secondary text-sm shrink-0">Gem navn</button>
-                    </form>
-                    <?php if ($hasPlaceholderDomain): ?>
-                        <p class="text-xs text-amber-800 mt-1">Import-placeholder domæne — tilføj rigtigt domæne.</p>
-                    <?php endif; ?>
-                </td>
-                <td>
-                    <?php if ($domains === []): ?>
-                        <span class="text-sm text-amber-700">Ingen domæner</span>
-                    <?php else: ?>
-                        <ul class="space-y-2">
-                            <?php foreach ($domains as $domain):
-                                $isPlaceholder = str_ends_with(strtolower((string) $domain), '.trekantbrand-import.local');
-                                ?>
-                                <li class="flex flex-wrap items-center gap-2">
-                                    <span class="abas-badge <?= $isPlaceholder ? 'bg-amber-50 text-amber-900 border-amber-200' : 'bg-gray-100 text-gray-800 border border-gray-200' ?> font-mono text-xs"><?= htmlspecialchars($domain) ?></span>
-                                    <?php if (count($domains) > 1): ?>
-                                    <form method="post" class="inline" onsubmit="return confirm('Fjern domænet <?= htmlspecialchars($domain, ENT_QUOTES) ?>?');">
-                                        <input type="hidden" name="action" value="remove_domain">
-                                        <input type="hidden" name="installer_id" value="<?= $installerId ?>">
-                                        <input type="hidden" name="email_domain" value="<?= htmlspecialchars($domain) ?>">
-                                        <button type="submit" class="text-xs text-red-700 hover:underline">Fjern</button>
-                                    </form>
-                                    <?php endif; ?>
-                                </li>
-                            <?php endforeach; ?>
-                        </ul>
-                    <?php endif; ?>
-                </td>
-                <td class="whitespace-nowrap text-gray-700"><?= $montorCount ?></td>
-                <td class="whitespace-nowrap align-top">
-                    <details class="abas-collapsible inline-block mr-3">
-                        <summary class="abas-link text-sm abas-collapsible-summary">Tilføj domæne</summary>
-                        <form method="post" class="mt-2 flex flex-wrap gap-2 items-end min-w-[14rem]">
-                            <input type="hidden" name="action" value="add_domain">
-                            <input type="hidden" name="installer_id" value="<?= $installerId ?>">
-                            <div class="abas-field flex-1 min-w-[10rem] !mb-0">
-                                <label class="sr-only">Nyt domæne</label>
-                                <input name="email_domain" required placeholder="andet-domæne.dk" class="abas-input text-sm">
-                            </div>
-                            <button class="abas-btn-secondary text-sm">Tilføj</button>
-                        </form>
-                    </details>
-                    <form method="post" class="inline"
-                          onsubmit="return confirm(<?= json_encode($deleteConfirm, JSON_UNESCAPED_UNICODE) ?>);">
-                        <input type="hidden" name="action" value="delete">
-                        <input type="hidden" name="installer_id" value="<?= $installerId ?>">
-                        <button type="submit" class="text-sm text-red-700 hover:underline">Slet</button>
-                    </form>
-                </td>
+            <tr class="abas-table-row-link"
+                role="link"
+                tabindex="0"
+                data-href="<?= htmlspecialchars($editUrl) ?>"
+                data-abas-loading="Åbner firma…">
+                <td class="font-medium text-brand"><?= htmlspecialchars($companyName) ?></td>
+                <td class="text-sm text-gray-600 font-mono"><?= htmlspecialchars($domainPreview) ?></td>
+                <td class="whitespace-nowrap text-gray-700"><?= (int) ($r['montor_count'] ?? 0) ?></td>
             </tr>
         <?php endforeach; ?>
         </tbody>
@@ -201,4 +136,4 @@ require __DIR__ . '/../partials/header.php';
 </div>
 <?php abas_render_table_pagination('admin/installers.php', $listQueryBase, $page, $totalPages); ?>
 <?php endif; ?>
-<?php require __DIR__ . '/../partials/footer.php';
+<?php require __DIR__ . '/../partials/admin_shell_end.php';

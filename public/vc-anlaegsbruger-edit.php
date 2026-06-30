@@ -10,10 +10,11 @@ require_once __DIR__ . '/../includes/users.php';
 require_once __DIR__ . '/../includes/user_management.php';
 require_once __DIR__ . '/../includes/password_flow.php';
 require_once __DIR__ . '/../includes/service.php';
+require_once __DIR__ . '/../includes/installation_sync.php';
 
 $conn = abas_db();
 $actor = abas_require_login();
-abas_require_role(['anlaegsejer']);
+abas_require_role(['vagtcentral']);
 
 $targetId = (int) ($_GET['id'] ?? $_POST['id'] ?? 0);
 $listQuery = array_filter([
@@ -21,15 +22,16 @@ $listQuery = array_filter([
     'sort' => (string) ($_GET['sort'] ?? $_POST['sort'] ?? '') ?: null,
     'dir' => (string) ($_GET['dir'] ?? $_POST['dir'] ?? '') ?: null,
 ]);
-$listUrl = abas_anlaegsbrugere_page_url($listQuery);
-$selfUrl = abas_url('anlaegsbruger-edit.php?' . http_build_query(array_merge(['id' => $targetId], $listQuery)));
+$listUrl = abas_vc_anlaegsbrugere_page_url($listQuery);
+$selfUrl = abas_vc_anlaegsbruger_edit_url($targetId, $listQuery);
+
 $stmt = $conn->prepare('SELECT * FROM users WHERE id = ? LIMIT 1');
 $stmt->bind_param('i', $targetId);
 $stmt->execute();
 $editUser = $stmt->get_result()->fetch_assoc();
 $stmt->close();
 
-if (!$editUser || !abas_anlaegsejer_may_manage_user($conn, $actor, $editUser)) {
+if (!$editUser || !abas_vc_may_manage_anlaegsbruger($actor, $editUser)) {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         abas_flash_set('error', 'Ingen adgang til brugeren.');
         abas_redirect($listUrl);
@@ -42,14 +44,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'unlink') {
         $installationId = (int) ($_POST['installation_id'] ?? 0);
-        if ($installationId > 0 && abas_anlaegsejer_may_unlink_shared_installation($conn, $actor, $installationId, $editUser)) {
-            abas_unlink_user_installation($conn, $targetId, $installationId);
+        if ($installationId > 0 && abas_unlink_user_installation($conn, $targetId, $installationId)) {
             abas_flash_set('success', 'Anlæg fjernet fra brugeren.');
-            if (!abas_users_share_installation($conn, (int) $actor['id'], $targetId)) {
-                abas_redirect($listUrl);
-            }
         } else {
             abas_flash_set('error', 'Kunne ikke fjerne tilknytning.');
+        }
+        abas_redirect($selfUrl);
+    }
+
+    if ($action === 'link') {
+        $linkError = abas_link_user_installation_by_miscno2($conn, $targetId, (string) ($_POST['miscno2'] ?? ''), $actor);
+        if ($linkError !== null) {
+            abas_flash_set('error', $linkError);
+        } else {
+            abas_flash_set('success', 'Anlæg tilknyttet.');
         }
         abas_redirect($selfUrl);
     }
@@ -57,6 +65,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'reset_password') {
         abas_password_send_flow_email($conn, $targetId, 'reset', (int) $actor['id']);
         abas_flash_set('success', 'Nulstillings-e-mail sendt.');
+        abas_redirect($selfUrl);
+    }
+
+    if ($action === 'send_welcome') {
+        abas_password_send_flow_email($conn, $targetId, 'welcome', (int) $actor['id']);
+        abas_flash_set('success', 'Velkomst-e-mail sendt.');
         abas_redirect($selfUrl);
     }
 
@@ -70,7 +84,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             (string) ($_POST['registration_display_name'] ?? ''),
             !empty($_POST['sms_service_allowed']),
             trim($_POST['sms_code'] ?? ''),
-            'anlaegsejer'
+            'vagtcentral'
         );
         abas_flash_set($result['ok'] ? 'success' : 'error', $result['message'] ?? 'Bruger opdateret.');
         abas_redirect($selfUrl);
@@ -78,12 +92,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $linkedInstallations = abas_user_installation_links($conn, $targetId);
-$actorInstIds = abas_user_installation_ids($conn, (int) $actor['id']);
 $linkedWithStatus = [];
 foreach ($linkedInstallations as $inst) {
-    if (!in_array((int) $inst['id'], $actorInstIds, true)) {
-        continue;
-    }
     $session = abas_active_session_for_installation($conn, (int) $inst['id']);
     $linkedWithStatus[] = ['inst' => $inst, 'in_service' => $session !== null];
 }
@@ -136,22 +146,32 @@ require __DIR__ . '/partials/header.php';
 </form>
 
 <div class="abas-card max-w-lg mb-6">
-    <h2 class="abas-card-title">Adgangskode</h2>
-    <p class="text-sm text-gray-600 mb-3">Send link til nulstilling af adgangskode.</p>
-    <form method="post">
-        <input type="hidden" name="id" value="<?= $targetId ?>">
-        <input type="hidden" name="action" value="reset_password">
-        <?php foreach ($listQuery as $key => $value): ?>
-            <input type="hidden" name="<?= htmlspecialchars((string) $key) ?>" value="<?= htmlspecialchars((string) $value) ?>">
-        <?php endforeach; ?>
-        <button type="submit" class="abas-btn-secondary text-sm">Send nulstil adgangskode</button>
-    </form>
+    <h2 class="abas-card-title">Adgangskode-e-mail</h2>
+    <p class="text-sm text-gray-600 mb-3">Send velkomst- eller nulstillingslink uden at gemme øvrige ændringer.</p>
+    <div class="flex flex-wrap gap-2">
+        <form method="post" class="inline">
+            <input type="hidden" name="id" value="<?= $targetId ?>">
+            <input type="hidden" name="action" value="send_welcome">
+            <?php foreach ($listQuery as $key => $value): ?>
+                <input type="hidden" name="<?= htmlspecialchars((string) $key) ?>" value="<?= htmlspecialchars((string) $value) ?>">
+            <?php endforeach; ?>
+            <button type="submit" class="abas-btn-secondary text-sm">Send velkomst-e-mail</button>
+        </form>
+        <form method="post" class="inline">
+            <input type="hidden" name="id" value="<?= $targetId ?>">
+            <input type="hidden" name="action" value="reset_password">
+            <?php foreach ($listQuery as $key => $value): ?>
+                <input type="hidden" name="<?= htmlspecialchars((string) $key) ?>" value="<?= htmlspecialchars((string) $value) ?>">
+            <?php endforeach; ?>
+            <button type="submit" class="abas-btn-secondary text-sm">Send nulstil adgangskode</button>
+        </form>
+    </div>
 </div>
 
 <div class="abas-card max-w-lg abas-form">
-    <h2 class="abas-card-title">Tilknyttede anlæg (dine anlæg)</h2>
+    <h2 class="abas-card-title">Tilknyttede anlæg</h2>
     <?php if ($linkedWithStatus === []): ?>
-        <p class="text-gray-500 text-sm mb-4">Ingen fælles anlæg tilknyttet.</p>
+        <p class="text-gray-500 text-sm mb-4">Ingen anlæg tilknyttet endnu.</p>
     <?php else: ?>
         <ul class="space-y-2 mb-4">
             <?php foreach ($linkedWithStatus as $row):
@@ -159,7 +179,7 @@ require __DIR__ . '/partials/header.php';
                 ?>
                 <li class="flex flex-wrap items-center justify-between gap-2 border border-gray-100 rounded-xl px-3 py-2">
                     <div>
-                        <span class="font-mono font-medium text-brand"><?= htmlspecialchars((string) $inst['miscno2']) ?></span>
+                        <a href="<?= abas_url('installation.php?id=' . (int) $inst['id']) ?>" class="font-mono font-medium text-brand hover:underline"><?= htmlspecialchars((string) $inst['miscno2']) ?></a>
                         <span class="text-sm text-gray-600"> — <?= htmlspecialchars((string) $inst['name']) ?></span>
                         <span class="<?= $row['in_service'] ? 'abas-badge-in-service' : 'abas-badge-ok' ?> ml-2"><?= $row['in_service'] ? 'I service' : 'Drift' ?></span>
                     </div>
@@ -176,6 +196,17 @@ require __DIR__ . '/partials/header.php';
             <?php endforeach; ?>
         </ul>
     <?php endif; ?>
-    <p class="abas-hint">Du kan fjerne tilknytning til fælles anlæg. Nye tilknytninger oprettes af vagtcentral eller administrator.</p>
+    <form method="post" class="flex flex-wrap gap-2 items-end border-t border-gray-100 pt-4">
+        <input type="hidden" name="id" value="<?= $targetId ?>">
+        <input type="hidden" name="action" value="link">
+        <?php foreach ($listQuery as $key => $value): ?>
+            <input type="hidden" name="<?= htmlspecialchars((string) $key) ?>" value="<?= htmlspecialchars((string) $value) ?>">
+        <?php endforeach; ?>
+        <div class="abas-field flex-1 min-w-[10rem] !mb-0">
+            <label class="abas-label" for="link-miscno2">Tilknyt anlæg (ABA-nr.)</label>
+            <input id="link-miscno2" name="miscno2" required placeholder="fab0100" class="abas-input font-mono">
+        </div>
+        <button type="submit" class="abas-btn-secondary">Tilknyt</button>
+    </form>
 </div>
 <?php require __DIR__ . '/partials/footer.php';

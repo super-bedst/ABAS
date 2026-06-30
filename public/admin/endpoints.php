@@ -17,12 +17,13 @@ $endpoints = abas_api_endpoint_registry();
 $legacy = abas_api_legacy_endpoint_registry();
 
 $pageTitle = 'API-endpoints';
+$adminSectionTitle = 'API-endpoints';
+$adminSectionLead = 'Fulde URL\'er for denne installation.';
 $currentUser = $user;
-require __DIR__ . '/../partials/header.php';
+require __DIR__ . '/../partials/admin_shell_start.php';
 ?>
-<h1 class="abas-page-title">API-endpoints</h1>
-<p class="abas-page-lead">
-    Fulde URL'er baseret på denne installation: <code class="text-sm bg-gray-100 px-1.5 py-0.5 rounded"><?= htmlspecialchars($baseUrl) ?></code>
+<p class="abas-page-lead mb-6">
+    Base-URL: <code class="text-sm bg-gray-100 px-1.5 py-0.5 rounded"><?= htmlspecialchars($baseUrl) ?></code>
 </p>
 
 <div class="mb-6 p-4 bg-sky-50 border border-sky-200 rounded-xl text-sm text-sky-950 space-y-2">
@@ -99,5 +100,4 @@ require __DIR__ . '/../partials/header.php';
     </div>
 </section>
 
-<p><a href="<?= abas_url('admin/index.php') ?>" class="abas-link text-sm">Tilbage til administration</a></p>
-<?php require __DIR__ . '/../partials/footer.php';
+<?php require __DIR__ . '/../partials/admin_shell_end.php';

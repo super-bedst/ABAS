@@ -40,10 +40,10 @@ $rows = abas_table_sort_rows($rows, $sort, $sortDir, [
     'active' => static fn (array $row): string => !empty($row['active']) ? '1' : '0',
 ]);
 $pageTitle = 'API-tokens';
+$adminSectionTitle = 'API-tokens';
 $currentUser = $user;
-require __DIR__ . '/../partials/header.php';
+require __DIR__ . '/../partials/admin_shell_start.php';
 ?>
-<h1 class="text-xl font-semibold text-brand mb-4">API-tokens</h1>
 <?php if ($newToken): ?>
 <div class="mb-4 p-3 bg-amber-50 border border-amber-300 rounded font-mono text-sm break-all"><?= htmlspecialchars($newToken) ?></div>
 <?php endif; ?>
@@ -71,5 +71,4 @@ require __DIR__ . '/../partials/header.php';
     </tbody>
 </table>
 </div>
-<p class="mt-4"><a href="<?= abas_url('admin/index.php') ?>" class="text-brand underline text-sm">Tilbage</a></p>
-<?php require __DIR__ . '/../partials/footer.php';
+<?php require __DIR__ . '/../partials/admin_shell_end.php';

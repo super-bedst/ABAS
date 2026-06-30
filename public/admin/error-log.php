@@ -15,12 +15,11 @@ abas_require_role(['admin']);
 $lines = abas_read_error_log();
 
 $pageTitle = 'Fejllog';
+$adminSectionTitle = 'Fejllog';
+$adminSectionLead = 'Seneste ' . count($lines) . ' applikationsfejl (registrering, mail, API m.m.).';
 $currentUser = $user;
-require __DIR__ . '/../partials/header.php';
+require __DIR__ . '/../partials/admin_shell_start.php';
 ?>
-<div class="mb-2"><a href="<?= abas_url('admin/index.php') ?>" class="abas-back-link">&larr; Admin</a></div>
-<h1 class="abas-page-title">Fejllog</h1>
-<p class="abas-page-lead">Seneste <?= count($lines) ?> applikationsfejl (registrering, mail, API m.m.).</p>
 
 <div class="flex flex-wrap gap-2 mb-4">
     <a href="<?= abas_url('admin/error-log.php') ?>" class="abas-btn-secondary">Opdater</a>
@@ -39,4 +38,4 @@ require __DIR__ . '/../partials/header.php';
 </div>
 
 <p class="abas-hint mt-3">Logfil: <code>storage/app/error-last50.log</code> (max. 50 linjer). Mail-detaljer logges også i <code>storage/mail/mail-<?= date('Y-m-d') ?>.log</code>.</p>
-<?php require __DIR__ . '/../partials/footer.php';
+<?php require __DIR__ . '/../partials/admin_shell_end.php';

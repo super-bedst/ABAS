@@ -39,12 +39,11 @@ $dirSql = $sortDir === 'desc' ? 'DESC' : 'ASC';
 $rows = $conn->query("SELECT * FROM mfa_ip_whitelist ORDER BY $orderCol $dirSql, ip_cidr ASC")->fetch_all(MYSQLI_ASSOC);
 
 $pageTitle = 'MFA IP-whitelist';
+$adminSectionTitle = 'MFA IP-whitelist';
+$adminSectionLead = 'IP-adresser der springer to-faktor godkendelse over ved login.';
 $currentUser = $admin;
-require __DIR__ . '/../partials/header.php';
+require __DIR__ . '/../partials/admin_shell_start.php';
 ?>
-<div class="mb-2"><a href="<?= abas_url('admin/index.php') ?>" class="abas-back-link">&larr; Admin</a></div>
-<h1 class="abas-page-title">MFA IP-whitelist</h1>
-<p class="abas-page-lead">IP-adresser der springer to-faktor godkendelse over ved login.</p>
 
 <form method="post" class="abas-card max-w-lg abas-form mb-6">
     <div class="abas-field"><label class="abas-label">IP / CIDR</label><input name="ip_cidr" required class="abas-input" placeholder="192.168.1.10 eller 10.0.0.0/24"></div>
@@ -75,4 +74,4 @@ require __DIR__ . '/../partials/header.php';
         </tbody>
     </table>
 </div>
-<?php require __DIR__ . '/../partials/footer.php';
+<?php require __DIR__ . '/../partials/admin_shell_end.php';

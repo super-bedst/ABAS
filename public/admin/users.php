@@ -208,14 +208,11 @@ $renderSortTh = static function (string $label, string $column) use ($sort, $sor
 };
 
 $pageTitle = 'Brugere';
+$adminSectionTitle = 'Brugere';
+$adminSectionLead = 'Samlet oversigt over alle brugertyper — opret, rediger og slet fra ét sted.';
 $currentUser = $user;
-require __DIR__ . '/../partials/header.php';
+require __DIR__ . '/../partials/admin_shell_start.php';
 ?>
-<div class="mb-2">
-    <a href="<?= abas_url('admin/index.php') ?>" class="abas-back-link">&larr; Administration</a>
-</div>
-<h1 class="abas-page-title !text-xl">Brugere</h1>
-<p class="abas-page-lead mb-4">Samlet oversigt over alle brugertyper — opret, rediger og slet fra ét sted.</p>
 
 <div class="flex flex-wrap items-center gap-2 mb-6">
     <nav class="flex flex-wrap gap-2 flex-1" aria-label="Filtrer efter rolle">
@@ -459,4 +456,4 @@ document.addEventListener('DOMContentLoaded', function () {
     syncCreateUserFields();
 });
 </script>
-<?php require __DIR__ . '/../partials/footer.php';
+<?php require __DIR__ . '/../partials/admin_shell_end.php';

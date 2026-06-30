@@ -45,6 +45,7 @@ abas_session_release();
             <?php if ($currentUser['role'] === 'virksomhedsadmin'): ?>
                 <a href="<?= abas_url('virksomhed/users.php') ?>" class="px-3 py-1.5 rounded-full hover:bg-white/15">Virksomhedsbrugere</a>
             <?php endif; ?>
+            <a href="<?= abas_url('vejledning.php') ?>" class="px-3 py-1.5 rounded-full hover:bg-white/15">Vejledning</a>
             <a href="<?= abas_url('profile.php') ?>" class="px-3 py-1.5 rounded-full hover:bg-white/15">Min konto</a>
             <span class="hidden sm:inline px-2.5 py-1 rounded-full bg-white/10 text-white/90 text-xs">
                 <?= htmlspecialchars($currentUser['username']) ?> · <?= htmlspecialchars(abas_role_label($currentUser['role'])) ?>

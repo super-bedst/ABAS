@@ -99,6 +99,9 @@
 
     function bindLoadingNavigation() {
         document.addEventListener('click', function (event) {
+            if (event.target.closest('a, button, input, select, textarea, label, summary, details, [data-abas-row-ignore]')) {
+                return;
+            }
             var row = event.target.closest('.abas-table-row-link');
             if (row && row.dataset.href) {
                 if (shouldShowNavLoading(event, row, row.dataset.href)) {
@@ -129,6 +132,9 @@
             }
             var row = event.target.closest('.abas-table-row-link');
             if (!row || !row.dataset.href) {
+                return;
+            }
+            if (event.target.closest('[data-abas-row-ignore], details, summary')) {
                 return;
             }
             event.preventDefault();

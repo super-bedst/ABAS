@@ -60,13 +60,14 @@ $initialMembers = array_map(static fn (array $row): array => [
 ], $members);
 
 $pageTitle = 'Rediger anlægsgruppe';
+$adminSectionTitle = (string) $group['name'];
+$adminSectionLead = (string) $group['public_id'];
+$adminNavSection = 'installation-groups.php';
 $currentUser = $user;
 $extraHead = '<script src="' . htmlspecialchars(abas_asset_url('assets/js/installation-group-edit.js')) . '" defer></script>';
-require __DIR__ . '/../partials/header.php';
+require __DIR__ . '/../partials/admin_shell_start.php';
 ?>
-<div class="mb-2"><a href="<?= htmlspecialchars($listUrl) ?>" class="abas-back-link">&larr; Anlægsgrupper</a></div>
-<h1 class="abas-page-title !text-xl"><?= htmlspecialchars((string) $group['name']) ?></h1>
-<p class="abas-page-lead font-mono text-sm text-gray-500"><?= htmlspecialchars((string) $group['public_id']) ?></p>
+<div class="mb-4"><a href="<?= htmlspecialchars($listUrl) ?>" class="abas-back-link">&larr; Anlægsgrupper</a></div>
 
 <form method="post" class="abas-form" id="ig-form">
     <input type="hidden" name="id" value="<?= (int) $groupId ?>">
@@ -147,4 +148,4 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 
-<?php require __DIR__ . '/../partials/footer.php';
+<?php require __DIR__ . '/../partials/admin_shell_end.php';

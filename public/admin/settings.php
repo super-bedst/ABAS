@@ -21,10 +21,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $pageTitle = 'Indstillinger';
+$adminSectionTitle = 'Systemindstillinger';
 $currentUser = $user;
-require __DIR__ . '/../partials/header.php';
+require __DIR__ . '/../partials/admin_shell_start.php';
 ?>
-<h1 class="text-xl font-semibold text-brand mb-4">Systemindstillinger</h1>
 <form method="post" class="bg-white border rounded p-4 max-w-md space-y-3">
     <div>
         <label class="block text-sm">Adgangsbekræftelse (måneder)</label>
@@ -40,5 +40,4 @@ require __DIR__ . '/../partials/header.php';
     </div>
     <button class="bg-brand text-white px-4 py-2 rounded">Gem</button>
 </form>
-<p class="mt-4"><a href="<?= abas_url('admin/index.php') ?>" class="text-brand underline text-sm">Tilbage</a></p>
-<?php require __DIR__ . '/../partials/footer.php';
+<?php require __DIR__ . '/../partials/admin_shell_end.php';

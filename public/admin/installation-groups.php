@@ -60,12 +60,11 @@ $totalPages = $listResult['totalPages'];
 $page = $listResult['page'];
 
 $pageTitle = 'Anlægsgrupper';
+$adminSectionTitle = 'Anlægsgrupper';
+$adminSectionLead = 'Saml anlæg i grupper og tilknyt dem til montører eller anlægsbrugere. Gruppenavne behøver ikke være unikke.';
 $currentUser = $user;
-require __DIR__ . '/../partials/header.php';
+require __DIR__ . '/../partials/admin_shell_start.php';
 ?>
-<div class="mb-2"><a href="<?= abas_url('admin/index.php') ?>" class="abas-back-link">&larr; Admin</a></div>
-<h1 class="abas-page-title !text-xl">Anlægsgrupper</h1>
-<p class="abas-page-lead">Saml anlæg i grupper og tilknyt dem til montører eller anlægsbrugere. Gruppenavne behøver ikke være unikke.</p>
 
 <form method="post" class="abas-card mb-6 max-w-lg abas-form">
     <input type="hidden" name="action" value="create">
@@ -157,4 +156,4 @@ require __DIR__ . '/../partials/header.php';
 <?php endif; ?>
 <?php endif; ?>
 
-<?php require __DIR__ . '/../partials/footer.php';
+<?php require __DIR__ . '/../partials/admin_shell_end.php';

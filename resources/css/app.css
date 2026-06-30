@@ -316,6 +316,35 @@
     @apply flex flex-wrap gap-1.5;
   }
 
+  .abas-installation-badges-expand {
+    @apply mt-1;
+  }
+
+  .abas-installation-badges-expand-summary {
+    @apply text-xs font-medium text-brand cursor-pointer list-none select-none hover:underline;
+  }
+
+  .abas-installation-badges-expand-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .abas-installation-badges--expanded {
+    @apply mt-1.5;
+  }
+
+  .abas-vc-installation-access {
+    @apply space-y-2 min-w-[10rem];
+  }
+
+  .abas-vc-access-group-label {
+    @apply text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1;
+  }
+
+  .abas-vc-access-group + .abas-vc-access-group,
+  .abas-vc-access-group + .abas-vc-access-direct {
+    @apply pt-1 border-t border-gray-100;
+  }
+
   .abas-auth-card {
     @apply max-w-md mx-auto abas-card border-brand-gold/25;
   }
@@ -844,5 +873,53 @@
 
   .abas-dual-list-actions {
     @apply flex md:flex-col flex-row flex-wrap justify-center items-center gap-2 py-2;
+  }
+
+  .abas-guide-layout {
+    @apply grid gap-6 lg:grid-cols-[minmax(12rem,16rem)_1fr] lg:items-start;
+  }
+
+  .abas-guide-toc {
+    @apply lg:sticky lg:top-6;
+  }
+
+  .abas-guide-toc-list {
+    @apply list-decimal list-inside space-y-1.5 text-sm m-0 p-0;
+  }
+
+  .abas-guide-toc-link {
+    @apply text-brand hover:text-brand-dark hover:underline;
+  }
+
+  .abas-guide-section {
+    @apply scroll-mt-6;
+  }
+
+  .abas-guide-section-title {
+    @apply text-lg font-semibold text-gray-900 mb-2;
+  }
+
+  .abas-guide-bullets {
+    @apply list-disc pl-5 space-y-1.5 text-gray-700;
+  }
+
+  .abas-guide-mock {
+    @apply border border-dashed border-gray-300 rounded-xl bg-gray-50/90 p-4;
+  }
+
+  .abas-guide-mock-label {
+    @apply text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3;
+  }
+
+  .abas-guide-mock-input {
+    @apply pointer-events-none select-none bg-white;
+  }
+
+  .abas-guide-mock-btn {
+    @apply pointer-events-none select-none inline-flex;
+  }
+
+  .abas-guide-code {
+    @apply font-mono text-sm bg-gray-900 text-gray-100 rounded-lg px-4 py-2 mb-2;
   }
 }

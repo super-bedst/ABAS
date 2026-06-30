@@ -49,6 +49,19 @@ function abas_admin_installers_list_url(?string $sort = null, ?string $dir = nul
     ]);
 }
 
+function abas_admin_installer_edit_url(int $installerId, ?string $sort = null, ?string $dir = null, ?string $search = null, ?int $page = null): string
+{
+    require_once __DIR__ . '/table_list.php';
+
+    return abas_table_page_url('admin/installer-edit.php', array_filter([
+        'id' => $installerId > 0 ? $installerId : null,
+        'sort' => $sort,
+        'dir' => $dir,
+        'q' => $search,
+        'page' => ($page !== null && $page > 1) ? $page : null,
+    ]));
+}
+
 /**
  * @return array{searchSql:string, types:string, params:list<mixed>}
  */
@@ -224,6 +237,114 @@ function abas_installer_montor_count(mysqli $conn, int $installerId): int
     $stmt->close();
 
     return (int) ($row['c'] ?? 0);
+}
+
+/**
+ * @return array<string, mixed>|null
+ */
+function abas_installer_get(mysqli $conn, int $installerId): ?array
+{
+    $stmt = $conn->prepare(
+        'SELECT ai.*, COUNT(u.id) AS montor_count
+         FROM approved_installers ai
+         LEFT JOIN users u ON u.installer_id = ai.id AND u.role IN ("montor", "virksomhedsadmin")
+         WHERE ai.id = ?
+         GROUP BY ai.id
+         LIMIT 1'
+    );
+    $stmt->bind_param('i', $installerId);
+    $stmt->execute();
+    $installer = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if (!$installer) {
+        return null;
+    }
+
+    $domainStmt = $conn->prepare(
+        'SELECT email_domain FROM approved_installer_domains WHERE installer_id = ? ORDER BY email_domain'
+    );
+    $domainStmt->bind_param('i', $installerId);
+    $domainStmt->execute();
+    $domainRows = $domainStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $domainStmt->close();
+
+    $installer['domains'] = array_map(
+        static fn (array $row): string => (string) $row['email_domain'],
+        $domainRows
+    );
+
+    return $installer;
+}
+
+/**
+ * @return list<array<string, mixed>>
+ */
+function abas_installer_list_users(mysqli $conn, int $installerId): array
+{
+    $stmt = $conn->prepare(
+        'SELECT id, username, email, phone, role, active, registration_display_name,
+                montor_scoped_access, sms_service_allowed, created_at
+         FROM users
+         WHERE installer_id = ? AND role IN ("montor", "virksomhedsadmin")
+         ORDER BY registration_display_name, username'
+    );
+    $stmt->bind_param('i', $installerId);
+    $stmt->execute();
+    $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+
+    return $rows;
+}
+
+/**
+ * @return array{mode:string, direct:list<array<string, mixed>>, groups:list<array<string, mixed>>}
+ */
+function abas_installer_user_access_summary(mysqli $conn, array $user): array
+{
+    require_once __DIR__ . '/installation_groups.php';
+    require_once __DIR__ . '/roles.php';
+
+    $role = (string) ($user['role'] ?? '');
+    $userId = (int) ($user['id'] ?? 0);
+    if ($userId <= 0) {
+        return ['mode' => 'none', 'direct' => [], 'groups' => []];
+    }
+
+    if ($role === 'montor' && empty($user['montor_scoped_access'])) {
+        return ['mode' => 'full', 'direct' => [], 'groups' => []];
+    }
+
+    if (!in_array($role, ['montor', 'anlaegsejer', 'anlaegsafprover'], true)) {
+        return ['mode' => 'none', 'direct' => [], 'groups' => []];
+    }
+
+    $direct = abas_user_installation_links($conn, $userId);
+    $groups = abas_user_role_uses_installation_groups($role)
+        ? abas_user_installation_group_links($conn, $userId)
+        : [];
+
+    return ['mode' => 'scoped', 'direct' => $direct, 'groups' => $groups];
+}
+
+/**
+ * @return array{ok:bool, message:string}
+ */
+function abas_installer_delete_user(mysqli $conn, int $installerId, int $userId, int $actorId): array
+{
+    $stmt = $conn->prepare(
+        'SELECT id FROM users WHERE id = ? AND installer_id = ? AND role IN ("montor", "virksomhedsadmin") LIMIT 1'
+    );
+    $stmt->bind_param('ii', $userId, $installerId);
+    $stmt->execute();
+    $exists = (bool) $stmt->get_result()->fetch_row();
+    $stmt->close();
+    if (!$exists) {
+        return ['ok' => false, 'message' => 'Brugeren tilhører ikke dette firma.'];
+    }
+
+    require_once __DIR__ . '/users.php';
+
+    return abas_delete_user($conn, $userId, $actorId);
 }
 
 /**

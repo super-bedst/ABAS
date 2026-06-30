@@ -88,7 +88,7 @@ require __DIR__ . '/partials/header.php';
     Brugere og afprøvere tilknyttet dine anlæg
     <?php if ($myInstallations !== []): ?>
         (<?= count($myInstallations) ?> anlæg)
-    <?php endif; ?>.
+    <?php endif; ?>. Klik på en bruger for at redigere.
 </p>
 
 <?php if (!$canAddUsers): ?>
@@ -138,19 +138,26 @@ require __DIR__ . '/partials/header.php';
                     <?php abas_render_table_sort_th('E-mail', abas_table_sort_link('anlaegsbrugere.php', $listQuery, 'email', $sort, $sortDir, abas_anlaegsejer_users_sort_columns())); ?>
                     <?php abas_render_table_sort_th('Telefon', abas_table_sort_link('anlaegsbrugere.php', $listQuery, 'phone', $sort, $sortDir, abas_anlaegsejer_users_sort_columns())); ?>
                     <?php abas_render_table_sort_th('Rolle', abas_table_sort_link('anlaegsbrugere.php', $listQuery, 'role', $sort, $sortDir, abas_anlaegsejer_users_sort_columns())); ?>
-                    <th scope="col"></th>
                 </tr>
             </thead>
             <tbody>
-            <?php foreach ($managedUsers as $u): ?>
-                <tr>
-                    <td><?= htmlspecialchars(abas_user_display_name($u)) ?></td>
+            <?php foreach ($managedUsers as $u):
+                $editUrl = abas_url('anlaegsbruger-edit.php?' . http_build_query(array_filter([
+                    'id' => (int) $u['id'],
+                    'q' => $search !== '' ? $search : null,
+                    'sort' => $sort !== 'name' ? $sort : null,
+                    'dir' => $sortDir !== 'asc' ? $sortDir : null,
+                ])));
+                ?>
+                <tr class="abas-table-row-link"
+                    role="link"
+                    tabindex="0"
+                    data-href="<?= htmlspecialchars($editUrl) ?>"
+                    data-abas-loading="Åbner bruger…">
+                    <td class="font-medium text-brand"><?= htmlspecialchars(abas_user_display_name($u)) ?></td>
                     <td><?= htmlspecialchars((string) $u['email']) ?></td>
                     <td><?= htmlspecialchars((string) ($u['phone'] ?? '')) ?></td>
                     <td><?= htmlspecialchars(abas_role_label((string) $u['role'])) ?></td>
-                    <td>
-                        <a href="<?= abas_url('anlaegsbruger-edit.php?id=' . (int) $u['id']) ?>" class="abas-link text-sm">Rediger</a>
-                    </td>
                 </tr>
             <?php endforeach; ?>
             </tbody>

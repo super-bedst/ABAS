@@ -47,8 +47,18 @@ if (!in_array($listSort, abas_admin_users_sort_columns(), true)) {
 }
 $listDir = strtolower((string) ($_GET['dir'] ?? $_POST['dir'] ?? 'asc')) === 'desc' ? 'desc' : 'asc';
 $listSearch = trim((string) ($_GET['q'] ?? $_POST['q'] ?? ''));
-$listUrl = abas_admin_users_list_url($listFilter, $listSort !== '' ? $listSort : null, $listSort !== '' ? $listDir : null, $listSearch !== '' ? $listSearch : null);
+$returnPath = trim((string) ($_GET['return'] ?? $_POST['return'] ?? ''));
+$fromVcList = $returnPath !== ''
+    && str_starts_with($returnPath, 'vc-anlaegsbrugere.php')
+    && !str_contains($returnPath, '://');
+$listUrl = $fromVcList
+    ? abas_url($returnPath)
+    : abas_admin_users_list_url($listFilter, $listSort !== '' ? $listSort : null, $listSort !== '' ? $listDir : null, $listSearch !== '' ? $listSearch : null);
+$listBackLabel = $fromVcList ? 'Tilbage til anlægsbrugere' : 'Tilbage til brugere';
 $selfUrl = abas_admin_user_edit_url($id, $listFilter, $listSort !== '' ? $listSort : null, $listSort !== '' ? $listDir : null, $listSearch !== '' ? $listSearch : null);
+if ($fromVcList) {
+    $selfUrl .= (str_contains($selfUrl, '?') ? '&' : '?') . 'return=' . rawurlencode($returnPath);
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? 'save';
@@ -272,14 +282,15 @@ foreach ($linkedWithStatus as $row) {
 }
 
 $pageTitle = 'Rediger bruger';
+$adminSectionTitle = 'Rediger bruger';
+$adminSectionLead = abas_role_label((string) $editUser['role']) . ' — ' . abas_user_display_name($editUser);
+$adminNavSection = 'users.php';
 $currentUser = $admin;
-require __DIR__ . '/../partials/header.php';
+require __DIR__ . '/../partials/admin_shell_start.php';
 ?>
-<div class="mb-2">
-    <a href="<?= htmlspecialchars($listUrl) ?>" class="abas-back-link">&larr; Tilbage til brugere</a>
+<div class="mb-4">
+    <a href="<?= htmlspecialchars($listUrl) ?>" class="abas-back-link">&larr; <?= htmlspecialchars($listBackLabel) ?></a>
 </div>
-<h1 class="abas-page-title !text-xl">Rediger bruger</h1>
-<p class="abas-page-lead"><?= htmlspecialchars(abas_role_label((string) $editUser['role'])) ?> — <?= htmlspecialchars(abas_user_display_name($editUser)) ?></p>
 
 <form method="post" class="abas-card max-w-lg abas-form mb-6" id="user-main-form">
     <input type="hidden" name="id" value="<?= (int) $editUser['id'] ?>">
@@ -577,4 +588,4 @@ require __DIR__ . '/../partials/header.php';
 </div>
 <?php endif; ?>
 
-<?php require __DIR__ . '/../partials/footer.php';
+<?php require __DIR__ . '/../partials/admin_shell_end.php';

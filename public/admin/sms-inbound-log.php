@@ -16,20 +16,17 @@ $lines = abas_sms_read_inbound_webhook_log();
 $endpoint = abas_sms_inbound_webhook_url();
 
 $pageTitle = 'SMS inbound log';
+$adminSectionTitle = 'SMS inbound log';
+$adminSectionLead = 'Seneste ' . count($lines) . ' webhook-kald. Konfigurer BAS med URL nedenfor.';
 $currentUser = $user;
-require __DIR__ . '/../partials/header.php';
+require __DIR__ . '/../partials/admin_shell_start.php';
 ?>
-<h1 class="abas-page-title">SMS inbound log</h1>
-<p class="abas-page-lead">
-    Seneste <?= count($lines) ?> webhook-kald. Konfigurer BAS med:
-</p>
 <p class="mb-4">
     <code class="text-sm bg-gray-100 px-2 py-1.5 rounded break-all block"><?= htmlspecialchars($endpoint) ?></code>
 </p>
 
 <div class="flex flex-wrap gap-2 mb-4">
     <a href="<?= abas_url('admin/sms-inbound-log.php') ?>" class="abas-btn-secondary">Opdater</a>
-    <a href="<?= abas_url('admin/index.php') ?>" class="abas-btn-secondary">Tilbage til admin</a>
 </div>
 
 <div class="abas-card !p-0 overflow-hidden">
@@ -51,4 +48,4 @@ setTimeout(function () {
     window.location.reload();
 }, 15000);
 </script>
-<?php require __DIR__ . '/../partials/footer.php';
+<?php require __DIR__ . '/../partials/admin_shell_end.php';

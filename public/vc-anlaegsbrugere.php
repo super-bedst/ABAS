@@ -77,7 +77,9 @@ $search = trim((string) ($_GET['q'] ?? ''));
 $listQuery = array_filter(['q' => $search !== '' ? $search : null, 'sort' => $sort !== 'name' ? $sort : null, 'dir' => $sortDir !== 'asc' ? $sortDir : null]);
 
 $owners = abas_list_vc_anlaegsbrugere($conn, $sort, $sortDir, $search);
-$ownerInstallations = abas_user_installations_with_service_status($conn);
+$ownerIds = array_map(static fn (array $row): int => (int) $row['id'], $owners);
+$directByUser = abas_user_installations_with_service_status_for_users($conn, $ownerIds);
+$ownerAccess = abas_anlaegsbrugere_installation_access_for_users($conn, $ownerIds, $directByUser);
 $installations = $conn->query('SELECT id, miscno2, name FROM installations ORDER BY miscno2 LIMIT 200')->fetch_all(MYSQLI_ASSOC);
 abas_session_release();
 
@@ -94,11 +96,10 @@ require __DIR__ . '/partials/header.php';
         <button type="button" id="open-create-user-modal" class="abas-btn-primary" aria-controls="create-user-modal" aria-expanded="false">Opret bruger</button>
     </div>
 </div>
-<p class="abas-page-lead">Opret og tilknyt anlægsejere og anlægsafprøvere til deres anlæg.</p>
+<p class="abas-page-lead">Opret og tilknyt anlægsejere og anlægsafprøvere til deres anlæg. Klik på en bruger for at redigere.</p>
 <?php if ($user['role'] === 'admin'): ?>
 <p class="text-sm text-gray-600 mb-4">
-    Rediger og slet brugere under
-    <a href="<?= abas_url('admin/users.php?filter=anlaegsbrugere') ?>" class="abas-link">Admin → Brugere → Anlægsbrugere</a>.
+    Som administrator åbnes fuld brugerredigering. Vagtcentralen får redigering med VC-rettigheder.
 </p>
 <?php endif; ?>
 
@@ -133,10 +134,16 @@ require __DIR__ . '/partials/header.php';
         <?php if ($owners === []): ?>
             <tr><td colspan="5" class="text-gray-500 text-sm p-4"><?= $search !== '' ? 'Ingen brugere matcher søgningen.' : 'Ingen anlægsbrugere endnu.' ?></td></tr>
         <?php endif; ?>
-        <?php foreach ($owners as $o): ?>
-            <?php $linked = $ownerInstallations[(int) $o['id']] ?? []; ?>
-            <tr class="<?= empty($o['active']) ? 'opacity-60' : '' ?>">
-                <td>
+        <?php foreach ($owners as $o):
+            $editUrl = abas_anlaegsbruger_edit_url_for_actor($user, (int) $o['id'], $listQuery);
+            $access = $ownerAccess[(int) $o['id']] ?? ['groups' => [], 'direct' => []];
+            ?>
+            <tr class="abas-table-row-link <?= empty($o['active']) ? 'opacity-60' : '' ?>"
+                role="link"
+                tabindex="0"
+                data-href="<?= htmlspecialchars($editUrl) ?>"
+                data-abas-loading="Åbner bruger…">
+                <td class="font-medium text-brand">
                     <?= htmlspecialchars(abas_user_display_name($o)) ?>
                     <?php if (empty($o['active'])): ?>
                         <span class="text-xs text-amber-700">(inaktiv)</span>
@@ -145,21 +152,8 @@ require __DIR__ . '/partials/header.php';
                 <td><?= htmlspecialchars((string) $o['email']) ?></td>
                 <td><?= htmlspecialchars((string) ($o['phone'] ?? '—')) ?></td>
                 <td><?= htmlspecialchars(abas_role_label((string) $o['role'])) ?></td>
-                <td>
-                    <?php if ($linked === []): ?>
-                        <span class="text-gray-400 text-sm">Ingen anlæg</span>
-                    <?php else: ?>
-                        <div class="abas-installation-badges">
-                            <?php foreach ($linked as $inst): ?>
-                                <a
-                                    href="<?= abas_url('installation.php?id=' . (int) $inst['installation_id']) ?>"
-                                    data-abas-loading="Åbner anlæg…"
-                                    class="<?= $inst['in_service'] ? 'abas-badge-in-service' : 'abas-badge-ok' ?> hover:opacity-90"
-                                    title="<?= $inst['in_service'] ? 'I service' : 'Normal drift' ?>"
-                                ><?= htmlspecialchars($inst['miscno2']) ?></a>
-                            <?php endforeach; ?>
-                        </div>
-                    <?php endif; ?>
+                <td class="align-top max-w-md" data-abas-row-ignore="1">
+                    <?php require __DIR__ . '/partials/vc-anlaegsbruger-installations.php'; ?>
                 </td>
             </tr>
         <?php endforeach; ?>
@@ -167,8 +161,9 @@ require __DIR__ . '/partials/header.php';
     </table>
 </div>
 <p class="mt-3 text-xs text-gray-500">
-    <span class="abas-badge-in-service">fab0100</span> = i service &nbsp;
-    <span class="abas-badge-ok">fab0100</span> = normal drift
+    <span class="abas-badge-in-service">fab0100</span> = i service (vises først) &nbsp;
+    <span class="abas-badge-ok">fab0100</span> = normal drift &nbsp;
+    · Gruppeanlæg vises under gruppenavn · brug «+N anlæg» for at folde flere ud
 </p>
 
 <div id="create-user-modal" class="abas-modal hidden" role="dialog" aria-modal="true" aria-labelledby="create-user-modal-title">
