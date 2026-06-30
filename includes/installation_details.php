@@ -348,6 +348,110 @@ function abas_zone_is_restore_label(string $label): bool
 }
 
 /**
+ * Række fra g_ma_zone venter på restore (Trekant: d_ma_testqueue returnerer 16840).
+ * inc=X betyder restore modtaget; stamp 4/8/9 uden restore er aktiv alarm/fejl.
+ */
+function abas_zone_row_pending_restore(array $row): bool
+{
+    $inc = strtoupper(trim((string) ($row['inc'] ?? '')));
+    if ($inc === 'X') {
+        return false;
+    }
+
+    $stamp = (int) ($row['stamp'] ?? 0);
+    if (!in_array($stamp, [4, 8, 9], true)) {
+        return false;
+    }
+
+    $event = strtoupper(trim((string) ($row['event'] ?? '')));
+    if ($event === 'RESTORE') {
+        return false;
+    }
+
+    $hidden = strtolower(trim((string) ($row['hidden'] ?? '')));
+    if ($hidden !== '' && $hidden !== '0' && $hidden !== 'n') {
+        return false;
+    }
+
+    $label = trim((string) ($row['atext'] ?? ''));
+    if ($label === '' || strtolower($label) === 'ikke defineret') {
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * @param list<array<string, mixed>> $rows
+ * @return list<array{zone_no:string, label:string, status_label:string}>
+ */
+function abas_zones_pending_restore_from_rows(array $rows): array
+{
+    $byZone = [];
+    foreach ($rows as $row) {
+        if (!is_array($row) || !abas_zone_row_pending_restore($row)) {
+            continue;
+        }
+        $zoneNo = abas_zone_display_number($row);
+        $label = trim((string) ($row['atext'] ?? ''));
+        $key = $zoneNo . "\0" . strtolower($label);
+        $byZone[$key] = [
+            'zone_no' => $zoneNo,
+            'label' => $label,
+            'status_label' => abas_zone_status_display(abas_extract_zone_ecode($row)),
+        ];
+    }
+
+    $out = array_values($byZone);
+    usort($out, static fn (array $a, array $b): int => abas_zone_number_sort_compare($a['zone_no'], $b['zone_no']));
+
+    return $out;
+}
+
+/**
+ * @param list<array{zone_no:string, label:string, status_label:string}> $zones
+ */
+function abas_format_zones_pending_restore_message(array $zones, string $action = 'stop'): string
+{
+    $prefix = match ($action) {
+        'stop' => 'Service kan ikke stoppes',
+        default => 'Anlægget kan ikke sættes i normal drift',
+    };
+
+    if ($zones === []) {
+        return $prefix . ' — der mangler zone-restore. Ret fejl/alarm på anlægget og vent på restore.';
+    }
+
+    $parts = [];
+    foreach ($zones as $zone) {
+        $part = 'zone ' . trim($zone['zone_no']);
+        if ($zone['label'] !== '') {
+            $part .= ' (' . $zone['label'] . ')';
+        }
+        $parts[] = $part;
+    }
+
+    if (count($parts) === 1) {
+        return $prefix . ' — restore mangler på ' . $parts[0] . '.';
+    }
+
+    return $prefix . ' — restore mangler på: ' . implode(', ', $parts) . '.';
+}
+
+/**
+ * @return list<array{zone_no:string, label:string, status_label:string}>
+ */
+function abas_fetch_zones_pending_restore(TrekantClient $client, string $userid, int $sIns, string $dealId): array
+{
+    $resp = $client->getInstallationZones($userid, $sIns, $dealId);
+    if (abas_trekant_return_code($resp) !== 0) {
+        return [];
+    }
+
+    return abas_zones_pending_restore_from_rows(abas_trekant_rows($resp));
+}
+
+/**
  * @param list<array{zone_no:string, zix:int, label:string, area:string, ecode:string, status_label:string, tone:string, in_test:bool, kind:string}> $members
  * @return array{zone_no:string, zix:int, label:string, area:string, ecode:string, status_label:string, tone:string, in_test:bool, kind:string}
  */

@@ -530,6 +530,16 @@ function abas_trekant_active_test_s_inc(TrekantClient $client, int $sIns, string
 
 function abas_trekant_response_hint(array $response): string
 {
+    $returnMessage = abas_trekant_pick_nested($response, [
+        ['returnMessage'],
+        ['ReturnMessage'],
+        ['message', 'returnMessage'],
+        ['message', 'ReturnMessage'],
+    ]);
+    if (is_string($returnMessage) && trim($returnMessage) !== '') {
+        return trim($returnMessage);
+    }
+
     if (isset($response['message']) && is_string($response['message'])) {
         return $response['message'];
     }

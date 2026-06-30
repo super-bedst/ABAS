@@ -417,7 +417,26 @@ function abas_stop_service_session(
         trim($comment)
     );
     if ($code !== 0 && $code !== 15974) {
-        return ['ok' => false, 'code' => $code, 'message' => $resp['message']['message'] ?? 'Stop fejlede'];
+        $message = abas_trekant_response_hint($resp);
+        if ($code === 16840) {
+            require_once __DIR__ . '/installation_details.php';
+            $blocking = abas_fetch_zones_pending_restore(
+                $client,
+                abas_trekant_userid($user, $conn),
+                $sIns,
+                $dealId
+            );
+            $zoneMessage = abas_format_zones_pending_restore_message($blocking, 'stop');
+            if ($blocking !== []) {
+                $message = $zoneMessage;
+            } elseif ($message === '') {
+                $message = $zoneMessage;
+            }
+        } elseif ($message === '') {
+            $message = 'Stop fejlede';
+        }
+
+        return ['ok' => false, 'code' => $code, 'message' => $message];
     }
     if ($stopComment !== '' && $sInc > 0) {
         $addResp = $client->addLogComment(abas_trekant_userid($user, $conn), $sIns, $dealId, $sInc, $stopComment);
