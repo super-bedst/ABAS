@@ -420,11 +420,12 @@ function abas_stop_service_session(
         $message = abas_trekant_response_hint($resp);
         if ($code === 16840) {
             require_once __DIR__ . '/installation_details.php';
-            $blocking = abas_fetch_zones_pending_restore(
+            $blocking = abas_zones_blocking_restore_for_stop(
                 $client,
                 abas_trekant_userid($user, $conn),
                 $sIns,
-                $dealId
+                $dealId,
+                $sInc > 0 ? $sInc : null
             );
             $zoneMessage = abas_format_zones_pending_restore_message($blocking, 'stop');
             if ($blocking !== []) {
@@ -1136,6 +1137,177 @@ function abas_alarmlog_row_tone(array $row): string
     }
 
     return 'neutral';
+}
+
+function abas_alarmlog_restore_zone_number(array $row): ?string
+{
+    $zoneNo = abas_alarmlog_field_value($row, 'zone');
+    if ($zoneNo !== '' && $zoneNo !== '0') {
+        return $zoneNo;
+    }
+
+    $comm = abas_alarmlog_field_value($row, 'comm_gen');
+    if ($comm === '') {
+        $comm = abas_alarmlog_field_value($row, 'comm');
+    }
+    if (preg_match('/^(\d+)\s*=>\s*R/i', $comm, $matches)) {
+        return $matches[1];
+    }
+
+    return null;
+}
+
+/**
+ * @param list<array<string, mixed>> $rows
+ * @return list<array{zone_no:string, label:string, status_label:string}>
+ */
+function abas_zones_open_alarm_from_alarmlog_rows(
+    array $rows,
+    ?int $sessionSInc = null,
+    ?array $restoreRequiredZoneNos = null
+): array {
+    require_once __DIR__ . '/installation_details.php';
+
+    if ($sessionSInc !== null && $sessionSInc > 0) {
+        $rows = array_values(array_filter(
+            $rows,
+            static fn (array $row): bool => (int) ($row['s_inc'] ?? 0) === $sessionSInc
+        ));
+    }
+
+    /** @var array<string, array{latest_alarm:int, latest_restore:int, label:string, ecode:string}> $state */
+    $state = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+
+        $event = strtoupper(abas_alarmlog_field_value($row, 'event'));
+        $ts = abas_alarmlog_row_timestamp($row);
+
+        if (str_contains($event, 'RESTORE')) {
+            $zoneNo = abas_alarmlog_restore_zone_number($row);
+            if ($zoneNo === null) {
+                continue;
+            }
+            if (!isset($state[$zoneNo])) {
+                $state[$zoneNo] = ['latest_alarm' => 0, 'latest_restore' => 0, 'label' => '', 'ecode' => ''];
+            }
+            $state[$zoneNo]['latest_restore'] = max($state[$zoneNo]['latest_restore'], $ts);
+            continue;
+        }
+
+        if (abas_alarmlog_row_tone($row) !== 'alarm') {
+            continue;
+        }
+
+        $zoneNo = abas_alarmlog_field_value($row, 'zone');
+        if ($zoneNo === '' || $zoneNo === '0') {
+            continue;
+        }
+
+        if (!isset($state[$zoneNo])) {
+            $state[$zoneNo] = ['latest_alarm' => 0, 'latest_restore' => 0, 'label' => '', 'ecode' => ''];
+        }
+        $state[$zoneNo]['latest_alarm'] = max($state[$zoneNo]['latest_alarm'], $ts);
+
+        $text = abas_alarmlog_field_value($row, 'text');
+        if ($text !== '') {
+            $state[$zoneNo]['label'] = $text;
+        }
+        $parsed = abas_parse_alarmlog_zone_text(abas_alarmlog_field_value($row, 'zone_text'));
+        if ($state[$zoneNo]['label'] === '' && !empty($parsed['extra'])) {
+            $state[$zoneNo]['label'] = (string) $parsed['extra'];
+        }
+
+        $ecode = strtoupper(abas_alarmlog_field_value($row, 'ecode'));
+        if ($ecode === '' && !empty($parsed['status_code'])) {
+            $ecode = strtoupper((string) $parsed['status_code']);
+        }
+        if ($ecode !== '') {
+            $state[$zoneNo]['ecode'] = $ecode;
+        }
+    }
+
+    $open = [];
+    foreach ($state as $zoneNo => $entry) {
+        if ($entry['latest_alarm'] <= 0 || $entry['latest_alarm'] <= $entry['latest_restore']) {
+            continue;
+        }
+        $zoneKey = trim((string) $zoneNo);
+        if ($restoreRequiredZoneNos !== null && !isset($restoreRequiredZoneNos[$zoneKey])) {
+            continue;
+        }
+        $open[] = [
+            'zone_no' => $zoneKey,
+            'label' => $entry['label'],
+            'status_label' => abas_zone_status_display($entry['ecode']),
+        ];
+    }
+
+    usort($open, static fn (array $a, array $b): int => abas_zone_number_sort_compare($a['zone_no'], $b['zone_no']));
+
+    return $open;
+}
+
+/**
+ * @param list<array{zone_no:string, label:string, status_label:string}> $lists
+ * @return list<array{zone_no:string, label:string, status_label:string}>
+ */
+function abas_merge_zones_pending_restore_lists(array ...$lists): array
+{
+    $byZone = [];
+    foreach ($lists as $list) {
+        foreach ($list as $zone) {
+            $zoneNo = trim((string) ($zone['zone_no'] ?? ''));
+            if ($zoneNo === '') {
+                continue;
+            }
+            if (!isset($byZone[$zoneNo]) || ($byZone[$zoneNo]['label'] === '' && ($zone['label'] ?? '') !== '')) {
+                $byZone[$zoneNo] = $zone;
+            }
+        }
+    }
+
+    $out = array_values($byZone);
+    usort($out, static fn (array $a, array $b): int => abas_zone_number_sort_compare($a['zone_no'], $b['zone_no']));
+
+    return $out;
+}
+
+function abas_zones_blocking_restore_for_stop(
+    TrekantClient $client,
+    string $userid,
+    int $sIns,
+    string $dealId,
+    ?int $sessionSInc = null
+): array {
+    require_once __DIR__ . '/installation_details.php';
+
+    $zoneResp = $client->getInstallationZones($userid, $sIns, $dealId);
+    if (abas_trekant_return_code($zoneResp) !== 0) {
+        return [];
+    }
+    $zoneRows = abas_trekant_rows($zoneResp);
+    $fromZones = abas_zones_pending_restore_from_rows($zoneRows);
+    $restoreRequired = abas_zone_numbers_with_restore_required($zoneRows);
+
+    if ($sessionSInc === null || $sessionSInc <= 0) {
+        return $fromZones;
+    }
+
+    $logResp = $client->getAlarmLog($userid, $sIns, $dealId, 200);
+    if (abas_trekant_return_code($logResp) !== 0) {
+        return $fromZones;
+    }
+
+    $fromLog = abas_zones_open_alarm_from_alarmlog_rows(
+        abas_trekant_rows($logResp),
+        $sessionSInc,
+        $restoreRequired
+    );
+
+    return abas_merge_zones_pending_restore_lists($fromZones, $fromLog);
 }
 
 /**

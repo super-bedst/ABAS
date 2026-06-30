@@ -253,8 +253,53 @@ function abas_zone_is_restore_code(string $code): bool
     return $code !== '' && in_array($code, abas_zone_restore_codes(), true);
 }
 
+/**
+ * Aktiv alarmhændelse i testkø (g_ma_zone): event=ALARM, stamp=8, inc≠X.
+ * Bruges til zonestatus i UI — uafhængigt af om rreq kræver restore før stop.
+ * c_ecode kan vise UR, men hændelsen er stadig åben — se alarmlog for samme zone.
+ */
+function abas_zone_row_has_open_alarm_incident(array $row): bool
+{
+    $event = strtoupper(trim((string) ($row['event'] ?? '')));
+    if ($event !== 'ALARM') {
+        return false;
+    }
+
+    $inc = strtoupper(trim((string) ($row['inc'] ?? '')));
+    if ($inc === 'X') {
+        return false;
+    }
+
+    if ((int) ($row['stamp'] ?? 0) !== 8) {
+        return false;
+    }
+
+    $label = trim((string) ($row['atext'] ?? ''));
+    if ($label === '' || strtolower($label) === 'ikke defineret' || abas_zone_is_restore_label($label)) {
+        return false;
+    }
+
+    $hidden = strtolower(trim((string) ($row['hidden'] ?? '')));
+    if ($hidden !== '' && $hidden !== '0' && $hidden !== 'n') {
+        return false;
+    }
+
+    return true;
+}
+
 function abas_extract_zone_ecode(array $row): string
 {
+    if (abas_zone_row_has_open_alarm_incident($row)) {
+        foreach (['ecode', 'c_ecode', 'r_ecode', 'ref_ecode'] as $field) {
+            $code = strtoupper(trim((string) ($row[$field] ?? '')));
+            if ($code !== '' && abas_zone_is_alarm_code($code)) {
+                return $code;
+            }
+        }
+
+        return 'UA';
+    }
+
     // c_ecode is the live status on the point; ecode is often the configured event type for the slot.
     $current = strtoupper(trim((string) ($row['c_ecode'] ?? '')));
     if ($current !== '') {
@@ -348,37 +393,33 @@ function abas_zone_is_restore_label(string $label): bool
 }
 
 /**
- * Række fra g_ma_zone venter på restore (Trekant: d_ma_testqueue returnerer 16840).
- * inc=X betyder restore modtaget; stamp 4/8/9 uden restore er aktiv alarm/fejl.
+ * Blokerer service stop (Trekant 16840): åben ALARM-hændelse + rreq=X på punktet.
+ * Zoner uden rreq (fx zone 13 AT) kan stå i alarm i UI uden at blokere stop.
  */
 function abas_zone_row_pending_restore(array $row): bool
 {
-    $inc = strtoupper(trim((string) ($row['inc'] ?? '')));
-    if ($inc === 'X') {
-        return false;
+    return abas_zone_row_has_open_alarm_incident($row)
+        && abas_zone_restore_required_on_point($row);
+}
+
+/**
+ * @param list<array<string, mixed>> $rows
+ * @return array<string, true> Zone numbers (id) with rreq=X on at least one row
+ */
+function abas_zone_numbers_with_restore_required(array $rows): array
+{
+    $set = [];
+    foreach ($rows as $row) {
+        if (!is_array($row) || !abas_zone_restore_required_on_point($row)) {
+            continue;
+        }
+        $zoneNo = abas_zone_display_number($row);
+        if ($zoneNo !== '') {
+            $set[$zoneNo] = true;
+        }
     }
 
-    $stamp = (int) ($row['stamp'] ?? 0);
-    if (!in_array($stamp, [4, 8, 9], true)) {
-        return false;
-    }
-
-    $event = strtoupper(trim((string) ($row['event'] ?? '')));
-    if ($event === 'RESTORE') {
-        return false;
-    }
-
-    $hidden = strtolower(trim((string) ($row['hidden'] ?? '')));
-    if ($hidden !== '' && $hidden !== '0' && $hidden !== 'n') {
-        return false;
-    }
-
-    $label = trim((string) ($row['atext'] ?? ''));
-    if ($label === '' || strtolower($label) === 'ikke defineret') {
-        return false;
-    }
-
-    return true;
+    return $set;
 }
 
 /**
@@ -393,13 +434,18 @@ function abas_zones_pending_restore_from_rows(array $rows): array
             continue;
         }
         $zoneNo = abas_zone_display_number($row);
+        if ($zoneNo === '') {
+            continue;
+        }
         $label = trim((string) ($row['atext'] ?? ''));
-        $key = $zoneNo . "\0" . strtolower($label);
-        $byZone[$key] = [
+        $entry = [
             'zone_no' => $zoneNo,
             'label' => $label,
             'status_label' => abas_zone_status_display(abas_extract_zone_ecode($row)),
         ];
+        if (!isset($byZone[$zoneNo]) || $label !== '' && abas_zone_is_restore_label($byZone[$zoneNo]['label'])) {
+            $byZone[$zoneNo] = $entry;
+        }
     }
 
     $out = array_values($byZone);
@@ -473,11 +519,16 @@ function abas_merge_zone_status_group(array $members): array
         static fn (array $member): bool => !abas_zone_is_restore_label($member['label'])
     ));
     $label = $primary[0]['label'] ?? $winner['label'];
+    $atype = $primary[0]['atype'] ?? $winner['atype'];
     $inTest = false;
+    $restoreRequired = false;
     $kind = 'system';
     foreach ($members as $member) {
         if ($member['in_test']) {
             $inTest = true;
+        }
+        if (!empty($member['restore_required'])) {
+            $restoreRequired = true;
         }
         if ($member['kind'] === 'zone') {
             $kind = 'zone';
@@ -488,6 +539,8 @@ function abas_merge_zone_status_group(array $members): array
         'zone_no' => $winner['zone_no'],
         'zix' => $winner['zix'],
         'label' => $label,
+        'atype' => $atype,
+        'restore_required' => $restoreRequired,
         'area' => $winner['area'],
         'ecode' => $winner['ecode'],
         'status_label' => abas_zone_status_display($winner['ecode']),
@@ -532,36 +585,39 @@ function abas_zone_status_display(string $code): string
     return $label . ' (' . $code . ')';
 }
 
-function abas_zone_id_is_panel_number(string $id): bool
-{
-    if ($id === '%') {
-        return true;
-    }
-
-    return $id !== '' && preg_match('/^\d{1,2}$/', $id) === 1;
-}
-
 function abas_zone_display_number(array $row): string
 {
-    $zix = (int) ($row['zix'] ?? 0);
     $id = trim((string) ($row['id'] ?? ''));
-    $template = trim((string) ($row['template'] ?? ''));
-
-    // Manually configured panel zones use id (matches vagtcentral zone list).
-    if ($template === '' && $id !== '') {
+    if ($id !== '') {
         return $id;
     }
 
-    // Dalko template status slots (IP, batteri, linje m.m.) are numbered by zix in drift.
-    if ($zix >= 9 && $zix <= 22) {
-        return (string) $zix;
-    }
-
-    if (abas_zone_id_is_panel_number($id)) {
-        return $id;
-    }
+    $zix = (int) ($row['zix'] ?? 0);
 
     return $zix > 0 ? (string) $zix : '';
+}
+
+function abas_zone_restore_required_on_point(array $row): bool
+{
+    return strtoupper(trim((string) ($row['rreq'] ?? ''))) === 'X';
+}
+
+function abas_zone_row_kind(array $row): string
+{
+    $zoneNo = abas_zone_display_number($row);
+    if ($zoneNo === '' || $zoneNo === '%' || strtoupper($zoneNo) === 'MTST') {
+        return 'system';
+    }
+    if (ctype_digit($zoneNo)) {
+        $n = (int) $zoneNo;
+        if ($n === 0 || $n >= 9000 || ($n >= 11 && $n <= 99)) {
+            return 'system';
+        }
+
+        return 'zone';
+    }
+
+    return 'system';
 }
 
 function abas_zone_row_key(array $row): string
@@ -615,7 +671,7 @@ function abas_prepare_installation_zones(array $rows): array
         if ($label === '' || strtolower($label) === 'ikke defineret') {
             continue;
         }
-        $kind = $zix >= 23 ? 'system' : 'zone';
+        $kind = abas_zone_row_kind($row);
 
         $ecode = abas_extract_zone_ecode($row);
         $rowKey = abas_zone_row_key($row);
@@ -623,6 +679,8 @@ function abas_prepare_installation_zones(array $rows): array
             'zone_no' => abas_zone_display_number($row),
             'zix' => $zix,
             'label' => $label,
+            'atype' => trim((string) ($row['atype'] ?? '')),
+            'restore_required' => abas_zone_restore_required_on_point($row),
             'area' => trim((string) ($row['area'] ?? '')),
             'ecode' => $ecode,
             'status_label' => abas_zone_status_display($ecode),
@@ -673,6 +731,7 @@ function abas_render_installation_zones_html(array $zones, ?string $error = null
             <thead>
                 <tr>
                     <th class="w-14">Zone</th>
+                    <th class="w-16">Type</th>
                     <th>Beskrivelse</th>
                     <th class="w-36">Status</th>
                 </tr>
@@ -681,8 +740,12 @@ function abas_render_installation_zones_html(array $zones, ?string $error = null
                 <?php foreach ($zones as $zone): ?>
                     <tr>
                         <td class="whitespace-nowrap font-medium"><?= htmlspecialchars($zone['zone_no']) ?></td>
+                        <td class="whitespace-nowrap text-gray-600"><?= htmlspecialchars($zone['atype'] ?? '') ?></td>
                         <td>
                             <?= htmlspecialchars($zone['label']) ?>
+                            <?php if (!empty($zone['restore_required'])): ?>
+                                <span class="text-[10px] ml-1 px-1.5 py-0 rounded bg-amber-100 text-amber-900" title="Restore kræves ved alarm før service kan stoppes (rreq=X)">Restore-krav</span>
+                            <?php endif; ?>
                             <?php if ($zone['in_test']): ?>
                                 <span class="abas-badge-active text-[10px] ml-1 px-1.5 py-0">Test</span>
                             <?php endif; ?>
