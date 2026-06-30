@@ -24,7 +24,13 @@ function abas_wants_json_response(): bool
         return true;
     }
 
-    return ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest';
+    if (($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest') {
+        return true;
+    }
+
+    $uri = (string) ($_SERVER['REQUEST_URI'] ?? '');
+
+    return str_contains($uri, '/api/v1/') || str_contains($uri, '/scim/v2/');
 }
 
 function abas_render_error_page(int $status = 500, ?string $hint = null): never
@@ -112,6 +118,13 @@ function abas_register_error_handlers(): void
 
         if (PHP_SAPI === 'cli') {
             throw $e;
+        }
+
+        if (abas_wants_json_response()) {
+            http_response_code(500);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['error' => 'Intern serverfejl'], JSON_UNESCAPED_UNICODE);
+            exit;
         }
 
         abas_render_error_page(500);

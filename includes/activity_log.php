@@ -23,6 +23,40 @@ function abas_activity_client_ip(): ?string
     return null;
 }
 
+function abas_activity_category_enum(mysqli $conn): array
+{
+    static $cache = null;
+    if ($cache !== null) {
+        return $cache;
+    }
+
+    $cache = [];
+    $res = $conn->query("SHOW COLUMNS FROM activity_events LIKE 'category'");
+    if ($res instanceof mysqli_result) {
+        $row = $res->fetch_assoc();
+        $res->close();
+        if (is_array($row) && preg_match_all("/'([^']+)'/", (string) ($row['Type'] ?? ''), $matches)) {
+            $cache = $matches[1];
+        }
+    }
+
+    return $cache;
+}
+
+function abas_activity_resolve_category(mysqli $conn, string $category): string
+{
+    $allowed = abas_activity_category_enum($conn);
+    if ($allowed === [] || in_array($category, $allowed, true)) {
+        return $category;
+    }
+
+    if (in_array('system', $allowed, true)) {
+        return 'system';
+    }
+
+    return $allowed[0];
+}
+
 /**
  * @param array<string, scalar|null> $extra
  */
@@ -52,10 +86,6 @@ function abas_log_activity(
         $chk->close();
     }
 
-    if ($details === null && $extra !== []) {
-        $details = json_encode($extra, JSON_UNESCAPED_UNICODE);
-    }
-
     if ($userId !== null && $userId > 0 && ($actorUsername === null || $actorUsername === '')) {
         $uStmt = $conn->prepare('SELECT username FROM users WHERE id = ? LIMIT 1');
         $uStmt->bind_param('i', $userId);
@@ -63,6 +93,24 @@ function abas_log_activity(
         $uRow = $uStmt->get_result()->fetch_assoc();
         $uStmt->close();
         $actorUsername = $uRow['username'] ?? null;
+    }
+
+    $requestedCategory = $category;
+    $category = abas_activity_resolve_category($conn, $category);
+    if ($category !== $requestedCategory) {
+        if ($details !== null && $details !== '') {
+            $decoded = json_decode($details, true);
+            if (is_array($decoded)) {
+                $decoded['audit_category'] = $requestedCategory;
+                $details = json_encode($decoded, JSON_UNESCAPED_UNICODE);
+            }
+        } else {
+            $extra['audit_category'] = $requestedCategory;
+        }
+    }
+
+    if ($details === null && $extra !== []) {
+        $details = json_encode($extra, JSON_UNESCAPED_UNICODE);
     }
 
     $stmt = $conn->prepare(
@@ -86,8 +134,20 @@ function abas_log_activity(
         $relatedDealId,
         $source
     );
-    $stmt->execute();
-    $stmt->close();
+    try {
+        $stmt->execute();
+    } catch (Throwable $e) {
+        if (function_exists('abas_log_error')) {
+            require_once __DIR__ . '/app_log.php';
+            abas_log_error('activity', 'Kunne ikke gemme aktivitet', [
+                'category' => $requestedCategory,
+                'action' => $action,
+                'message' => $e->getMessage(),
+            ]);
+        }
+    } finally {
+        $stmt->close();
+    }
 }
 
 function abas_activity_installation_object(?string $miscno2, ?string $installationName, int $sIns, string $dealId): array
