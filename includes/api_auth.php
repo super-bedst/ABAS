@@ -145,11 +145,27 @@ function abas_api_bearer_token(): ?string
     return null;
 }
 
+/** Bearer header, eller ?key= / POST key (fx 3CX CFD uden custom headers). */
+function abas_api_request_token(): ?string
+{
+    $bearer = abas_api_bearer_token();
+    if ($bearer !== null && $bearer !== '') {
+        return $bearer;
+    }
+
+    $key = trim((string) ($_GET['key'] ?? $_POST['key'] ?? ''));
+    if ($key !== '') {
+        return $key;
+    }
+
+    return null;
+}
+
 function abas_api_authenticate(mysqli $conn): array
 {
-    $raw = abas_api_bearer_token();
+    $raw = abas_api_request_token();
     if (!$raw) {
-        abas_api_json(401, ['error' => 'Mangler Bearer token']);
+        abas_api_json(401, ['error' => 'Mangler API-token — brug Authorization: Bearer … eller ?key=…']);
     }
     $hash = hash('sha256', $raw);
     $stmt = $conn->prepare('SELECT * FROM api_tokens WHERE token_hash=? AND active=1 LIMIT 1');

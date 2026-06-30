@@ -270,7 +270,7 @@ function abas_threecx_handle_webhook(mysqli $conn): never
     }
     if ($payload === [] && $_GET !== []) {
         $payload = $_GET;
-        unset($payload['route']);
+        unset($payload['route'], $payload['key']);
     }
 
     $event = abas_threecx_normalize_event($payload);

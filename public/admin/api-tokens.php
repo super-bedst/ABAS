@@ -56,7 +56,7 @@ require __DIR__ . '/../partials/header.php';
     </select>
     <button class="bg-brand text-white px-4 py-2 rounded">Opret token</button>
 </form>
-<p class="abas-hint mb-4">Brug token som <code>Authorization: Bearer …</code> i 3CX CFD webhook til <code>/api/v1/3cx/call</code>. Vælg rolle <strong>vagtcentral</strong> til 3CX.</p>
+<p class="abas-hint mb-4">Brug token som <code>Authorization: Bearer …</code> eller <code>?key=…</code> på URL (fx 3CX uden custom headers) til <code>/api/v1/3cx/call</code>. Vælg rolle <strong>vagtcentral</strong> til 3CX.</p>
 <div class="abas-table-wrap">
 <table class="abas-table">
     <thead><tr>

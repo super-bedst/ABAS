@@ -26,9 +26,17 @@ Reference: [3CX CFD Workspace](https://www.3cx.com/docs/manual/cfd-workspace/)
 | **URL** | `https://teknikweb2.trekantbrand.dk/api/v1/3cx/call` |
 | **Method** | `POST` |
 | **Content-Type** | `application/json` |
-| **Authorization** | `Bearer <API-token fra ABAS admin>` |
+| **Authorization** | `Bearer <API-token fra ABAS admin>` *(anbefalet)* |
 
-Token oprettes i ABAS under **Admin → API-tokens** (rolle: Vagtcentral). I indsætter den i CFD — gem den som fast tekst i Authorization-headeren.
+Token oprettes i ABAS under **Admin → API-tokens** (rolle: Vagtcentral).
+
+**Hvis CFD ikke kan sende custom headers** (fx kun simpel HTTP Request), sæt token i URL i stedet:
+
+```
+https://teknikweb2.trekantbrand.dk/api/v1/3cx/call?key=INDSÆT_API_TOKEN_HER
+```
+
+Brug samme token som til Bearer. *Bemærk:* `?key=` kan ende i webserver-log — brug Bearer hvis 3CX understøtter det.
 
 **Wait for response:** Nej (eller kør HTTP i **Parallel Execution**).
 
@@ -99,7 +107,7 @@ CONCATENATE(
 )
 ```
 
-Samme URL, method, Content-Type og Authorization som ved `connected`.
+Samme URL, method og Content-Type som ved `connected` (inkl. `?key=` eller Bearer).
 
 ---
 
@@ -144,13 +152,13 @@ Samme URL, method, Content-Type og Authorization som ved `connected`.
 | Felt | Værdi |
 |------|--------|
 | Request type | POST |
-| URI | `https://teknikweb2.trekantbrand.dk/api/v1/3cx/call` |
+| URI | `https://teknikweb2.trekantbrand.dk/api/v1/3cx/call` — eller `…/3cx/call?key=TOKEN` hvis Bearer-header ikke virker |
 | Content type | `application/json` |
 | Content | CONCATENATE (se ovenfor) |
-| Custom header | `Authorization` = `CONCATENATE("Bearer ", "TOKEN")` |
+| Custom header | `Authorization` = `CONCATENATE("Bearer ", "TOKEN")` — udelad hvis token er i URL |
 | Wait for response | Nej |
 
-Alternativt: komponenten **Web Service REST** med Authentication = Bearer og samme body.
+Alternativt: komponenten **Web Service REST** med Authentication = Bearer og samme body. Uden header-auth: sæt `?key=TOKEN` på URI.
 
 ---
 
