@@ -85,6 +85,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         abas_redirect($redirectUrl);
     }
 
+    if ($miscno2 !== '' && !in_array($role, ['anlaegsejer', 'anlaegsafprover'], true)) {
+        abas_flash_set('error', 'Anlægsnr. kan kun tilknyttes anlægsejer eller anlægsafprøver.');
+        abas_redirect($redirectUrl);
+    }
+
     $smsCode = trim($_POST['sms_code'] ?? '');
     $smsAllowed = !empty($_POST['sms_service_allowed']) ? 1 : 0;
     if (abas_user_sms_service_code_required_on_create($role, $smsAllowed === 1, $smsCode)) {
@@ -135,7 +140,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 : 'Bruger oprettet, men velkomst-e-mail kunne ikke sendes — tjek mail-konfiguration.';
         }
         if (($role === 'anlaegsejer' || $role === 'anlaegsafprover') && $miscno2 !== '') {
-            $linkError = abas_link_user_installation_by_miscno2($conn, $uid, $miscno2);
+            $linkError = abas_link_user_installation_by_miscno2($conn, $uid, $miscno2, $user);
             if ($linkError !== null) {
                 abas_flash_set('error', 'Bruger oprettet, men anlæg: ' . $linkError);
                 abas_redirect('admin/user-edit.php?id=' . $uid);
@@ -249,10 +254,10 @@ require __DIR__ . '/../partials/header.php';
             <div class="abas-field"><label class="abas-label" for="create-display-name">Navn</label><input id="create-display-name" name="registration_display_name" maxlength="255" class="abas-input" placeholder="Fulde navn eller kontaktperson"></div>
             <div class="abas-field"><label class="abas-label" for="create-username">Brugernavn</label><input id="create-username" name="username" maxlength="255" class="abas-input" placeholder="Samme som e-mail hvis tom"></div>
             <div class="abas-field"><label class="abas-label" for="create-phone">Telefon</label><input id="create-phone" name="phone" required placeholder="+45..." class="abas-input"></div>
-            <div class="abas-field">
+            <div class="abas-field" id="create-sms-code-field">
                 <label class="abas-label" for="create-sms-code">SMS-kode (anlægsbetjening)</label>
-                <input id="create-sms-code" name="sms_code" minlength="6" autocomplete="off" class="abas-input font-mono" placeholder="Min. 6 tegn">
-                <p class="abas-hint">Påkrævet når «Må betjene anlæg via SMS» er valgt — ikke til 2FA-login.</p>
+                <input id="create-sms-code" name="sms_code" autocomplete="off" class="abas-input font-mono" placeholder="Valgfri — min. 6 tegn ved SMS-betjening">
+                <p class="abas-hint">Valgfrit. Påkrævet kun når «Må betjene anlæg via SMS» er valgt — ikke til 2FA-login.</p>
             </div>
             <div class="abas-field">
                 <label class="abas-label" for="role">Rolle</label>
@@ -268,8 +273,8 @@ require __DIR__ . '/../partials/header.php';
                 <input id="miscno2" name="miscno2" placeholder="fab0100" class="abas-input font-mono">
                 <p class="abas-hint">Valgfrit ved oprettelse af anlægsejer/anlægsafprøver.</p>
             </div>
-            <label class="flex items-center gap-2 text-sm mb-4">
-                <input type="checkbox" name="sms_service_allowed" value="1" class="abas-checkbox">
+            <label class="flex items-center gap-2 text-sm mb-4" id="create-sms-allowed-wrap">
+                <input type="checkbox" name="sms_service_allowed" value="1" id="create-sms-allowed" class="abas-checkbox">
                 Må betjene anlæg via SMS
             </label>
             <label class="flex items-center gap-2 text-sm mb-4">
@@ -333,10 +338,21 @@ require __DIR__ . '/../partials/header.php';
     <?php if ($rows === []): ?>
         <tr><td colspan="8" class="text-gray-500 text-sm"><?= $search !== '' ? 'Ingen brugere matcher søgningen.' : 'Ingen brugere i dette filter.' ?></td></tr>
     <?php endif; ?>
-    <?php foreach ($rows as $r): ?>
-        <tr class="<?= empty($r['active']) ? 'opacity-60' : '' ?>">
+    <?php foreach ($rows as $r):
+        $regStatus = (string) ($r['registration_status'] ?? 'approved');
+        $isPending = $regStatus === 'pending';
+        $isRejected = $regStatus === 'rejected';
+        $isDeactivated = empty($r['active']) && !$isPending && !$isRejected;
+        ?>
+        <tr class="<?= $isDeactivated ? 'opacity-60' : '' ?>">
             <td>
-                <?= htmlspecialchars(abas_user_display_name($r)) ?><br>
+                <?= htmlspecialchars(abas_user_display_name($r)) ?>
+                <?php if ($isPending): ?>
+                    <span class="abas-badge-pending text-[10px] ml-1.5 align-middle">Afventer</span>
+                <?php elseif ($isRejected): ?>
+                    <span class="abas-badge-rejected text-[10px] ml-1.5 align-middle">Afvist</span>
+                <?php endif; ?>
+                <br>
                 <span class="text-gray-500 text-xs"><?= htmlspecialchars($r['email']) ?></span>
                 <?php if ((string) $r['username'] !== (string) $r['email']): ?>
                     <br><span class="text-gray-400 text-xs">Login: <?= htmlspecialchars((string) $r['username']) ?></span>
@@ -363,17 +379,19 @@ require __DIR__ . '/../partials/header.php';
                 <?php endif; ?>
             </td>
             <td class="text-center text-sm">
-                <?php if (abas_user_role_uses_sms_code($r['role'])): ?>
-                    <?php if (abas_user_has_sms_code($r)): ?>
-                        Ja<?php if (empty($r['sms_service_allowed'])): ?><br><span class="text-amber-700 text-xs">ikke tilladt</span><?php endif; ?>
-                    <?php else: ?>
-                        <span class="text-amber-700">Mangler</span>
-                    <?php endif; ?>
-                <?php else: ?>
-                    —
+                <?php if (abas_user_role_uses_sms_code($r['role']) && !empty($r['sms_service_allowed'])): ?>
+                    <span class="abas-badge-active">Aktiv</span>
                 <?php endif; ?>
             </td>
-            <td class="text-center text-sm"><?= $r['active'] ? 'Ja' : 'Nej' ?></td>
+            <td class="text-center text-sm">
+                <?php if ($isPending): ?>
+                    <span class="text-sky-700 text-xs">Afventer</span>
+                <?php elseif ($isRejected): ?>
+                    <span class="text-gray-500 text-xs">Afvist</span>
+                <?php else: ?>
+                    <?= $r['active'] ? 'Ja' : 'Nej' ?>
+                <?php endif; ?>
+            </td>
             <td class="whitespace-nowrap text-sm text-gray-600">
                 <?php
                 $lastLogin = trim((string) ($r['last_login_at'] ?? ''));
@@ -401,6 +419,44 @@ document.addEventListener('DOMContentLoaded', function () {
     if (typeof window.abasInitModal === 'function') {
         window.abasInitModal('open-create-user', 'create-user-modal');
     }
+
+    var roleSelect = document.getElementById('role');
+    var ownerMiscField = document.getElementById('owner-misc-field');
+    var smsCodeField = document.getElementById('create-sms-code-field');
+    var smsCodeInput = document.getElementById('create-sms-code');
+    var smsAllowed = document.getElementById('create-sms-allowed');
+    var smsAllowedWrap = document.getElementById('create-sms-allowed-wrap');
+    var ownerRoles = ['anlaegsejer', 'anlaegsafprover'];
+    var smsRoles = ['montor', 'anlaegsejer', 'anlaegsafprover'];
+
+    function syncCreateUserFields() {
+        var role = roleSelect ? roleSelect.value : '';
+        if (ownerMiscField) {
+            ownerMiscField.classList.toggle('hidden', ownerRoles.indexOf(role) === -1);
+        }
+        if (smsCodeField && smsAllowedWrap) {
+            var showSms = smsRoles.indexOf(role) !== -1;
+            smsCodeField.classList.toggle('hidden', !showSms);
+            smsAllowedWrap.classList.toggle('hidden', !showSms);
+        }
+        if (smsCodeInput && smsAllowed) {
+            var requireSms = smsAllowed.checked && smsRoles.indexOf(role) !== -1;
+            smsCodeInput.required = requireSms;
+            if (requireSms) {
+                smsCodeInput.minLength = 6;
+            } else {
+                smsCodeInput.removeAttribute('minlength');
+            }
+        }
+    }
+
+    if (roleSelect) {
+        roleSelect.addEventListener('change', syncCreateUserFields);
+    }
+    if (smsAllowed) {
+        smsAllowed.addEventListener('change', syncCreateUserFields);
+    }
+    syncCreateUserFields();
 });
 </script>
 <?php require __DIR__ . '/../partials/footer.php';

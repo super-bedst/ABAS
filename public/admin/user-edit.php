@@ -73,7 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'link') {
-        $linkError = abas_link_user_installation_by_miscno2($conn, $id, (string) ($_POST['miscno2'] ?? ''));
+        $linkError = abas_link_user_installation_by_miscno2($conn, $id, (string) ($_POST['miscno2'] ?? ''), $user);
         if ($linkError !== null) {
             abas_flash_set('error', $linkError);
         } else {
@@ -257,7 +257,7 @@ require __DIR__ . '/../partials/header.php';
     </div>
     <div class="abas-field" id="sms-code-field">
         <label class="abas-label" for="sms_code">SMS-kode (anlægsbetjening)</label>
-        <input id="sms_code" name="sms_code" minlength="6" autocomplete="new-password" class="abas-input font-mono" placeholder="<?= abas_user_has_sms_code($editUser) ? 'Tom = behold nuværende' : 'Min. 6 tegn' ?>">
+        <input id="sms_code" name="sms_code" autocomplete="new-password" class="abas-input font-mono" placeholder="<?= abas_user_has_sms_code($editUser) ? 'Tom = behold nuværende' : 'Valgfri — min. 6 tegn ved SMS-betjening' ?>">
         <p class="abas-hint">
             Bruges til at starte/stoppe anlæg via SMS — ikke til 2FA-login.
             Påkrævet når «Må betjene anlæg via SMS» er valgt.

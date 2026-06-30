@@ -1289,10 +1289,19 @@ function abas_zones_blocking_restore_for_stop(
         return [];
     }
     $zoneRows = abas_trekant_rows($zoneResp);
-    $fromZones = abas_zones_pending_restore_from_rows($zoneRows);
+    $alarmlogOpenZones = null;
+    $logResp = $client->getAlarmLog($userid, $sIns, $dealId, 200);
+    if (abas_trekant_return_code($logResp) === 0) {
+        $alarmlogOpenZones = abas_alarmlog_open_alarm_zone_map(abas_trekant_rows($logResp));
+    }
+    $fromZones = abas_zones_pending_restore_from_rows($zoneRows, $alarmlogOpenZones);
     $restoreRequired = abas_zone_numbers_with_restore_required($zoneRows);
 
     if ($sessionSInc === null || $sessionSInc <= 0) {
+        return $fromZones;
+    }
+
+    if ($alarmlogOpenZones !== null) {
         return $fromZones;
     }
 

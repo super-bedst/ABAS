@@ -167,13 +167,26 @@ function abas_unlink_user_installation(mysqli $conn, int $userId, int $installat
     return $ok;
 }
 
-function abas_link_user_installation_by_miscno2(mysqli $conn, int $userId, string $miscno2): ?string
+function abas_link_user_installation_by_miscno2(mysqli $conn, int $userId, string $miscno2, ?array $apiUser = null): ?string
 {
     $misc = strtolower(trim($miscno2));
     if ($misc === '') {
         return null;
     }
     $installation = abas_find_installation_by_miscno2($conn, $misc);
+    if (!$installation && $apiUser !== null && abas_is_miscno2_query($misc)) {
+        require_once __DIR__ . '/installation_sync.php';
+        try {
+            foreach (abas_search_installations_from_api($conn, $apiUser, $misc) as $row) {
+                if (strcasecmp((string) ($row['miscno2'] ?? ''), $misc) === 0) {
+                    $installation = $row;
+                    break;
+                }
+            }
+        } catch (Throwable $e) {
+            return 'Kunne ikke slå anlæg op: ' . $e->getMessage();
+        }
+    }
     if (!$installation) {
         return 'Anlæg ikke fundet: ' . $misc;
     }
