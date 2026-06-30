@@ -28,6 +28,18 @@ function abas_user_role_supports_optional_installation_scope(string $role): bool
     return in_array($role, ['montor', 'virksomhedsadmin'], true);
 }
 
+/** Kun montør kan have adgangsbegrænsning redigeret i admin efter oprettelse. */
+function abas_user_role_admin_editable_installation_scope(string $role): bool
+{
+    return $role === 'montor';
+}
+
+/** Roller hvor admin kan tilknytte/redigere anlægsgrupper i brugerredigering. */
+function abas_user_role_admin_editable_installation_groups(string $role): bool
+{
+    return in_array($role, ['montor', 'anlaegsejer', 'anlaegsafprover'], true);
+}
+
 function abas_user_can_access_all_installations(string $role): bool
 {
     return in_array($role, ['admin', 'vagtcentral', 'montor'], true);
