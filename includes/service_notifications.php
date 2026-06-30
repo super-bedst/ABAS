@@ -4,6 +4,48 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/sms.php';
 
+/**
+ * @return list<string>
+ */
+function abas_service_notification_phones(mysqli $conn, array $actor, ?int $onBehalfUserId, int $installationId): array
+{
+    $phones = [];
+    $add = static function (string $phone) use (&$phones): void {
+        $phone = trim($phone);
+        if ($phone === '') {
+            return;
+        }
+        foreach ($phones as $existing) {
+            if (abas_sms_phones_match($existing, $phone)) {
+                return;
+            }
+        }
+        $phones[] = $phone;
+    };
+
+    $primary = abas_service_notification_phone($conn, $actor, $onBehalfUserId);
+    $add($primary);
+
+    $stmt = $conn->prepare(
+        'SELECT u.phone
+         FROM user_installations ui
+         INNER JOIN users u ON u.id = ui.user_id
+         WHERE ui.installation_id = ?
+           AND u.active = 1
+           AND u.role IN ("anlaegsejer", "anlaegsafprover")
+           AND u.phone IS NOT NULL AND TRIM(u.phone) <> ""'
+    );
+    $stmt->bind_param('i', $installationId);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    while ($row = $res->fetch_assoc()) {
+        $add((string) ($row['phone'] ?? ''));
+    }
+    $stmt->close();
+
+    return $phones;
+}
+
 function abas_service_notification_phone(mysqli $conn, array $actor, ?int $onBehalfUserId): string
 {
     if ($onBehalfUserId !== null && $onBehalfUserId > 0) {
@@ -34,11 +76,6 @@ function abas_notify_service_started(
     ?float $hours,
     bool $extended = false
 ): void {
-    $phone = abas_service_notification_phone($conn, $actor, $onBehalfUserId);
-    if ($phone === '') {
-        return;
-    }
-
     $misc = abas_service_notification_misc($installation);
     $name = trim((string) ($installation['name'] ?? ''));
     $vcOnBehalf = $onBehalfUserId !== null
@@ -59,7 +96,15 @@ function abas_notify_service_started(
         $body .= ' Varighed: ' . rtrim(rtrim(number_format($hours, 1, ',', ''), '0'), ',') . ' t.';
     }
 
-    abas_sms_queue($conn, $phone, $body, 'service_start', $sessionId);
+    $installationId = (int) ($installation['id'] ?? 0);
+    $phones = abas_service_notification_phones($conn, $actor, $onBehalfUserId, $installationId);
+    if ($phones === []) {
+        return;
+    }
+
+    foreach ($phones as $phone) {
+        abas_sms_queue($conn, $phone, $body, 'service_start', $sessionId);
+    }
 }
 
 function abas_notify_service_stopped(
@@ -69,11 +114,6 @@ function abas_notify_service_stopped(
     ?int $onBehalfUserId,
     ?int $sessionId
 ): void {
-    $phone = abas_service_notification_phone($conn, $actor, $onBehalfUserId);
-    if ($phone === '') {
-        return;
-    }
-
     $misc = abas_service_notification_misc($installation);
     $name = trim((string) ($installation['name'] ?? ''));
     $vcOnBehalf = $onBehalfUserId !== null
@@ -90,7 +130,15 @@ function abas_notify_service_stopped(
         $body .= ' er sat i drift igen.';
     }
 
-    abas_sms_queue($conn, $phone, $body, 'service_stop', $sessionId);
+    $installationId = (int) ($installation['id'] ?? 0);
+    $phones = abas_service_notification_phones($conn, $actor, $onBehalfUserId, $installationId);
+    if ($phones === []) {
+        return;
+    }
+
+    foreach ($phones as $phone) {
+        abas_sms_queue($conn, $phone, $body, 'service_stop', $sessionId);
+    }
 }
 
 function abas_load_service_session_for_stop(mysqli $conn, int $installationId, ?int $sessionId): ?array

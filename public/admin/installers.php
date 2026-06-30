@@ -38,11 +38,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $domain = trim($_POST['email_domain'] ?? '');
         $result = abas_installer_create($conn, $name, $domain, (int) $user['id']);
         abas_flash_set($result['ok'] ? 'success' : 'error', $result['message'] ?? ($result['ok'] ? 'Firma oprettet.' : 'Fejl'));
+    } elseif ($action === 'update_company') {
+        $installerId = (int) ($_POST['installer_id'] ?? 0);
+        $name = trim($_POST['company_name'] ?? '');
+        $result = abas_installer_update_company($conn, $installerId, $name);
+        abas_flash_set($result['ok'] ? 'success' : 'error', $result['message'] ?? ($result['ok'] ? 'Firmanavn opdateret.' : 'Fejl'));
     } elseif ($action === 'add_domain') {
         $installerId = (int) ($_POST['installer_id'] ?? 0);
         $domain = trim($_POST['email_domain'] ?? '');
         $result = abas_installer_add_domain($conn, $installerId, $domain);
         abas_flash_set($result['ok'] ? 'success' : 'error', $result['message'] ?? 'Domæne tilføjet.');
+    } elseif ($action === 'remove_domain') {
+        $installerId = (int) ($_POST['installer_id'] ?? 0);
+        $domain = trim($_POST['email_domain'] ?? '');
+        $result = abas_installer_remove_domain($conn, $installerId, $domain);
+        abas_flash_set($result['ok'] ? 'success' : 'error', $result['message'] ?? ($result['ok'] ? 'Domæne fjernet.' : 'Fejl'));
     } elseif ($action === 'delete') {
         $installerId = (int) ($_POST['installer_id'] ?? 0);
         $result = abas_installer_delete($conn, $installerId);
@@ -130,7 +140,12 @@ require __DIR__ . '/../partials/header.php';
             ?>
             <tr>
                 <td>
-                    <div class="font-semibold text-brand"><?= htmlspecialchars($companyName) ?></div>
+                    <form method="post" class="flex flex-wrap gap-2 items-center max-w-xs">
+                        <input type="hidden" name="action" value="update_company">
+                        <input type="hidden" name="installer_id" value="<?= $installerId ?>">
+                        <input name="company_name" required value="<?= htmlspecialchars($companyName) ?>" class="abas-input text-sm font-semibold text-brand">
+                        <button type="submit" class="abas-btn-secondary text-sm shrink-0">Gem navn</button>
+                    </form>
                     <?php if ($hasPlaceholderDomain): ?>
                         <p class="text-xs text-amber-800 mt-1">Import-placeholder domæne — tilføj rigtigt domæne.</p>
                     <?php endif; ?>
@@ -139,11 +154,21 @@ require __DIR__ . '/../partials/header.php';
                     <?php if ($domains === []): ?>
                         <span class="text-sm text-amber-700">Ingen domæner</span>
                     <?php else: ?>
-                        <ul class="flex flex-wrap gap-1.5">
+                        <ul class="space-y-2">
                             <?php foreach ($domains as $domain):
                                 $isPlaceholder = str_ends_with(strtolower((string) $domain), '.trekantbrand-import.local');
                                 ?>
-                                <li class="abas-badge <?= $isPlaceholder ? 'bg-amber-50 text-amber-900 border-amber-200' : 'bg-gray-100 text-gray-800 border border-gray-200' ?> font-mono text-xs"><?= htmlspecialchars($domain) ?></li>
+                                <li class="flex flex-wrap items-center gap-2">
+                                    <span class="abas-badge <?= $isPlaceholder ? 'bg-amber-50 text-amber-900 border-amber-200' : 'bg-gray-100 text-gray-800 border border-gray-200' ?> font-mono text-xs"><?= htmlspecialchars($domain) ?></span>
+                                    <?php if (count($domains) > 1): ?>
+                                    <form method="post" class="inline" onsubmit="return confirm('Fjern domænet <?= htmlspecialchars($domain, ENT_QUOTES) ?>?');">
+                                        <input type="hidden" name="action" value="remove_domain">
+                                        <input type="hidden" name="installer_id" value="<?= $installerId ?>">
+                                        <input type="hidden" name="email_domain" value="<?= htmlspecialchars($domain) ?>">
+                                        <button type="submit" class="text-xs text-red-700 hover:underline">Fjern</button>
+                                    </form>
+                                    <?php endif; ?>
+                                </li>
                             <?php endforeach; ?>
                         </ul>
                     <?php endif; ?>

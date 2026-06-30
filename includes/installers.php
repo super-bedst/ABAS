@@ -304,6 +304,66 @@ function abas_installer_add_domain(mysqli $conn, int $installerId, string $email
 }
 
 /**
+ * @return array{ok:bool, message?:string}
+ */
+function abas_installer_update_company(mysqli $conn, int $installerId, string $companyName): array
+{
+    $companyName = trim($companyName);
+    if ($companyName === '') {
+        return ['ok' => false, 'message' => 'Angiv firmanavn.'];
+    }
+
+    $stmt = $conn->prepare('UPDATE approved_installers SET company_name = ? WHERE id = ? LIMIT 1');
+    $stmt->bind_param('si', $companyName, $installerId);
+    $stmt->execute();
+    $ok = $stmt->affected_rows > 0;
+    $stmt->close();
+
+    if (!$ok) {
+        $chk = $conn->prepare('SELECT id FROM approved_installers WHERE id = ? LIMIT 1');
+        $chk->bind_param('i', $installerId);
+        $chk->execute();
+        $exists = (bool) $chk->get_result()->fetch_row();
+        $chk->close();
+        if (!$exists) {
+            return ['ok' => false, 'message' => 'Firma ikke fundet.'];
+        }
+    }
+
+    return ['ok' => true];
+}
+
+/**
+ * @return array{ok:bool, message?:string}
+ */
+function abas_installer_remove_domain(mysqli $conn, int $installerId, string $emailDomain): array
+{
+    $emailDomain = abas_normalize_email_domain($emailDomain);
+    if ($emailDomain === '') {
+        return ['ok' => false, 'message' => 'Angiv et domæne.'];
+    }
+
+    $countStmt = $conn->prepare('SELECT COUNT(*) AS c FROM approved_installer_domains WHERE installer_id = ?');
+    $countStmt->bind_param('i', $installerId);
+    $countStmt->execute();
+    $domainCount = (int) ($countStmt->get_result()->fetch_assoc()['c'] ?? 0);
+    $countStmt->close();
+    if ($domainCount <= 1) {
+        return ['ok' => false, 'message' => 'Firmaet skal have mindst ét domæne — tilføj et nyt før du sletter det sidste.'];
+    }
+
+    $stmt = $conn->prepare('DELETE FROM approved_installer_domains WHERE installer_id = ? AND email_domain = ? LIMIT 1');
+    $stmt->bind_param('is', $installerId, $emailDomain);
+    $stmt->execute();
+    $ok = $stmt->affected_rows > 0;
+    $stmt->close();
+
+    return $ok
+        ? ['ok' => true]
+        : ['ok' => false, 'message' => 'Domænet blev ikke fundet for firmaet.'];
+}
+
+/**
  * @return array{ok:bool, message:string, removed_users?:int}
  */
 function abas_installer_delete(mysqli $conn, int $installerId): array

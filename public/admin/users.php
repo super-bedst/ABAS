@@ -180,8 +180,15 @@ $listQueryBase = array_filter([
     'dir' => $sort !== '' ? $sortDir : null,
 ]);
 
-$userIdsOnPage = array_map(static fn (array $row): int => (int) $row['id'], $rows);
-$ownerInstallations = abas_user_installations_with_service_status_for_users($conn, $userIdsOnPage);
+$ownerUserIds = [];
+foreach ($rows as $row) {
+    if (in_array((string) ($row['role'] ?? ''), ['anlaegsejer', 'anlaegsafprover'], true)) {
+        $ownerUserIds[] = (int) $row['id'];
+    }
+}
+$ownerInstallations = $ownerUserIds !== []
+    ? abas_user_installations_with_service_status_for_users($conn, $ownerUserIds)
+    : [];
 
 /** @param array{href: string, active: bool, indicator: string} $link */
 $renderSortTh = static function (string $label, string $column) use ($sort, $sortDir, $filter, $search): void {

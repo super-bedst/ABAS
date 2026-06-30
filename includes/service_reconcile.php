@@ -207,10 +207,7 @@ function abas_notify_service_ended_externally(
     ?int $onBehalfUserId,
     ?int $sessionId
 ): void {
-    $phone = abas_service_notification_phone($conn, $actor, $onBehalfUserId);
-    if ($phone === '') {
-        return;
-    }
+    require_once __DIR__ . '/service_notifications.php';
 
     $misc = abas_service_notification_misc($installation);
     $name = trim((string) ($installation['name'] ?? ''));
@@ -220,7 +217,12 @@ function abas_notify_service_ended_externally(
     }
     $body .= ' er sat i drift igen uden for ABA Service (fx af VC). Din ABAS-service er afsluttet.';
 
-    abas_sms_queue($conn, $phone, $body, 'service_external_end', $sessionId);
+    require_once __DIR__ . '/service_notifications.php';
+    $installationId = (int) ($installation['id'] ?? 0);
+    $phones = abas_service_notification_phones($conn, $actor, $onBehalfUserId, $installationId);
+    foreach ($phones as $phone) {
+        abas_sms_queue($conn, $phone, $body, 'service_external_end', $sessionId);
+    }
 }
 
 /**

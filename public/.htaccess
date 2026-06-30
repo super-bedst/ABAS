@@ -23,6 +23,10 @@ RewriteRule ^api/v1/cron/sms-expiry-warnings/?$ api/v1/index.php?route=cron/sms-
 # Øvrige API-ruter
 RewriteRule ^api/v1/(.*)$ api/v1/index.php?route=$1 [QSA,L]
 
+# Apache/CGI stripper Authorization — gør Bearer tilgængelig for PHP
+RewriteCond %{HTTP:Authorization} .
+RewriteRule ^ - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
 # Front controller fallback
 DirectoryIndex index.php
 

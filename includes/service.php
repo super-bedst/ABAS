@@ -611,13 +611,14 @@ function abas_user_installations_with_service_status_for_users(mysqli $conn, arr
     $types = str_repeat('i', count($userIds));
     $stmt = $conn->prepare(
         "SELECT ui.user_id, i.id AS installation_id, i.miscno2,
-                EXISTS(
-                    SELECT 1 FROM service_sessions ss
-                    WHERE ss.installation_id = i.id AND ss.status = 'active'
-                    LIMIT 1
-                ) AS in_service
+                (active_ss.installation_id IS NOT NULL) AS in_service
          FROM user_installations ui
-         JOIN installations i ON i.id = ui.installation_id
+         INNER JOIN installations i ON i.id = ui.installation_id
+         LEFT JOIN (
+             SELECT DISTINCT installation_id
+             FROM service_sessions
+             WHERE status = 'active'
+         ) active_ss ON active_ss.installation_id = i.id
          WHERE ui.user_id IN ($placeholders)
          ORDER BY ui.user_id, i.miscno2"
     );

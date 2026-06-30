@@ -135,9 +135,31 @@ function abas_api_json(int $status, array $payload): void
     exit;
 }
 
+function abas_api_authorization_header(): string
+{
+    if (!empty($_SERVER['HTTP_AUTHORIZATION'])) {
+        return (string) $_SERVER['HTTP_AUTHORIZATION'];
+    }
+    if (!empty($_SERVER['REDIRECT_HTTP_AUTHORIZATION'])) {
+        return (string) $_SERVER['REDIRECT_HTTP_AUTHORIZATION'];
+    }
+    if (function_exists('getallheaders')) {
+        $headers = getallheaders();
+        if (is_array($headers)) {
+            foreach ($headers as $name => $value) {
+                if (strcasecmp((string) $name, 'Authorization') === 0) {
+                    return trim((string) $value);
+                }
+            }
+        }
+    }
+
+    return '';
+}
+
 function abas_api_bearer_token(): ?string
 {
-    $hdr = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
+    $hdr = abas_api_authorization_header();
     if (preg_match('/Bearer\s+(\S+)/i', $hdr, $m)) {
         return $m[1];
     }
