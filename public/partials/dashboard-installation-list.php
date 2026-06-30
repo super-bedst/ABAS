@@ -31,8 +31,26 @@ $sortColumns = ['miscno2', 'name', 'city', 'service'];
         </thead>
         <tbody>
         <?php foreach ($installations as $inst):
+            $accessDenied = !empty($inst['access_denied']);
             $href = abas_url('installation.php?id=' . (int) $inst['id']);
             ?>
+            <?php if ($accessDenied): ?>
+            <tr class="abas-table-row--access-denied">
+                <td class="font-mono font-medium text-gray-700">
+                    <?= htmlspecialchars((string) $inst['miscno2']) ?>
+                </td>
+                <td>
+                    <?= htmlspecialchars((string) $inst['name']) ?>
+                    <div class="mt-1 lg:hidden">
+                        <?= abas_render_dashboard_installation_status($inst, !empty($showServiceInfo)) ?>
+                    </div>
+                </td>
+                <td class="hidden md:table-cell"><?= htmlspecialchars((string) $inst['city']) ?></td>
+                <td class="hidden lg:table-cell text-sm">
+                    <?= abas_render_dashboard_installation_status($inst, !empty($showServiceInfo)) ?>
+                </td>
+            </tr>
+            <?php else: ?>
             <tr class="abas-table-row-link"
                 role="link"
                 tabindex="0"
@@ -57,13 +75,26 @@ $sortColumns = ['miscno2', 'name', 'city', 'service'];
                     <?= abas_render_dashboard_installation_status($inst, !empty($showServiceInfo)) ?>
                 </td>
             </tr>
+            <?php endif; ?>
         <?php endforeach; ?>
         </tbody>
     </table>
 </div>
 
 <div class="sm:hidden space-y-3">
-    <?php foreach ($installations as $inst): ?>
+    <?php foreach ($installations as $inst):
+        $accessDenied = !empty($inst['access_denied']);
+        ?>
+        <?php if ($accessDenied): ?>
+        <div class="abas-mobile-card abas-mobile-card--access-denied">
+            <div class="abas-mobile-card-title text-gray-700"><?= htmlspecialchars((string) $inst['miscno2']) ?></div>
+            <div class="font-medium text-gray-800 mt-1"><?= htmlspecialchars((string) $inst['name']) ?></div>
+            <div class="text-sm text-gray-500 mt-1"><?= htmlspecialchars((string) $inst['city']) ?></div>
+            <div class="mt-2">
+                <?= abas_render_dashboard_installation_status($inst, !empty($showServiceInfo)) ?>
+            </div>
+        </div>
+        <?php else: ?>
         <a href="<?= abas_url('installation.php?id=' . (int) $inst['id']) ?>" class="abas-mobile-card" data-abas-loading="Åbner anlæg…">
             <div class="flex flex-wrap items-center gap-2">
                 <div class="abas-mobile-card-title"><?= htmlspecialchars((string) $inst['miscno2']) ?></div>
@@ -99,5 +130,6 @@ $sortColumns = ['miscno2', 'name', 'city', 'service'];
                 </div>
             <?php endif; ?>
         </a>
+        <?php endif; ?>
     <?php endforeach; ?>
 </div>

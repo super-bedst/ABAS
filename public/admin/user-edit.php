@@ -12,6 +12,7 @@ require_once __DIR__ . '/../../includes/installation_sync.php';
 require_once __DIR__ . '/../../includes/service.php';
 require_once __DIR__ . '/../../includes/mfa.php';
 require_once __DIR__ . '/../../includes/bas_sso_auth.php';
+require_once __DIR__ . '/../../includes/installation_groups.php';
 
 $conn = abas_db();
 $admin = abas_require_login();
@@ -73,7 +74,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'link') {
-        $linkError = abas_link_user_installation_by_miscno2($conn, $id, (string) ($_POST['miscno2'] ?? ''), $user);
+        $linkError = abas_link_user_installation_by_miscno2($conn, $id, (string) ($_POST['miscno2'] ?? ''), $admin);
         if ($linkError !== null) {
             abas_flash_set('error', $linkError);
         } else {
@@ -193,6 +194,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         abas_set_user_sms_code($conn, $id, $smsCode);
     }
 
+    if (abas_user_role_uses_installation_groups($role)) {
+        $groupIds = array_map(static fn ($v) => (int) $v, (array) ($_POST['group_ids'] ?? []));
+        abas_user_set_installation_groups($conn, $id, $groupIds);
+    } else {
+        abas_user_set_installation_groups($conn, $id, []);
+    }
+    abas_set_user_montor_scoped_access($conn, $id, $role === 'montor' && !empty($_POST['montor_scoped_access']));
+
     require_once __DIR__ . '/../../includes/activity_log.php';
     abas_log_user_target_event(
         $conn,
@@ -209,6 +218,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $linkedInstallations = abas_user_installation_links($conn, $id);
+$allInstallationGroups = abas_list_all_installation_groups($conn);
+$userInstallationGroups = abas_user_installation_group_links($conn, $id);
+$userInstallationGroupIds = array_map(static fn (array $row): int => (int) $row['id'], $userInstallationGroups);
+$showInstallationAccess = in_array($editUser['role'], ['anlaegsejer', 'anlaegsafprover', 'montor'], true);
 $ownerInstallStatus = abas_user_installations_with_service_status($conn);
 $linkedWithStatus = $ownerInstallStatus[$id] ?? [];
 $statusByInstId = [];
@@ -296,6 +309,12 @@ require __DIR__ . '/../partials/header.php';
         <input type="checkbox" name="sms_service_allowed" value="1" class="abas-checkbox" <?= !empty($editUser['sms_service_allowed']) ? 'checked' : '' ?>>
         Må betjene anlæg via SMS
     </label>
+    <?php if ($editUser['role'] === 'montor'): ?>
+    <label class="flex items-start gap-2 text-sm border border-amber-200 bg-amber-50 rounded-xl p-3">
+        <input type="checkbox" name="montor_scoped_access" value="1" class="abas-checkbox mt-0.5" <?= !empty($editUser['montor_scoped_access']) ? 'checked' : '' ?>>
+        <span><strong>Kun tildelte anlæg og grupper</strong> — montøren kan kun se og betjene direkte tilknyttede anlæg og anlæg i tildelte grupper. Uden afkrydsning har montøren fuld adgang som i dag.</span>
+    </label>
+    <?php endif; ?>
     <div class="abas-field">
         <label class="abas-label" for="mfa_method">2FA-metode</label>
         <select id="mfa_method" name="mfa_method" class="abas-select">
@@ -333,9 +352,31 @@ require __DIR__ . '/../partials/header.php';
     <button class="abas-btn-secondary text-sm">Nulstil 2FA</button>
 </form>
 
-<?php if (in_array($editUser['role'], ['anlaegsejer', 'anlaegsafprover'], true)): ?>
+<?php if ($showInstallationAccess): ?>
 <div class="abas-card max-w-lg abas-form mb-6">
-    <h2 class="abas-card-title">Tilknyttede anlæg</h2>
+    <h2 class="abas-card-title">Anlægsgrupper</h2>
+    <p class="text-sm text-gray-600 mb-4">Adgang til alle anlæg i de valgte grupper (ud over direkte tilknytning nedenfor).</p>
+    <?php if ($allInstallationGroups === []): ?>
+        <p class="text-gray-500 text-sm mb-2">Ingen grupper oprettet endnu. <a href="<?= abas_url('admin/installation-groups.php') ?>" class="text-brand underline">Opret anlægsgrupper</a></p>
+    <?php else: ?>
+        <ul class="space-y-2 mb-2 max-h-64 overflow-y-auto border border-gray-100 rounded-xl p-3">
+            <?php foreach ($allInstallationGroups as $group): ?>
+                <li>
+                    <label class="flex items-start gap-2 text-sm">
+                        <input type="checkbox" name="group_ids[]" value="<?= (int) $group['id'] ?>" class="abas-checkbox mt-0.5" <?= in_array((int) $group['id'], $userInstallationGroupIds, true) ? 'checked' : '' ?>>
+                        <span>
+                            <span class="font-medium"><?= htmlspecialchars((string) $group['name']) ?></span>
+                            <span class="text-gray-500 text-xs block font-mono"><?= htmlspecialchars((string) $group['public_id']) ?> · <?= (int) ($group['member_count'] ?? 0) ?> anlæg</span>
+                        </span>
+                    </label>
+                </li>
+            <?php endforeach; ?>
+        </ul>
+    <?php endif; ?>
+</div>
+
+<div class="abas-card max-w-lg abas-form mb-6">
+    <h2 class="abas-card-title">Direkte tilknyttede anlæg</h2>
     <?php if ($linkedInstallations === []): ?>
         <p class="text-gray-500 text-sm mb-4">Ingen anlæg tilknyttet endnu.</p>
     <?php else: ?>

@@ -189,23 +189,18 @@ function abas_email_domain(string $email): string
 }
 
 require_once __DIR__ . '/installers.php';
+require_once __DIR__ . '/installation_groups.php';
 
 function abas_user_may_access_installation(mysqli $conn, array $user, array $installation): bool
 {
-    if (abas_user_can_access_all_installations($user['role'])) {
+    if (in_array((string) ($user['role'] ?? ''), ['admin', 'vagtcentral'], true)) {
         return true;
     }
-    $stmt = $conn->prepare(
-        'SELECT 1 FROM user_installations ui WHERE ui.user_id = ? AND ui.installation_id = ? LIMIT 1'
-    );
-    $uid = (int) $user['id'];
-    $iid = (int) $installation['id'];
-    $stmt->bind_param('ii', $uid, $iid);
-    $stmt->execute();
-    $ok = (bool) $stmt->get_result()->fetch_row();
-    $stmt->close();
+    if (abas_user_has_full_installation_access($user)) {
+        return true;
+    }
 
-    return $ok;
+    return abas_user_has_installation_access($conn, (int) $user['id'], (int) $installation['id']);
 }
 
 function abas_find_installation_by_miscno2(mysqli $conn, string $miscno2): ?array

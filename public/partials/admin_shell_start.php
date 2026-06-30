@@ -29,6 +29,7 @@ $navItems = array_map(
         ['path' => 'admin/activity-log.php', 'label' => 'Aktivitetslog', 'icon' => '☰'],
         ['path' => 'admin/users.php', 'label' => 'Brugere', 'icon' => '👤'],
         ['path' => 'admin/montors.php', 'label' => 'Montører', 'icon' => '🔧'],
+        ['path' => 'admin/installation-groups.php', 'label' => 'Anlægsgrupper', 'icon' => '🗂'],
         ['path' => 'admin/installers.php', 'label' => 'Installatører', 'icon' => '🏢'],
         ['path' => 'admin/registration-requests.php', 'label' => 'Ansøgninger', 'icon' => '📋'],
         ['path' => 'admin/sync.php', 'label' => 'Sync', 'icon' => '↻'],

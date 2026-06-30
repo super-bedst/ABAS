@@ -27,6 +27,20 @@ function abas_user_can_access_all_installations(string $role): bool
     return in_array($role, ['admin', 'vagtcentral', 'montor'], true);
 }
 
+/** Ful adgang til alle anlæg (montør med montor_scoped_access=0 har stadig fuld adgang). */
+function abas_user_has_full_installation_access(array $user): bool
+{
+    $role = (string) ($user['role'] ?? '');
+    if (in_array($role, ['admin', 'vagtcentral'], true)) {
+        return true;
+    }
+    if ($role === 'montor') {
+        return empty($user['montor_scoped_access']);
+    }
+
+    return false;
+}
+
 function abas_user_may_view_contact_phones(array $user): bool
 {
     return !in_array($user['role'] ?? '', ['montor', 'anlaegsafprover'], true);

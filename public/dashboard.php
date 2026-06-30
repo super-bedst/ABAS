@@ -39,7 +39,7 @@ $isOwner = $state['isOwner'];
 $isMontor = $state['isMontor'];
 $autoRefresh = $q === '';
 
-if ($q !== '' && $state['installations'] === [] && abas_user_can_access_all_installations((string) $user['role']) && abas_is_miscno2_query($q)) {
+if ($q !== '' && $state['installations'] === [] && abas_is_miscno2_query($q) && abas_user_has_full_installation_access($user)) {
     try {
         $fromApi = abas_search_installations_from_api($conn, $user, $q);
         if ($fromApi === []) {

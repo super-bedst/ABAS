@@ -72,6 +72,10 @@ function abas_installation_is_active(string $monStat): bool
  */
 function abas_render_dashboard_installation_status(array $inst, bool $showServiceInfo): string
 {
+    if (!empty($inst['access_denied'])) {
+        return '<span class="abas-badge abas-badge-access-denied">Anlæg fundet — ingen rettighed til anlæg</span>';
+    }
+
     if ($showServiceInfo) {
         if (empty($inst['service_started_at'])) {
             return '';

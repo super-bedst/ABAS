@@ -714,7 +714,30 @@ function abas_dashboard_in_service_installations(mysqli $conn, array $user, bool
     $params = [];
 
     if ($role === 'montor') {
-        if ($includeCompany && $installerId > 0) {
+        require_once __DIR__ . '/installation_groups.php';
+        if (abas_user_uses_scoped_installation_access($user)) {
+            $accessibleIds = abas_user_accessible_installation_ids($conn, $userId);
+            if ($accessibleIds === []) {
+                return [];
+            }
+            $placeholders = implode(',', array_fill(0, count($accessibleIds), '?'));
+            $types = str_repeat('i', count($accessibleIds));
+            $params = $accessibleIds;
+            $sql .= ' AND ss.installation_id IN (' . $placeholders . ')';
+            if ($includeCompany && $installerId > 0) {
+                $sql .= ' AND (
+                    ss.user_id = ? OR ss.on_behalf_of_user_id = ?
+                    OR ss.user_id IN (SELECT id FROM users WHERE installer_id = ?)
+                    OR ss.on_behalf_of_user_id IN (SELECT id FROM users WHERE installer_id = ?)
+                )';
+                $types .= 'iiii';
+                array_push($params, $userId, $userId, $installerId, $installerId);
+            } else {
+                $sql .= ' AND (ss.user_id = ? OR ss.on_behalf_of_user_id = ?)';
+                $types .= 'ii';
+                array_push($params, $userId, $userId);
+            }
+        } elseif ($includeCompany && $installerId > 0) {
             $sql .= ' AND (
                 ss.user_id = ? OR ss.on_behalf_of_user_id = ?
                 OR ss.user_id IN (SELECT id FROM users WHERE installer_id = ?)

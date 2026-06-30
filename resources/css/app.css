@@ -204,6 +204,18 @@
     @apply abas-badge bg-green-100 text-green-800 border border-green-200;
   }
 
+  .abas-badge-access-denied {
+    @apply abas-badge bg-amber-50 text-amber-900 border border-amber-200;
+  }
+
+  .abas-table-row--access-denied {
+    @apply bg-amber-50/60;
+  }
+
+  .abas-mobile-card--access-denied {
+    @apply border-amber-200 bg-amber-50/40 cursor-default;
+  }
+
   .abas-badge-zone-ok {
     @apply abas-badge bg-green-100 text-green-800 border border-green-200;
   }
@@ -792,5 +804,45 @@
 
   #vc-service-form.is-drop-target {
     @apply ring-2 ring-brand/30;
+  }
+
+  .abas-dual-list {
+    @apply grid gap-3 md:grid-cols-[1fr_auto_1fr] items-stretch;
+  }
+
+  .abas-dual-list-panel {
+    @apply flex flex-col min-h-[16rem] border border-gray-200 rounded-xl overflow-hidden bg-white;
+  }
+
+  .abas-dual-list-panel-head {
+    @apply px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500 bg-gray-50 border-b border-gray-100;
+  }
+
+  .abas-dual-list-items {
+    @apply flex-1 overflow-y-auto p-2 space-y-1 min-h-[14rem] max-h-[28rem];
+  }
+
+  .abas-dual-list-items.is-drop-target {
+    @apply bg-brand/5 ring-2 ring-inset ring-brand/20;
+  }
+
+  .abas-dual-list-item {
+    @apply flex flex-col gap-0.5 px-2 py-1.5 rounded-lg border border-transparent cursor-grab text-sm;
+  }
+
+  .abas-dual-list-item:hover {
+    @apply bg-gray-50 border-gray-100;
+  }
+
+  .abas-dual-list-item.is-selected {
+    @apply bg-brand/10 border-brand/30;
+  }
+
+  .abas-dual-list-item.is-dragging {
+    @apply opacity-50;
+  }
+
+  .abas-dual-list-actions {
+    @apply flex md:flex-col flex-row flex-wrap justify-center items-center gap-2 py-2;
   }
 }

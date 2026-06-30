@@ -59,29 +59,27 @@ function abas_virksomhed_users_order_sql(string $sort, string $dir): string
  */
 function abas_user_installation_ids(mysqli $conn, int $userId): array
 {
-    $stmt = $conn->prepare('SELECT installation_id FROM user_installations WHERE user_id = ?');
-    $stmt->bind_param('i', $userId);
-    $stmt->execute();
-    $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-    $stmt->close();
+    require_once __DIR__ . '/installation_groups.php';
 
-    return array_map(static fn (array $row): int => (int) $row['installation_id'], $rows);
+    return abas_user_accessible_installation_ids($conn, $userId);
 }
 
 function abas_users_share_installation(mysqli $conn, int $userA, int $userB): bool
 {
-    $stmt = $conn->prepare(
-        'SELECT 1 FROM user_installations a
-         INNER JOIN user_installations b ON b.installation_id = a.installation_id
-         WHERE a.user_id = ? AND b.user_id = ?
-         LIMIT 1'
-    );
-    $stmt->bind_param('ii', $userA, $userB);
-    $stmt->execute();
-    $ok = (bool) $stmt->get_result()->fetch_row();
-    $stmt->close();
+    require_once __DIR__ . '/installation_groups.php';
 
-    return $ok;
+    $idsA = abas_user_accessible_installation_ids($conn, $userA);
+    if ($idsA === []) {
+        return false;
+    }
+    $idsB = array_flip(abas_user_accessible_installation_ids($conn, $userB));
+    foreach ($idsA as $id) {
+        if (isset($idsB[$id])) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 function abas_anlaegsejer_may_manage_user(mysqli $conn, array $actor, array $target): bool

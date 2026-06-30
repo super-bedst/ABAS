@@ -48,17 +48,9 @@ function abas_upsert_installation(mysqli $conn, array $row): int
 
 function abas_user_linked_installations(mysqli $conn, int $userId): array
 {
-    $stmt = $conn->prepare(
-        'SELECT i.* FROM installations i
-         JOIN user_installations ui ON ui.installation_id = i.id
-         WHERE ui.user_id = ? ORDER BY i.miscno2'
-    );
-    $stmt->bind_param('i', $userId);
-    $stmt->execute();
-    $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-    $stmt->close();
+    require_once __DIR__ . '/installation_groups.php';
 
-    return $rows;
+    return abas_user_accessible_installations($conn, $userId);
 }
 
 function abas_search_installations_local(mysqli $conn, string $q, bool $allAccess, int $userId = 0): array
@@ -71,13 +63,21 @@ function abas_search_installations_local(mysqli $conn, string $q, bool $allAcces
         );
         $stmt->bind_param('ssss', $like, $like, $like, $like);
     } else {
+        require_once __DIR__ . '/installation_groups.php';
         $stmt = $conn->prepare(
-            'SELECT i.* FROM installations i
-             JOIN user_installations ui ON ui.installation_id = i.id
-             WHERE ui.user_id = ? AND (i.miscno2 LIKE ? OR i.name LIKE ? OR i.city LIKE ?)
+            'SELECT DISTINCT i.* FROM installations i
+             WHERE i.id IN (
+                 SELECT ui.installation_id FROM user_installations ui WHERE ui.user_id = ?
+                 UNION
+                 SELECT igm.installation_id
+                 FROM user_installation_groups uig
+                 JOIN installation_group_members igm ON igm.group_id = uig.group_id
+                 WHERE uig.user_id = ?
+             )
+             AND (i.miscno2 LIKE ? OR i.name LIKE ? OR i.city LIKE ?)
              ORDER BY i.miscno2 LIMIT 50'
         );
-        $stmt->bind_param('isss', $userId, $like, $like, $like);
+        $stmt->bind_param('iisss', $userId, $userId, $like, $like, $like);
     }
     $stmt->execute();
     $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
