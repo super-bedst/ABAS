@@ -347,8 +347,10 @@ function abas_start_service_session(
         }
     }
 
-    require_once __DIR__ . '/service_notifications.php';
-    abas_notify_service_started($conn, $user, $installation, $onBehalfUserId, $sessionId, false, $hours, $isExtend);
+    if ($source === 'sms') {
+        require_once __DIR__ . '/service_notifications.php';
+        abas_notify_service_started($conn, $user, $installation, $onBehalfUserId, $sessionId, false, $hours, $isExtend);
+    }
 
     return ['ok' => true, 'code' => $code, 'session_id' => $sessionId, 'extended' => $isExtend, 'response' => $resp];
 }
@@ -458,7 +460,9 @@ function abas_stop_service_session(
         $u->close();
     }
 
-    abas_notify_service_stopped($conn, $user, $installation, $onBehalfUserId, $notifySessionId);
+    if ($source === 'sms') {
+        abas_notify_service_stopped($conn, $user, $installation, $onBehalfUserId, $notifySessionId);
+    }
 
     return ['ok' => true, 'code' => $code, 'response' => $resp];
 }
