@@ -235,6 +235,7 @@
         return String((item && item.phone) || fallback || '').trim();
     }
 
+    function phoneDigits(value) {
         return String(value || '').replace(/\D/g, '').replace(/^0+/, '');
     }
 

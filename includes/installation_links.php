@@ -132,6 +132,68 @@ function abas_installation_link_delete(mysqli $conn, int $installationIdA, int $
 }
 
 /**
+ * @param list<int> $targetInstallationIds
+ * @return array{ok:bool, message:string, created:int, skipped:int}
+ */
+function abas_installation_link_create_many(
+    mysqli $conn,
+    int $installationId,
+    array $targetInstallationIds,
+    ?int $actorUserId = null
+): array {
+    if ($installationId <= 0) {
+        return ['ok' => false, 'message' => 'Ugyldigt anlæg.', 'created' => 0, 'skipped' => 0];
+    }
+
+    $created = 0;
+    $skipped = 0;
+    $errors = [];
+    $seen = [];
+
+    foreach ($targetInstallationIds as $targetId) {
+        $targetId = (int) $targetId;
+        if ($targetId <= 0 || isset($seen[$targetId])) {
+            continue;
+        }
+        $seen[$targetId] = true;
+
+        $result = abas_installation_link_create($conn, $installationId, $targetId, $actorUserId);
+        if ($result['ok']) {
+            $created++;
+            continue;
+        }
+        if (str_contains($result['message'], 'allerede koblet')) {
+            $skipped++;
+            continue;
+        }
+        $errors[] = $result['message'];
+    }
+
+    if ($created === 0 && $errors === [] && $skipped === 0) {
+        return ['ok' => false, 'message' => 'Vælg mindst ét anlæg at koble.', 'created' => 0, 'skipped' => 0];
+    }
+
+    if ($created === 0 && $errors !== []) {
+        return ['ok' => false, 'message' => $errors[0], 'created' => 0, 'skipped' => $skipped];
+    }
+
+    $parts = [];
+    if ($created > 0) {
+        $parts[] = $created === 1 ? '1 anlæg koblet' : $created . ' anlæg koblet';
+    }
+    if ($skipped > 0) {
+        $parts[] = $skipped === 1 ? '1 var allerede koblet' : $skipped . ' var allerede koblet';
+    }
+
+    return [
+        'ok' => true,
+        'message' => implode('. ', $parts) . '.',
+        'created' => $created,
+        'skipped' => $skipped,
+    ];
+}
+
+/**
  * @param list<string> $linkedMiscno2
  * @return array{ok:bool, message?:string, primary?:array<string, mixed>, linked?:list<array<string, mixed>>}
  */

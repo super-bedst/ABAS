@@ -61,15 +61,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($action === 'stop_external') {
         $r = abas_stop_external_testqueue($conn, $user, $installation, trim($_POST['comment'] ?? ''));
         abas_flash_set($r['ok'] ? 'success' : 'error', $r['ok'] ? 'Anlæg sat i drift igen.' : ($r['message'] ?? 'Fejl'));
-    } elseif ($action === 'link_installation' && ($user['role'] ?? '') === 'admin') {
-        $linkMisc = strtolower(trim((string) ($_POST['link_miscno2'] ?? '')));
-        $target = $linkMisc !== '' ? abas_find_installation_by_miscno2($conn, $linkMisc) : null;
-        if (!$target) {
-            abas_flash_set('error', 'Koblings-anlæg ikke fundet i cache. Synkronisér anlægget først.');
-        } else {
-            $result = abas_installation_link_create($conn, $id, (int) $target['id'], (int) $user['id']);
-            abas_flash_set($result['ok'] ? 'success' : 'error', $result['message']);
-        }
+    } elseif ($action === 'link_installations' && ($user['role'] ?? '') === 'admin') {
+        $targetIds = array_values(array_unique(array_filter(
+            array_map(static fn ($v) => (int) $v, (array) ($_POST['link_installation_ids'] ?? [])),
+            static fn (int $targetId): bool => $targetId > 0
+        )));
+        $result = abas_installation_link_create_many($conn, $id, $targetIds, (int) $user['id']);
+        abas_flash_set($result['ok'] ? 'success' : 'error', $result['message']);
     } elseif ($action === 'unlink_installation' && ($user['role'] ?? '') === 'admin') {
         $unlinkId = (int) ($_POST['unlink_installation_id'] ?? 0);
         if ($unlinkId <= 0) {
@@ -115,11 +113,16 @@ $maxExtendHours = abas_service_remaining_extend_hours($session);
 $installationLinks = ($user['role'] ?? '') === 'admin'
     ? abas_installation_linked_installations($conn, $id)
     : [];
+$isInstallationLinksAdmin = ($user['role'] ?? '') === 'admin';
+$installationLinkIds = array_map(static fn (array $row): int => (int) $row['id'], $installationLinks);
 
 $pageTitle = $installation['miscno2'] ?? 'Anlæg';
 $currentUser = $user;
 $extraHead = '<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">';
 $extraHead .= '<script src="' . htmlspecialchars(abas_asset_url('assets/js/installation-auto-refresh.js')) . '" defer></script>';
+if ($isInstallationLinksAdmin) {
+    $extraHead .= '<script src="' . htmlspecialchars(abas_asset_url('assets/js/installation-links.js')) . '" defer></script>';
+}
 require __DIR__ . '/partials/header.php';
 ?>
 <div class="mb-2">
@@ -237,40 +240,66 @@ require __DIR__ . '/partials/header.php';
     </div>
 </div>
 
-<?php if (($user['role'] ?? '') === 'admin'): ?>
-<div class="abas-card mb-6">
+<?php if ($isInstallationLinksAdmin): ?>
+<div class="abas-card mb-6" id="installation-links-admin">
     <h2 class="abas-card-title">Koblede anlæg</h2>
-    <p class="text-sm text-gray-600 mb-4">Koble anlæg der hører sammen (fx fab7001 og fab7002). Vagtcentralen kan vælge at sætte koblede anlæg i service samtidig.</p>
+    <p class="text-sm text-gray-600 mb-4">Kun administratorer kan administrere koblinger. Tilknyt flere anlæg der hører sammen — vagtcentralen kan vælge at sætte dem i service samtidig.</p>
     <?php if ($installationLinks === []): ?>
-        <p class="text-sm text-gray-500 mb-4">Ingen koblinger endnu.</p>
+        <p class="text-sm text-gray-500 mb-4" id="installation-links-empty">Ingen koblinger endnu.</p>
     <?php else: ?>
-        <ul class="space-y-2 mb-4">
-            <?php foreach ($installationLinks as $linked): ?>
-                <li class="flex flex-wrap items-center justify-between gap-2 border border-gray-100 rounded-xl px-3 py-2 text-sm">
-                    <div>
-                        <a href="<?= abas_url('installation.php?id=' . (int) $linked['id']) ?>" class="font-mono font-medium text-brand hover:underline">
-                            <?= htmlspecialchars((string) $linked['miscno2']) ?>
-                        </a>
-                        <span class="text-gray-600 ml-2"><?= htmlspecialchars((string) ($linked['name'] ?? '')) ?></span>
-                    </div>
-                    <form method="post" class="inline" onsubmit="return confirm('Fjern kobling?')">
-                        <input type="hidden" name="action" value="unlink_installation">
-                        <input type="hidden" name="unlink_installation_id" value="<?= (int) $linked['id'] ?>">
-                        <button type="submit" class="abas-btn-secondary !py-1 !px-2 text-xs">Fjern</button>
-                    </form>
-                </li>
-            <?php endforeach; ?>
-        </ul>
+        <p class="text-sm text-gray-500 mb-4 hidden" id="installation-links-empty">Ingen koblinger endnu.</p>
     <?php endif; ?>
-    <form method="post" class="flex flex-wrap gap-2 items-end max-w-md">
-        <input type="hidden" name="action" value="link_installation">
-        <div class="abas-field flex-1 min-w-[10rem] !mb-0">
-            <label class="abas-label" for="link_miscno2">Tilknyt anlæg (ABA-nr.)</label>
-            <input id="link_miscno2" name="link_miscno2" required class="abas-input font-mono text-sm" placeholder="fx fab7002">
+    <ul class="space-y-2 mb-4" id="installation-links-list">
+        <?php foreach ($installationLinks as $linked): ?>
+            <li class="flex flex-wrap items-center justify-between gap-2 border border-gray-100 rounded-xl px-3 py-2 text-sm">
+                <div>
+                    <a href="<?= abas_url('installation.php?id=' . (int) $linked['id']) ?>" class="font-mono font-medium text-brand hover:underline">
+                        <?= htmlspecialchars((string) $linked['miscno2']) ?>
+                    </a>
+                    <span class="text-gray-600 ml-2"><?= htmlspecialchars((string) ($linked['name'] ?? '')) ?></span>
+                </div>
+                <form method="post" class="inline" onsubmit="return confirm('Fjern kobling?')">
+                    <input type="hidden" name="action" value="unlink_installation">
+                    <input type="hidden" name="unlink_installation_id" value="<?= (int) $linked['id'] ?>">
+                    <button type="submit" class="abas-btn-secondary !py-1 !px-2 text-xs">Fjern</button>
+                </form>
+            </li>
+        <?php endforeach; ?>
+    </ul>
+
+    <form method="post" class="abas-form max-w-xl" id="installation-links-form">
+        <input type="hidden" name="action" value="link_installations">
+        <div class="abas-field abas-combobox mb-3" id="inst-link-combobox">
+            <label class="abas-label" for="inst-link-search">Søg anlæg at koble</label>
+            <input
+                type="text"
+                id="inst-link-search"
+                class="abas-input font-mono"
+                placeholder="Søg anlægsnr. eller kundenavn…"
+                autocomplete="off"
+                aria-autocomplete="list"
+                aria-controls="inst-link-results"
+                aria-expanded="false"
+            >
+            <ul id="inst-link-results" class="abas-combobox-list hidden" role="listbox"></ul>
+            <p class="abas-hint">Vælg fra listen — du kan tilføje flere anlæg før du gemmer koblingerne.</p>
         </div>
-        <button type="submit" class="abas-btn-secondary text-sm shrink-0">Kobl</button>
+
+        <div id="inst-link-pending-wrap" class="mb-4 hidden">
+            <p class="text-sm font-medium text-gray-800 mb-2">Valgte til kobling</p>
+            <ul id="inst-link-pending-list" class="space-y-2 mb-3"></ul>
+            <div id="inst-link-hidden-inputs"></div>
+            <button type="submit" class="abas-btn-primary text-sm" id="inst-link-submit">Kobl valgte anlæg</button>
+        </div>
     </form>
 </div>
+<script>
+window.abasInstallationLinks = <?= json_encode([
+    'searchUrl' => abas_url('vc-service-search.php'),
+    'installationId' => $id,
+    'linkedIds' => $installationLinkIds,
+], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
+</script>
 <?php endif; ?>
 
 <div class="abas-card !p-0" id="inst-log-card">
