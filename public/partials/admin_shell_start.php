@@ -71,7 +71,5 @@ $navItems = abas_admin_nav_render_items($adminNavSection ?? null);
         </aside>
         <main class="abas-admin-main">
             <?php if ($flash): ?>
-                <div class="<?= $flash['type'] === 'error' ? 'abas-alert-error' : 'abas-alert-success' ?>">
-                    <?= htmlspecialchars($flash['message']) ?>
-                </div>
+                <?php require __DIR__ . '/flash.php'; ?>
             <?php endif; ?>

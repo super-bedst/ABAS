@@ -29,7 +29,5 @@ abas_send_embed_headers();
 <body class="font-sans abas-embed-body">
 <main class="abas-embed-main">
     <?php if ($flash): ?>
-        <div class="<?= $flash['type'] === 'error' ? 'abas-alert-error' : 'abas-alert-success' ?> mb-4">
-            <?= htmlspecialchars($flash['message']) ?>
-        </div>
+        <?php require __DIR__ . '/flash.php'; ?>
     <?php endif; ?>

@@ -12,6 +12,7 @@ header('Content-Type: application/json; charset=utf-8');
 $user = abas_require_login();
 $conn = abas_db();
 $installationId = (int) ($_GET['installation_id'] ?? 0);
+$context = strtolower(trim((string) ($_GET['context'] ?? 'start')));
 
 if ($installationId <= 0) {
     echo json_encode(['items' => []], JSON_UNESCAPED_UNICODE);
@@ -29,6 +30,10 @@ if (!$installation || !abas_user_may_access_installation($conn, $user, $installa
 }
 
 echo json_encode(
-    ['items' => abas_linked_installation_service_options($conn, $installationId)],
+    [
+        'items' => $context === 'stop'
+            ? abas_linked_installation_stop_options($conn, $installationId)
+            : abas_linked_installation_service_options($conn, $installationId),
+    ],
     JSON_UNESCAPED_UNICODE
 );

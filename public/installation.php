@@ -78,8 +78,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         );
         abas_flash_set($result['ok'] ? 'success' : 'error', $result['message']);
     } elseif ($action === 'stop') {
-        $r = abas_stop_service_session($conn, $user, $installation, $session ? (int) $session['id'] : null, trim($_POST['comment'] ?? ''));
-        abas_flash_set($r['ok'] ? 'success' : 'error', $r['ok'] ? 'Service stoppet.' : ($r['message'] ?? 'Fejl'));
+        $comment = trim($_POST['comment'] ?? '');
+        $linkedMisc = array_values(array_unique(array_filter(
+            array_map(static fn ($v) => strtolower(trim((string) $v)), (array) ($_POST['linked_miscno2'] ?? []))
+        )));
+        $resolved = abas_vc_resolve_service_installations(
+            $conn,
+            strtolower((string) ($installation['miscno2'] ?? '')),
+            $linkedMisc
+        );
+        if (!$resolved['ok']) {
+            abas_flash_set('error', $resolved['message'] ?? 'Ugyldigt anlægsvalg.');
+            abas_redirect('installation.php?id=' . $id);
+        }
+        $result = abas_execute_linked_service_stops(
+            $conn,
+            $user,
+            $resolved['primary'],
+            $resolved['linked'],
+            $session ? (int) $session['id'] : null,
+            $comment
+        );
+        $flashExtra = [];
+        $problemLinks = abas_linked_stop_flash_installation_links($result, $id);
+        if ($problemLinks !== []) {
+            $flashExtra['installation_links'] = $problemLinks;
+        }
+        abas_flash_set($result['ok'] ? 'success' : 'error', $result['message'], $flashExtra);
     } elseif ($action === 'stop_external') {
         $r = abas_stop_external_testqueue($conn, $user, $installation, trim($_POST['comment'] ?? ''));
         abas_flash_set($r['ok'] ? 'success' : 'error', $r['ok'] ? 'Anlæg sat i drift igen.' : ($r['message'] ?? 'Fejl'));
@@ -134,6 +159,9 @@ $inService = $inAbasService || $externalService;
 $maxExtendHours = abas_service_remaining_extend_hours($session);
 $linkedServiceOptions = $canStartService && !$inService
     ? abas_linked_installation_service_options($conn, $id)
+    : [];
+$linkedStopOptions = $inAbasService
+    ? abas_linked_installation_stop_options($conn, $id)
     : [];
 $isInstallationLinksAdmin = ($user['role'] ?? '') === 'admin';
 $installationLinks = $isInstallationLinksAdmin
@@ -203,6 +231,7 @@ require __DIR__ . '/partials/header.php';
                     <label class="abas-label" for="stop-comment">Kommentar ved stop</label>
                     <textarea id="stop-comment" name="comment" rows="2" class="abas-textarea" placeholder="Beskriv kort hvad der er udført"></textarea>
                 </div>
+                <?php abas_render_linked_installation_service_options($linkedStopOptions, 'stop'); ?>
                 <button class="abas-btn-danger">Stop service</button>
             </form>
         <?php elseif ($externalService && $canStartService): ?>

@@ -358,13 +358,156 @@ function abas_execute_linked_service_starts(
 }
 
 /**
+ * @return list<array<string, mixed>>
+ */
+function abas_linked_installation_stop_options(mysqli $conn, int $installationId): array
+{
+    return array_values(array_filter(
+        abas_linked_installation_service_options($conn, $installationId),
+        static fn (array $row): bool => !empty($row['in_service'])
+    ));
+}
+
+/**
+ * @param list<array<string, mixed>> $linkedInstallations
+ * @return array{ok:bool, partial:bool, message:string, stopped_misc:list<string>, errors:list<string>, failed_installations:list<array{id:int, miscno2:string, name:string, message:string}>, primary_id:int}
+ */
+function abas_execute_linked_service_stops(
+    mysqli $conn,
+    array $user,
+    array $primaryInstallation,
+    array $linkedInstallations,
+    ?int $primarySessionId,
+    string $comment,
+    string $source = 'web',
+    string $successMessageSingle = 'Service stoppet.'
+): array {
+    require_once __DIR__ . '/service.php';
+
+    $stoppedMisc = [];
+    $errors = [];
+    $failedInstallations = [];
+
+    $recordStopFailure = static function (array $installationRow, string $message) use (&$errors, &$failedInstallations): void {
+        $miscno2 = (string) ($installationRow['miscno2'] ?? '?');
+        $errors[] = $miscno2 . ': ' . $message;
+        $failedInstallations[] = [
+            'id' => (int) ($installationRow['id'] ?? 0),
+            'miscno2' => $miscno2,
+            'name' => (string) ($installationRow['name'] ?? ''),
+            'message' => $message,
+        ];
+    };
+
+    $primaryResult = abas_stop_service_session(
+        $conn,
+        $user,
+        $primaryInstallation,
+        $primarySessionId,
+        $comment,
+        $source
+    );
+    if ($primaryResult['ok']) {
+        $stoppedMisc[] = (string) ($primaryInstallation['miscno2'] ?? '');
+    } else {
+        $recordStopFailure($primaryInstallation, (string) ($primaryResult['message'] ?? 'Fejl'));
+    }
+
+    foreach ($linkedInstallations as $instRow) {
+        $linkedSession = abas_active_session_for_installation($conn, (int) ($instRow['id'] ?? 0));
+        if ($linkedSession === null) {
+            $recordStopFailure($instRow, 'Ikke i service.');
+            continue;
+        }
+        $r = abas_stop_service_session(
+            $conn,
+            $user,
+            $instRow,
+            (int) $linkedSession['id'],
+            $comment,
+            $source
+        );
+        if ($r['ok']) {
+            $stoppedMisc[] = (string) ($instRow['miscno2'] ?? '');
+        } else {
+            $recordStopFailure($instRow, (string) ($r['message'] ?? 'Fejl'));
+        }
+    }
+
+    if ($stoppedMisc !== [] && $errors === []) {
+        $message = count($stoppedMisc) === 1
+            ? $successMessageSingle
+            : 'Service stoppet på ' . count($stoppedMisc) . ' anlæg: ' . implode(', ', $stoppedMisc) . '.';
+
+        return [
+            'ok' => true,
+            'partial' => false,
+            'message' => $message,
+            'stopped_misc' => $stoppedMisc,
+            'errors' => [],
+            'failed_installations' => [],
+            'primary_id' => (int) ($primaryInstallation['id'] ?? 0),
+        ];
+    }
+
+    if ($stoppedMisc !== []) {
+        return [
+            'ok' => false,
+            'partial' => true,
+            'message' => 'Service stoppet på ' . implode(', ', $stoppedMisc) . '. Fejl: ' . implode(' · ', $errors),
+            'stopped_misc' => $stoppedMisc,
+            'errors' => $errors,
+            'failed_installations' => $failedInstallations,
+            'primary_id' => (int) ($primaryInstallation['id'] ?? 0),
+        ];
+    }
+
+    return [
+        'ok' => false,
+        'partial' => false,
+        'message' => $errors[0] ?? 'Kunne ikke stoppe service.',
+        'stopped_misc' => [],
+        'errors' => $errors,
+        'failed_installations' => $failedInstallations,
+        'primary_id' => (int) ($primaryInstallation['id'] ?? 0),
+    ];
+}
+
+/**
+ * @param array{partial?:bool, failed_installations?:list<array{id:int, miscno2:string, name?:string}>} $stopResult
+ * @return list<array{id:int, miscno2:string, name:string}>
+ */
+function abas_linked_stop_flash_installation_links(array $stopResult, int $currentInstallationId): array
+{
+    if (empty($stopResult['partial'])) {
+        return [];
+    }
+
+    $links = [];
+    foreach ($stopResult['failed_installations'] ?? [] as $row) {
+        $instId = (int) ($row['id'] ?? 0);
+        if ($instId <= 0 || $instId === $currentInstallationId) {
+            continue;
+        }
+        $links[] = [
+            'id' => $instId,
+            'miscno2' => (string) ($row['miscno2'] ?? ''),
+            'name' => (string) ($row['name'] ?? ''),
+        ];
+    }
+
+    return $links;
+}
+
+/**
  * @param list<array<string, mixed>> $options
  */
-function abas_render_linked_installation_service_options(array $options): void
+function abas_render_linked_installation_service_options(array $options, string $context = 'start'): void
 {
     if ($options === []) {
         return;
     }
 
+    $linkedOptionsContext = $context;
     require __DIR__ . '/../public/partials/linked-installation-service-options.php';
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/service.php';
+require_once __DIR__ . '/installation_links.php';
 require_once __DIR__ . '/sms_sender.php';
 
 function abas_sms_queue(mysqli $conn, string $to, string $body, string $trigger, ?int $sessionId = null): int
@@ -254,8 +255,31 @@ function abas_sms_handle_inbound(mysqli $conn, string $from, string $body): stri
         $r = abas_start_service_session($conn, $user, $installation, $hours, null, 'SMS start', 'sms');
         $result = $r['ok'] ? 'ABA: Service startet på ' . $installation['miscno2'] . '.' : ($r['message'] ?? 'Start fejlede');
     } elseif ($parsed['command'] === 'STOP') {
-        $r = abas_stop_service_session($conn, $user, $installation, null, 'SMS stop', 'sms');
-        $result = $r['ok'] ? 'ABA: Service stoppet på ' . $installation['miscno2'] . '.' : ($r['message'] ?? 'Stop fejlede');
+        $linkedMisc = array_map(
+            static fn (array $row): string => (string) ($row['miscno2'] ?? ''),
+            abas_linked_installation_stop_options($conn, (int) $installation['id'])
+        );
+        $resolved = abas_vc_resolve_service_installations(
+            $conn,
+            strtolower((string) ($installation['miscno2'] ?? '')),
+            $linkedMisc
+        );
+        if (!$resolved['ok']) {
+            return $resolved['message'] ?? 'Ugyldigt anlægsvalg.';
+        }
+        $activeSession = abas_active_session_for_installation($conn, (int) $installation['id']);
+        $stopResult = abas_execute_linked_service_stops(
+            $conn,
+            $user,
+            $resolved['primary'],
+            $resolved['linked'],
+            $activeSession ? (int) $activeSession['id'] : null,
+            'SMS stop',
+            'sms'
+        );
+        $result = $stopResult['ok']
+            ? 'ABA: Service stoppet på ' . implode(', ', $stopResult['stopped_misc']) . '.'
+            : ($stopResult['message'] ?? 'Stop fejlede');
     } else {
         $session = abas_active_session_for_installation($conn, (int) $installation['id']);
         $result = $session ? 'ABA: Anlæg ' . $installation['miscno2'] . ' er i aktiv service.' : 'ABA: Anlæg ikke i service.';

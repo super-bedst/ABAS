@@ -8,6 +8,7 @@ require_once dirname(__DIR__, 3) . '/includes/api_auth.php';
 require_once dirname(__DIR__, 3) . '/includes/auth.php';
 require_once dirname(__DIR__, 3) . '/includes/service.php';
 require_once dirname(__DIR__, 3) . '/includes/installation_sync.php';
+require_once dirname(__DIR__, 3) . '/includes/installation_links.php';
 require_once dirname(__DIR__, 3) . '/includes/sms.php';
 
 $conn = abas_db();
@@ -82,8 +83,27 @@ if (preg_match('#^installations/([^/]+)/service$#', $path, $m) && $method === 'P
         abas_api_json($r['ok'] ? 200 : 400, $r);
     }
     $session = abas_active_session_for_installation($conn, (int) $installation['id']);
-    $r = abas_stop_service_session($conn, $apiUser, $installation, $session ? (int) $session['id'] : null, (string) ($body['comment'] ?? 'API stop'), 'api');
-    abas_api_json($r['ok'] ? 200 : 400, $r);
+    $linkedMisc = array_values(array_unique(array_filter(
+        array_map(static fn ($v) => strtolower(trim((string) $v)), (array) ($body['linked_miscno2'] ?? []))
+    )));
+    $resolved = abas_vc_resolve_service_installations(
+        $conn,
+        strtolower((string) ($installation['miscno2'] ?? '')),
+        $linkedMisc
+    );
+    if (!$resolved['ok']) {
+        abas_api_json(400, ['ok' => false, 'message' => $resolved['message'] ?? 'Ugyldigt anlægsvalg.']);
+    }
+    $result = abas_execute_linked_service_stops(
+        $conn,
+        $apiUser,
+        $resolved['primary'],
+        $resolved['linked'],
+        $session ? (int) $session['id'] : null,
+        (string) ($body['comment'] ?? 'API stop'),
+        'api'
+    );
+    abas_api_json($result['ok'] ? 200 : 400, $result);
 }
 
 if (preg_match('#^installations/([^/]+)/log$#', $path, $m) && $method === 'GET') {

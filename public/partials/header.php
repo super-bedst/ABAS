@@ -57,7 +57,5 @@ abas_session_release();
 </header>
 <main class="flex-1 max-w-6xl w-full mx-auto px-4 py-6 sm:py-8">
 <?php if ($flash): ?>
-    <div class="<?= $flash['type'] === 'error' ? 'abas-alert-error' : 'abas-alert-success' ?>">
-        <?= htmlspecialchars($flash['message']) ?>
-    </div>
+    <?php require __DIR__ . '/flash.php'; ?>
 <?php endif; ?>

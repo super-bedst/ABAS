@@ -28,12 +28,12 @@ function abas_session_start(): void
     session_start();
 }
 
-function abas_flash_set(string $type, string $message): void
+function abas_flash_set(string $type, string $message, array $extra = []): void
 {
     if (session_status() !== PHP_SESSION_ACTIVE) {
         abas_session_start();
     }
-    $_SESSION['flash'] = ['type' => $type, 'message' => $message];
+    $_SESSION['flash'] = array_merge(['type' => $type, 'message' => $message], $extra);
 }
 
 function abas_flash_get(): ?array
