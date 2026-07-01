@@ -53,8 +53,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $hours = (float) ($_POST['hours'] ?? 2);
         $comment = trim($_POST['comment'] ?? '');
         abas_set_user_responsibility_ack($conn, (int) $user['id']);
-        $r = abas_start_service_session($conn, $user, $installation, $hours, null, $comment, 'web', true);
-        abas_flash_set($r['ok'] ? 'success' : 'error', $r['ok'] ? (($r['extended'] ?? false) ? 'Service forlænget.' : 'Service startet.') : ($r['message'] ?? 'Fejl'));
+        $linkedMisc = array_values(array_unique(array_filter(
+            array_map(static fn ($v) => strtolower(trim((string) $v)), (array) ($_POST['linked_miscno2'] ?? []))
+        )));
+        $resolved = abas_vc_resolve_service_installations(
+            $conn,
+            strtolower((string) ($installation['miscno2'] ?? '')),
+            $linkedMisc
+        );
+        if (!$resolved['ok']) {
+            abas_flash_set('error', $resolved['message'] ?? 'Ugyldigt anlægsvalg.');
+            abas_redirect('installation.php?id=' . $id);
+        }
+        $result = abas_execute_linked_service_starts(
+            $conn,
+            $user,
+            $resolved['primary'],
+            $resolved['linked'],
+            $hours,
+            null,
+            $comment,
+            'web',
+            true
+        );
+        abas_flash_set($result['ok'] ? 'success' : 'error', $result['message']);
     } elseif ($action === 'stop') {
         $r = abas_stop_service_session($conn, $user, $installation, $session ? (int) $session['id'] : null, trim($_POST['comment'] ?? ''));
         abas_flash_set($r['ok'] ? 'success' : 'error', $r['ok'] ? 'Service stoppet.' : ($r['message'] ?? 'Fejl'));
@@ -110,10 +132,13 @@ $inAbasService = $session !== null;
 $externalService = $externalTest !== null && !$inAbasService;
 $inService = $inAbasService || $externalService;
 $maxExtendHours = abas_service_remaining_extend_hours($session);
-$installationLinks = ($user['role'] ?? '') === 'admin'
-    ? abas_installation_linked_installations($conn, $id)
+$linkedServiceOptions = $canStartService && !$inService
+    ? abas_linked_installation_service_options($conn, $id)
     : [];
 $isInstallationLinksAdmin = ($user['role'] ?? '') === 'admin';
+$installationLinks = $isInstallationLinksAdmin
+    ? abas_installation_linked_installations($conn, $id)
+    : [];
 $installationLinkIds = array_map(static fn (array $row): int => (int) $row['id'], $installationLinks);
 
 $pageTitle = $installation['miscno2'] ?? 'Anlæg';
@@ -209,6 +234,7 @@ require __DIR__ . '/partials/header.php';
                         <p class="abas-hint">Din kommentar får automatisk tilføjet navn, telefon og rolle<?= $user['role'] === 'montor' ? ' samt firmanavn' : '' ?>.</p>
                     <?php endif; ?>
                 </div>
+                <?php abas_render_linked_installation_service_options($linkedServiceOptions); ?>
                 <div class="abas-field border border-amber-200 bg-amber-50 rounded-xl p-3">
                     <label class="flex items-start gap-2 text-sm text-gray-800">
                         <input type="checkbox" name="responsibility_ack" value="1" class="abas-checkbox abas-ack-checkbox mt-1" id="responsibility_ack" required>

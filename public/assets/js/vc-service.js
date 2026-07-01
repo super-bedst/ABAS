@@ -1,6 +1,7 @@
 (function () {
     var cfg = window.abasVcService || {};
     var searchUrl = cfg.searchUrl || 'vc-service-search.php';
+    var linkedUrl = cfg.linkedUrl || 'installation-linked-options.php';
     var pollMs = cfg.pollMs || 3000;
 
     function debounce(fn, ms) {
@@ -353,7 +354,7 @@
                 return;
             }
             fetch(
-                searchUrl + '?type=linked&installation_id=' + encodeURIComponent(String(installationId)),
+                linkedUrl + '?installation_id=' + encodeURIComponent(String(installationId)),
                 { credentials: 'same-origin', headers: { Accept: 'application/json' } }
             )
                 .then(function (res) { return res.json(); })

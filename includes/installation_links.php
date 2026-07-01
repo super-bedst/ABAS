@@ -244,7 +244,7 @@ function abas_vc_resolve_service_installations(
 /**
  * @return list<array<string, mixed>>
  */
-function abas_vc_linked_installation_options(mysqli $conn, int $installationId): array
+function abas_linked_installation_service_options(mysqli $conn, int $installationId): array
 {
     require_once __DIR__ . '/installation_status.php';
     require_once __DIR__ . '/service.php';
@@ -267,4 +267,104 @@ function abas_vc_linked_installation_options(mysqli $conn, int $installationId):
     }
 
     return $out;
+}
+
+/** @deprecated Use abas_linked_installation_service_options() */
+function abas_vc_linked_installation_options(mysqli $conn, int $installationId): array
+{
+    return abas_linked_installation_service_options($conn, $installationId);
+}
+
+/**
+ * @param list<array<string, mixed>> $linkedInstallations
+ * @return array{ok:bool, partial:bool, message:string, started_misc:list<string>, errors:list<string>, primary_id:int}
+ */
+function abas_execute_linked_service_starts(
+    mysqli $conn,
+    array $user,
+    array $primaryInstallation,
+    array $linkedInstallations,
+    float $hours,
+    ?int $onBehalfUserId,
+    string $comment,
+    string $source = 'web',
+    bool $responsibilityAck = false,
+    ?array $actorOverride = null,
+    string $successMessageSingle = 'Service startet.',
+    string $successMessageVcSingle = 'Service startet på vegne af montør.'
+): array {
+    require_once __DIR__ . '/service.php';
+
+    $installationsToStart = array_merge([$primaryInstallation], $linkedInstallations);
+    $startedMisc = [];
+    $errors = [];
+    $isVcBehalf = $onBehalfUserId !== null || $actorOverride !== null;
+
+    foreach ($installationsToStart as $instRow) {
+        $r = abas_start_service_session(
+            $conn,
+            $user,
+            $instRow,
+            $hours,
+            $onBehalfUserId,
+            $comment,
+            $source,
+            $responsibilityAck,
+            $actorOverride
+        );
+        if ($r['ok']) {
+            $startedMisc[] = (string) ($instRow['miscno2'] ?? '');
+        } else {
+            $errors[] = ((string) ($instRow['miscno2'] ?? '?')) . ': ' . ($r['message'] ?? 'Fejl');
+        }
+    }
+
+    if ($startedMisc !== [] && $errors === []) {
+        if (count($startedMisc) === 1) {
+            $message = $isVcBehalf ? $successMessageVcSingle : $successMessageSingle;
+        } else {
+            $message = 'Service startet på ' . count($startedMisc) . ' anlæg: ' . implode(', ', $startedMisc) . '.';
+        }
+
+        return [
+            'ok' => true,
+            'partial' => false,
+            'message' => $message,
+            'started_misc' => $startedMisc,
+            'errors' => [],
+            'primary_id' => (int) ($primaryInstallation['id'] ?? 0),
+        ];
+    }
+
+    if ($startedMisc !== []) {
+        return [
+            'ok' => false,
+            'partial' => true,
+            'message' => 'Service startet på ' . implode(', ', $startedMisc) . '. Fejl: ' . implode(' · ', $errors),
+            'started_misc' => $startedMisc,
+            'errors' => $errors,
+            'primary_id' => (int) ($primaryInstallation['id'] ?? 0),
+        ];
+    }
+
+    return [
+        'ok' => false,
+        'partial' => false,
+        'message' => $errors[0] ?? 'Kunne ikke starte service.',
+        'started_misc' => [],
+        'errors' => $errors,
+        'primary_id' => (int) ($primaryInstallation['id'] ?? 0),
+    ];
+}
+
+/**
+ * @param list<array<string, mixed>> $options
+ */
+function abas_render_linked_installation_service_options(array $options): void
+{
+    if ($options === []) {
+        return;
+    }
+
+    require __DIR__ . '/../public/partials/linked-installation-service-options.php';
 }

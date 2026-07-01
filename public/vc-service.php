@@ -108,43 +108,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ];
     }
 
-    $installationsToStart = array_merge([$resolved['primary']], $resolved['linked']);
-    $startedMisc = [];
-    $errors = [];
-    foreach ($installationsToStart as $instRow) {
-        $r = abas_start_service_session(
-            $conn,
-            $user,
-            $instRow,
-            $hours,
-            $onBehalf,
-            $comment,
-            'web',
-            false,
-            $manualActor
-        );
-        if ($r['ok']) {
-            $startedMisc[] = (string) ($instRow['miscno2'] ?? '');
-        } else {
-            $errors[] = ((string) ($instRow['miscno2'] ?? '?')) . ': ' . ($r['message'] ?? 'Fejl');
-        }
-    }
+    $result = abas_execute_linked_service_starts(
+        $conn,
+        $user,
+        $resolved['primary'],
+        $resolved['linked'],
+        $hours,
+        $onBehalf,
+        $comment,
+        'web',
+        false,
+        $manualActor
+    );
 
-    if ($startedMisc !== [] && $errors === []) {
-        $message = count($startedMisc) === 1
-            ? 'Service startet på vegne af montør.'
-            : 'Service startet på ' . count($startedMisc) . ' anlæg: ' . implode(', ', $startedMisc) . '.';
-        abas_flash_set('success', $message);
-        if (!$embed && count($startedMisc) === 1) {
-            abas_redirect('installation.php?id=' . (int) $resolved['primary']['id']);
+    if ($result['ok']) {
+        abas_flash_set('success', $result['message']);
+        if (!$embed && count($result['started_misc']) === 1) {
+            abas_redirect('installation.php?id=' . (int) $result['primary_id']);
         }
-    } elseif ($startedMisc !== []) {
-        abas_flash_set(
-            'error',
-            'Service startet på ' . implode(', ', $startedMisc) . '. Fejl: ' . implode(' · ', $errors)
-        );
     } else {
-        abas_flash_set('error', $errors[0] ?? 'Kunne ikke starte service.');
+        abas_flash_set('error', $result['message']);
     }
     abas_redirect($vcUrl);
 }
@@ -245,6 +228,7 @@ if ($embed) {
 <script>
 window.abasVcService = <?= json_encode([
     'searchUrl' => $searchUrl,
+    'linkedUrl' => abas_url('installation-linked-options.php'),
     'pollMs' => 3000,
 ], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
 </script>
