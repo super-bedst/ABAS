@@ -10,6 +10,7 @@ require_once __DIR__ . '/../includes/roles.php';
 require_once __DIR__ . '/../includes/installation_sync.php';
 require_once __DIR__ . '/../includes/users.php';
 require_once __DIR__ . '/../includes/threecx_calls.php';
+require_once __DIR__ . '/../includes/installation_links.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -90,12 +91,24 @@ if ($type === 'montors') {
         $out[] = [
             'id' => (int) $row['id'],
             'username' => (string) ($row['username'] ?? ''),
+            'display_name' => abas_user_display_name($row),
             'phone' => (string) ($row['phone'] ?? ''),
             'company_name' => (string) ($row['company_name'] ?? ''),
         ];
     }
 
     echo json_encode(['items' => $out], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+if ($type === 'linked') {
+    $installationId = (int) ($_GET['installation_id'] ?? 0);
+    if ($installationId <= 0) {
+        echo json_encode(['items' => []], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    echo json_encode(['items' => abas_vc_linked_installation_options($conn, $installationId)], JSON_UNESCAPED_UNICODE);
     exit;
 }
 

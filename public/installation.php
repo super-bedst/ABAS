@@ -13,6 +13,7 @@ require_once __DIR__ . '/../includes/installation_sync.php';
 require_once __DIR__ . '/../includes/installation_details.php';
 require_once __DIR__ . '/../includes/installation_status.php';
 require_once __DIR__ . '/../includes/users.php';
+require_once __DIR__ . '/../includes/installation_links.php';
 require_once __DIR__ . '/../includes/table_list.php';
 require_once __DIR__ . '/../includes/theme.php';
 
@@ -60,6 +61,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($action === 'stop_external') {
         $r = abas_stop_external_testqueue($conn, $user, $installation, trim($_POST['comment'] ?? ''));
         abas_flash_set($r['ok'] ? 'success' : 'error', $r['ok'] ? 'Anlæg sat i drift igen.' : ($r['message'] ?? 'Fejl'));
+    } elseif ($action === 'link_installation' && ($user['role'] ?? '') === 'admin') {
+        $linkMisc = strtolower(trim((string) ($_POST['link_miscno2'] ?? '')));
+        $target = $linkMisc !== '' ? abas_find_installation_by_miscno2($conn, $linkMisc) : null;
+        if (!$target) {
+            abas_flash_set('error', 'Koblings-anlæg ikke fundet i cache. Synkronisér anlægget først.');
+        } else {
+            $result = abas_installation_link_create($conn, $id, (int) $target['id'], (int) $user['id']);
+            abas_flash_set($result['ok'] ? 'success' : 'error', $result['message']);
+        }
+    } elseif ($action === 'unlink_installation' && ($user['role'] ?? '') === 'admin') {
+        $unlinkId = (int) ($_POST['unlink_installation_id'] ?? 0);
+        if ($unlinkId <= 0) {
+            abas_flash_set('error', 'Ugyldig kobling.');
+        } else {
+            $result = abas_installation_link_delete($conn, $id, $unlinkId);
+            abas_flash_set($result['ok'] ? 'success' : 'error', $result['message']);
+        }
     }
     abas_redirect('installation.php?id=' . $id);
 }
@@ -94,6 +112,9 @@ $inAbasService = $session !== null;
 $externalService = $externalTest !== null && !$inAbasService;
 $inService = $inAbasService || $externalService;
 $maxExtendHours = abas_service_remaining_extend_hours($session);
+$installationLinks = ($user['role'] ?? '') === 'admin'
+    ? abas_installation_linked_installations($conn, $id)
+    : [];
 
 $pageTitle = $installation['miscno2'] ?? 'Anlæg';
 $currentUser = $user;
@@ -215,6 +236,42 @@ require __DIR__ . '/partials/header.php';
         </dl>
     </div>
 </div>
+
+<?php if (($user['role'] ?? '') === 'admin'): ?>
+<div class="abas-card mb-6">
+    <h2 class="abas-card-title">Koblede anlæg</h2>
+    <p class="text-sm text-gray-600 mb-4">Koble anlæg der hører sammen (fx fab7001 og fab7002). Vagtcentralen kan vælge at sætte koblede anlæg i service samtidig.</p>
+    <?php if ($installationLinks === []): ?>
+        <p class="text-sm text-gray-500 mb-4">Ingen koblinger endnu.</p>
+    <?php else: ?>
+        <ul class="space-y-2 mb-4">
+            <?php foreach ($installationLinks as $linked): ?>
+                <li class="flex flex-wrap items-center justify-between gap-2 border border-gray-100 rounded-xl px-3 py-2 text-sm">
+                    <div>
+                        <a href="<?= abas_url('installation.php?id=' . (int) $linked['id']) ?>" class="font-mono font-medium text-brand hover:underline">
+                            <?= htmlspecialchars((string) $linked['miscno2']) ?>
+                        </a>
+                        <span class="text-gray-600 ml-2"><?= htmlspecialchars((string) ($linked['name'] ?? '')) ?></span>
+                    </div>
+                    <form method="post" class="inline" onsubmit="return confirm('Fjern kobling?')">
+                        <input type="hidden" name="action" value="unlink_installation">
+                        <input type="hidden" name="unlink_installation_id" value="<?= (int) $linked['id'] ?>">
+                        <button type="submit" class="abas-btn-secondary !py-1 !px-2 text-xs">Fjern</button>
+                    </form>
+                </li>
+            <?php endforeach; ?>
+        </ul>
+    <?php endif; ?>
+    <form method="post" class="flex flex-wrap gap-2 items-end max-w-md">
+        <input type="hidden" name="action" value="link_installation">
+        <div class="abas-field flex-1 min-w-[10rem] !mb-0">
+            <label class="abas-label" for="link_miscno2">Tilknyt anlæg (ABA-nr.)</label>
+            <input id="link_miscno2" name="link_miscno2" required class="abas-input font-mono text-sm" placeholder="fx fab7002">
+        </div>
+        <button type="submit" class="abas-btn-secondary text-sm shrink-0">Kobl</button>
+    </form>
+</div>
+<?php endif; ?>
 
 <div class="abas-card !p-0" id="inst-log-card">
     <div class="abas-log-toolbar">

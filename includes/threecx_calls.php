@@ -230,9 +230,10 @@ function abas_threecx_list_active_calls(mysqli $conn): array
 
     $limit = abas_threecx_calls_max();
     $stmt = $conn->prepare(
-        'SELECT c.*, u.username, u.registration_display_name, u.phone AS user_phone
+        'SELECT c.*, u.username, u.registration_display_name, u.phone AS user_phone, ai.company_name AS matched_company_name
          FROM threecx_inbound_calls c
          LEFT JOIN users u ON u.id = c.matched_user_id
+         LEFT JOIN approved_installers ai ON ai.id = u.installer_id
          WHERE c.status = "connected"
          ORDER BY c.last_seen_at DESC
          LIMIT ?'
@@ -268,6 +269,8 @@ function abas_threecx_list_active_calls(mysqli $conn): array
             'matched_user_id' => (int) ($row['matched_user_id'] ?? 0) ?: null,
             'matched_role' => $matchedRole !== '' ? $matchedRole : null,
             'matched_role_label' => $matchedRole !== '' ? abas_role_label($matchedRole) : null,
+            'matched_company_name' => trim((string) ($row['matched_company_name'] ?? '')),
+            'matched_phone' => trim((string) ($row['user_phone'] ?? '')),
             'filters_installations' => abas_threecx_owner_filters_installations($matchedRole),
             'last_seen_at' => (string) ($row['last_seen_at'] ?? ''),
             'active_service_sessions' => abas_match_active_service_sessions_for_phone($activeSessions, $callerNumber),

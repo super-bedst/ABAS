@@ -10,6 +10,7 @@ require_once __DIR__ . '/../includes/roles.php';
 require_once __DIR__ . '/../includes/service.php';
 require_once __DIR__ . '/../includes/installation_sync.php';
 require_once __DIR__ . '/../includes/users.php';
+require_once __DIR__ . '/../includes/installation_links.php';
 
 if (!empty($_GET['embed'])) {
     abas_set_embed_session(true);
@@ -24,6 +25,10 @@ $vcUrl = abas_embed_url('vc-service.php');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $misc = strtolower(trim($_POST['miscno2'] ?? ''));
+    $linkedMisc = array_values(array_filter(array_map(
+        static fn ($v) => strtolower(trim((string) $v)),
+        (array) ($_POST['linked_miscno2'] ?? [])
+    )));
     $montorId = (int) ($_POST['montor_id'] ?? 0);
     $behalfUserId = (int) ($_POST['behalf_user_id'] ?? 0);
     if ($behalfUserId <= 0) {
@@ -67,6 +72,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         abas_redirect($vcUrl);
     }
 
+    $resolved = abas_vc_resolve_service_installations($conn, $misc, $linkedMisc);
+    if (!$resolved['ok']) {
+        abas_flash_set('error', $resolved['message'] ?? 'Ugyldigt anlægsvalg.');
+        abas_redirect($vcUrl);
+    }
+
     $onBehalf = null;
     if ($behalfUserId > 0) {
         $allowedRoles = ['montor', 'anlaegsejer', 'anlaegsafprover'];
@@ -97,10 +108,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ];
     }
 
-    $r = abas_start_service_session($conn, $user, $installation, $hours, $onBehalf, $comment, 'web', false, $manualActor);
-    abas_flash_set($r['ok'] ? 'success' : 'error', $r['ok'] ? 'Service startet på vegne af montør.' : ($r['message'] ?? 'Fejl'));
-    if ($r['ok'] && !$embed) {
-        abas_redirect('installation.php?id=' . (int) $installation['id']);
+    $installationsToStart = array_merge([$resolved['primary']], $resolved['linked']);
+    $startedMisc = [];
+    $errors = [];
+    foreach ($installationsToStart as $instRow) {
+        $r = abas_start_service_session(
+            $conn,
+            $user,
+            $instRow,
+            $hours,
+            $onBehalf,
+            $comment,
+            'web',
+            false,
+            $manualActor
+        );
+        if ($r['ok']) {
+            $startedMisc[] = (string) ($instRow['miscno2'] ?? '');
+        } else {
+            $errors[] = ((string) ($instRow['miscno2'] ?? '?')) . ': ' . ($r['message'] ?? 'Fejl');
+        }
+    }
+
+    if ($startedMisc !== [] && $errors === []) {
+        $message = count($startedMisc) === 1
+            ? 'Service startet på vegne af montør.'
+            : 'Service startet på ' . count($startedMisc) . ' anlæg: ' . implode(', ', $startedMisc) . '.';
+        abas_flash_set('success', $message);
+        if (!$embed && count($startedMisc) === 1) {
+            abas_redirect('installation.php?id=' . (int) $resolved['primary']['id']);
+        }
+    } elseif ($startedMisc !== []) {
+        abas_flash_set(
+            'error',
+            'Service startet på ' . implode(', ', $startedMisc) . '. Fejl: ' . implode(' · ', $errors)
+        );
+    } else {
+        abas_flash_set('error', $errors[0] ?? 'Kunne ikke starte service.');
     }
     abas_redirect($vcUrl);
 }
@@ -145,6 +189,8 @@ if ($embed) {
         <ul id="inst-results" class="abas-combobox-list hidden" role="listbox"></ul>
         <p class="abas-hint">Vælg fra listen — viser anlægsnr. og kundenavn.</p>
     </div>
+
+    <div id="vc-linked-installations" class="abas-vc-linked-panel hidden" aria-live="polite"></div>
 
     <div class="abas-field abas-combobox" id="montor-combobox">
         <label class="abas-label" for="montor-search">Montør / person</label>

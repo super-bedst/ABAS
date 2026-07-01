@@ -942,6 +942,22 @@
     @apply ring-2 ring-brand/30;
   }
 
+  .abas-vc-linked-panel {
+    @apply mb-4 rounded-xl border border-brand-gold/30 bg-brand/5 p-3;
+  }
+
+  .abas-vc-linked-list {
+    @apply space-y-2;
+  }
+
+  .abas-vc-linked-option {
+    @apply flex items-start gap-2 text-sm cursor-pointer;
+  }
+
+  .abas-vc-linked-option--disabled {
+    @apply opacity-60 cursor-not-allowed;
+  }
+
   .abas-dual-list {
     @apply grid gap-3 md:grid-cols-[1fr_auto_1fr] items-stretch;
   }

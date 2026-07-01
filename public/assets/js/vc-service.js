@@ -143,8 +143,9 @@
                     '<span class="text-sm text-gray-600">' + escapeHtml(item.name || '—') +
                     (item.city ? ' · ' + escapeHtml(item.city) : '') + '</span>';
             } else {
+                var label = montorDisplayName(item);
                 li.innerHTML =
-                    '<span class="font-medium">' + escapeHtml(item.username) + '</span>' +
+                    '<span class="font-medium">' + escapeHtml(label) + '</span>' +
                     '<span class="text-sm text-gray-600">' +
                     (item.company_name ? escapeHtml(item.company_name) + ' · ' : '') +
                     escapeHtml(item.phone || '—') + '</span>';
@@ -185,16 +186,17 @@
                 '<button type="button" class="text-sm abas-link vc-clear-pick">Skift anlæg</button></div>';
             this.input.value = item.miscno2;
         } else {
+            var name = montorDisplayName(item);
             this.hidden.value = String(item.id);
             this.selected.innerHTML =
                 '<div class="flex flex-wrap items-start justify-between gap-2">' +
                 '<div class="text-sm space-y-0.5">' +
-                '<div><span class="text-gray-500">Navn:</span> <span class="font-medium">' + escapeHtml(item.username) + '</span></div>' +
+                '<div><span class="text-gray-500">Navn:</span> <span class="font-medium">' + escapeHtml(name) + '</span></div>' +
                 '<div><span class="text-gray-500">Firma:</span> ' + escapeHtml(item.company_name || '—') + '</div>' +
-                '<div><span class="text-gray-500">Telefon:</span> ' + escapeHtml(item.phone || '—') + '</div>' +
+                '<div><span class="text-gray-500">Telefon:</span> ' + escapeHtml(montorPickPhone(item)) + '</div>' +
                 '</div>' +
                 '<button type="button" class="text-sm abas-link vc-clear-pick">Skift montør</button></div>';
-            this.input.value = item.username;
+            this.input.value = name;
         }
 
         this.selected.classList.remove('hidden');
@@ -225,7 +227,14 @@
         this.activeIndex = -1;
     };
 
-    function phoneDigits(value) {
+    function montorDisplayName(item) {
+        return String((item && (item.display_name || item.username)) || '').trim() || '—';
+    }
+
+    function montorPickPhone(item, fallback) {
+        return String((item && item.phone) || fallback || '').trim();
+    }
+
         return String(value || '').replace(/\D/g, '').replace(/^0+/, '');
     }
 
@@ -295,13 +304,79 @@
             instBox.clearCallerUserId();
         }
 
+        function clearLinkedInstallations() {
+            var linkedPanel = document.getElementById('vc-linked-installations');
+            if (!linkedPanel) {
+                return;
+            }
+            linkedPanel.innerHTML = '';
+            linkedPanel.classList.add('hidden');
+        }
+
+        function renderLinkedInstallations(items) {
+            var linkedPanel = document.getElementById('vc-linked-installations');
+            if (!linkedPanel) {
+                return;
+            }
+            if (!items || items.length === 0) {
+                clearLinkedInstallations();
+                return;
+            }
+
+            var html =
+                '<p class="text-sm font-medium text-gray-800 mb-1">Koblede anlæg (valgfrit)</p>' +
+                '<p class="abas-hint mb-3">Vælg om tilknyttede anlæg også skal i service samtidig.</p>' +
+                '<ul class="abas-vc-linked-list">';
+            items.forEach(function (item) {
+                var disabled = !item.allows_service || item.in_service;
+                var statusHint = item.in_service
+                    ? 'Allerede i service'
+                    : (!item.allows_service ? (item.mon_stat_label || 'Kan ikke sættes i service') : '');
+                html +=
+                    '<li><label class="abas-vc-linked-option' + (disabled ? ' abas-vc-linked-option--disabled' : '') + '">' +
+                    '<input type="checkbox" name="linked_miscno2[]" value="' + escapeHtml(item.miscno2) + '" class="abas-checkbox mt-0.5"' +
+                    (disabled ? ' disabled' : '') + '>' +
+                    '<span><span class="font-mono font-medium text-brand">' + escapeHtml(item.miscno2) + '</span>' +
+                    '<span class="text-gray-600 ml-1">' + escapeHtml(item.name || '') + '</span>' +
+                    (statusHint ? '<span class="text-xs text-gray-500 block">' + escapeHtml(statusHint) + '</span>' : '') +
+                    '</span></label></li>';
+            });
+            html += '</ul>';
+            linkedPanel.innerHTML = html;
+            linkedPanel.classList.remove('hidden');
+        }
+
+        function loadLinkedInstallations(installationId) {
+            if (!installationId) {
+                clearLinkedInstallations();
+                return;
+            }
+            fetch(
+                searchUrl + '?type=linked&installation_id=' + encodeURIComponent(String(installationId)),
+                { credentials: 'same-origin', headers: { Accept: 'application/json' } }
+            )
+                .then(function (res) { return res.json(); })
+                .then(function (data) {
+                    renderLinkedInstallations(data.items || []);
+                })
+                .catch(function () {
+                    clearLinkedInstallations();
+                });
+        }
+
         var instBox = new Combobox({
             input: document.getElementById('inst-search'),
             hidden: document.getElementById('miscno2'),
             list: document.getElementById('inst-results'),
             selected: document.getElementById('inst-selected'),
             type: 'installations',
-            minChars: 2
+            minChars: 2,
+            onSelect: function (item) {
+                loadLinkedInstallations(item.id);
+            },
+            onClear: function () {
+                clearLinkedInstallations();
+            }
         });
 
         var montorBox = new Combobox({
@@ -329,6 +404,7 @@
         document.getElementById('inst-combobox').addEventListener('click', function (e) {
             if (e.target.classList.contains('vc-clear-pick')) {
                 instBox.clear();
+                clearLinkedInstallations();
             }
         });
         document.getElementById('montor-combobox').addEventListener('click', function (e) {
@@ -347,19 +423,26 @@
         });
 
         function applyCall(call) {
-            instBox.clear();
+            var preserveInstallation = !!document.getElementById('miscno2').value;
+            if (!preserveInstallation) {
+                instBox.clear();
+            }
             montorBox.clear();
-            clearBehalf();
+            if (behalfInput) {
+                behalfInput.value = '0';
+            }
+            instBox.clearCallerUserId();
 
             var phone = call.caller_number || '';
-            var personName = call.matched_user_id && call.display_name ? call.display_name : '';
+            var personName = call.display_name || '';
 
             if (call.matched_user_id && call.matched_role === 'montor') {
                 montorBox.pick({
                     id: call.matched_user_id,
+                    display_name: personName,
                     username: personName || 'Montør',
-                    phone: phone,
-                    company_name: call.matched_role_label || ''
+                    phone: call.matched_phone || phone,
+                    company_name: call.matched_company_name || ''
                 });
                 if (behalfInput) {
                     behalfInput.value = String(call.matched_user_id);
@@ -380,8 +463,10 @@
                 montorBox.input.classList.add('hidden');
                 montorBox.input.value = personName;
                 document.getElementById('montor_id').value = '0';
-                instBox.setCallerUserId(call.matched_user_id);
-                instBox.search('');
+                if (!preserveInstallation) {
+                    instBox.setCallerUserId(call.matched_user_id);
+                    instBox.search('');
+                }
                 syncManualFields();
             } else {
                 manualName.value = personName;

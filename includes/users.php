@@ -362,7 +362,7 @@ function abas_assign_installer_for_montor(mysqli $conn, string $email): ?int
 }
 
 /**
- * @return list<array{id:int, username:string, email:string, phone:?string, company_name:?string}>
+ * @return list<array{id:int, username:string, registration_display_name:?string, email:string, phone:?string, company_name:?string}>
  */
 function abas_search_montors(mysqli $conn, string $q, int $limit = 40): array
 {
@@ -371,26 +371,26 @@ function abas_search_montors(mysqli $conn, string $q, int $limit = 40): array
 
     if ($q === '') {
         $stmt = $conn->prepare(
-            'SELECT u.id, u.username, u.email, u.phone, ai.company_name
+            'SELECT u.id, u.username, u.registration_display_name, u.email, u.phone, ai.company_name
              FROM users u
              LEFT JOIN approved_installers ai ON ai.id = u.installer_id
              WHERE u.role = "montor" AND u.active = 1
-             ORDER BY u.username
+             ORDER BY COALESCE(NULLIF(u.registration_display_name, ""), u.username)
              LIMIT ?'
         );
         $stmt->bind_param('i', $limit);
     } else {
         $like = '%' . $q . '%';
         $stmt = $conn->prepare(
-            'SELECT u.id, u.username, u.email, u.phone, ai.company_name
+            'SELECT u.id, u.username, u.registration_display_name, u.email, u.phone, ai.company_name
              FROM users u
              LEFT JOIN approved_installers ai ON ai.id = u.installer_id
              WHERE u.role = "montor" AND u.active = 1
-               AND (u.username LIKE ? OR u.phone LIKE ? OR u.email LIKE ? OR ai.company_name LIKE ?)
-             ORDER BY u.username
+               AND (u.username LIKE ? OR u.registration_display_name LIKE ? OR u.phone LIKE ? OR u.email LIKE ? OR ai.company_name LIKE ?)
+             ORDER BY COALESCE(NULLIF(u.registration_display_name, ""), u.username)
              LIMIT ?'
         );
-        $stmt->bind_param('ssssi', $like, $like, $like, $like, $limit);
+        $stmt->bind_param('sssssi', $like, $like, $like, $like, $like, $limit);
     }
 
     $stmt->execute();
